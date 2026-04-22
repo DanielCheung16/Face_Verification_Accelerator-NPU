@@ -52,3 +52,10 @@ To verify that the completely independent C model mathematically matches the PyT
 
 For a detailed explanation of the architecture, the difference between the testing models (`c_golden_model` vs `c_inference_model`), and how to map this reference design to RTL, please read:
 - **[note.md](note.md)** - The primary developer notes and verification strategies.
+
+## TODOs / Next Steps
+
+- [ ] **Fixed-Point Quantization (INT8/INT16)**: The current C model uses `Float32` to guarantee exact mathematical alignment with PyTorch. The next immediate step is to refactor `tensor.c` and Python exporters to support low-precision integer quantization to reflect the actual hardware datapaths.
+- [ ] **RTL Unit Development**: Implement SystemVerilog `MAC Arrays` and `Line Buffers` utilizing the block-by-block `golden/` text files for modular testbench debugging.
+- [ ] **System-Level RTL Integration**: Wire all hardware modules together with a global finite state machine (FSM) and memory controller.
+- [ ] **End-to-End RTL Verification**: Verify the entire integrated SystemVerilog wrapper against `c_inference_model` 128D embeddings and similarity calculations.

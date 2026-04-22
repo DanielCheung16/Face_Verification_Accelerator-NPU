@@ -95,3 +95,39 @@
 
 1. **模組開發**：硬體工程師現在可以直接看著 `conv.c` 的迴圈寫出 `MAC Array`，並看著 `tensor.c` 的 `add_tensor_inplace` 寫出 `Residual Adder`。
 2. **定點數轉換 (Quantization)**：目前版本依然使用 Float32 運算以對齊數學演算法。當硬體開始引入 `INT8 / INT16` Quantization (量化) 時，只需修改 `tensor.c` 裡的資料型別，並修改 Python 端的導出位移量，即可輕鬆驗證 Quantization 造成的精準度耗損。
+
+---
+
+## 7. 硬體記憶體架構 (SRAM & OpenRAM 指南)
+
+在進行 RTL 實作時，**絕對會需要使用 SRAM** 來儲存大量的特徵圖 (Feature Maps) 與權重 (Weights)，不能僅依靠 Flip-Flops (DFF)。例如一層 `64 x 56 x 48` 的特徵圖若使用 16-bit 儲存，約需 344 KB 空間，若硬用 DFF 合成會導致面積爆炸且無法繞線。
+
+### 沒有 CPU 的情況下如何控制 SRAM？
+在 ASIC 設計中，我們不需要 CPU。我們會在 SystemVerilog 中設計一個 **Memory Controller + FSM (狀態機)** 來操控 SRAM：
+1. **FSM (大腦)**：負責掌控當前在算哪一層的第幾個 Pixel。
+2. **Address Generator**：依據迴圈公式（例：`addr = c * (H * W) + y * W + x`）算出記憶體位址。
+3. **讀寫控制**：把算出的 `addr` 送給 SRAM 的位址接腳，並透過切換 `we_n` (Write Enable) 來控制要讀取輸入資料，還是將 MAC 算完的結果寫回 SRAM。
+這就是我們在 C Model 裡實作 **Ping-Pong Buffer** 的硬體對應作法：兩塊 SRAM 交替做為 Input 與 Output。
+
+### OpenRAM 產生 SRAM 巨集教學 (FreePDK45)
+為了取得能在硬體合成 (Genus/Innovus) 使用的 SRAM `.v`, `.lib`, `.lef` 檔案，請依循以下教學使用 OpenRAM 生成 SRAM Macros：
+
+```bash
+# 1. 建立一個新的資料夾來產生 RAM 檔案，並進入該資料夾
+mkdir sram_generation && cd sram_generation
+
+# 2. 複製 OpenRAM 腳本與設定檔範本
+cp /vol/ece393/tools/OpenRAM/sram_compiler.py .
+cp /vol/ece393/tools/OpenRAM/macros/sram_configs/freepdk45_sram_1rw1r_32x2048_8.py .
+
+# 3. 根據你的硬體需求 (Word Size, 深度等) 修改 freepdk45_sram_1rw1r_32x2048_8.py 裡的參數
+# vi freepdk45_sram_1rw1r_32x2048_8.py
+
+# 4. 安裝 OpenRAM (若尚未安裝)
+pip3.8 install openram --user
+
+# 5. 執行編譯器生成 SRAM
+python3.8 sram_compiler.py freepdk45_sram_1rw1r_32x2048_8.py
+```
+> [!NOTE]
+> 執行通常需要 5~10 分鐘。完成後，所有生成的 SRAM 檔案（含 Verilog wrapper 與 Lib）都會在 `macro` 資料夾中。你可以將產生的 `.v` 當作普通的 module instantiate 到你的 SystemVerilog 頂層設計中。
