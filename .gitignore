@@ -9,3 +9,11 @@ golden_weights_fixed8/
 
 068.ckpt
 faces_ms1m_refine_v2_112x112-0-of-16.tfrecord
+
+# Simulation Artifacts
+hardware/frontend/sim/xcelium.d/
+hardware/frontend/sim/INCA_libs/
+hardware/frontend/sim/xrun.log
+hardware/frontend/sim/xrun.history
+hardware/frontend/sim/waves.shm/
+hardware/frontend/sim/*.key
