@@ -7,6 +7,14 @@ This directory contains the golden reference models (both Python and C) for the 
 - `python/`: Contains PyTorch model definitions, TFRecord dataset extraction scripts, and golden weight exporters.
 - `c_model/`: Contains the pure C implementation of the MobileFaceNet architecture, optimized for hardware mapping (Ping-Pong buffering, flattened NCHW memory layout).
 - `src/`: Stores the PyTorch checkpoint (`068.ckpt`), sample images, and TFRecord dataset.
+
+> [!IMPORTANT]
+> **Required Downloads**
+> The raw weights and dataset files are too large for version control. Please download them manually:
+> 1. **Model Weights (`068.ckpt`)**: Download from [MobileFaceNet_Pytorch/model/best](https://github.com/Xiaoccer/MobileFaceNet_Pytorch/tree/master/model/best)
+> 2. **TFRecord Dataset**: Download from [Kaggle: MobileFaceNet Dataset](https://www.kaggle.com/code/jasonhcwong/mobilefacenet/input)
+> 
+> 🛑 **Action Required**: After downloading, you MUST place both files inside the [`Project/software/src`](./software/src) directory before running any Python extraction scripts.
 - `golden/`: (Auto-generated) Contains block-by-block text files for isolated RTL module testing.
 - `golden_weights/`: (Auto-generated) Contains 150+ fused parameter text files for end-to-end inference.
 

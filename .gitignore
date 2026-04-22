@@ -2,3 +2,10 @@
 __pycache__/
 *.pyc
 .venv/
+
+
+c_model_fixed8/
+golden_weights_fixed8/
+
+068.ckpt
+faces_ms1m_refine_v2_112x112-0-of-16.tfrecord
