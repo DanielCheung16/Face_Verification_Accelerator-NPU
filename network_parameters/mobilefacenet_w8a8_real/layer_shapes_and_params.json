@@ -1,0 +1,5758 @@
+{
+  "metadata": {
+    "model_path": "/home/jzh2008/nu_classes/ce392/Face_Verification_Accelerator-NPU/pretrained_models/quantface_mobilefacenet_w8a8_real/backbone.pt",
+    "input_shape": [
+      1,
+      3,
+      112,
+      112
+    ],
+    "output_shape": [
+      1,
+      128
+    ],
+    "captured_layers": 145,
+    "captured_param_numel": 1003136,
+    "captured_buffer_numel": 19682,
+    "captured_macs": 220965376
+  },
+  "layers": [
+    {
+      "index": 0,
+      "name": "conv1.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        3,
+        112,
+        112
+      ],
+      "output_shape": [
+        1,
+        64,
+        56,
+        56
+      ],
+      "param_numel": 1728,
+      "buffer_numel": 0,
+      "macs": 5419008,
+      "output_elements": 200704,
+      "note": "",
+      "in_channels": 3,
+      "out_channels": 64,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        2,
+        2
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        64,
+        3,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 1,
+      "name": "conv1.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        64,
+        56,
+        56
+      ],
+      "output_shape": [
+        1,
+        64,
+        56,
+        56
+      ],
+      "param_numel": 128,
+      "buffer_numel": 129,
+      "macs": null,
+      "output_elements": 200704,
+      "note": "",
+      "num_features": 64,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        64
+      ],
+      "bias_shape": [
+        64
+      ],
+      "running_mean_shape": [
+        64
+      ],
+      "running_var_shape": [
+        64
+      ]
+    },
+    {
+      "index": 2,
+      "name": "conv1.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        64,
+        56,
+        56
+      ],
+      "output_shape": [
+        1,
+        64,
+        56,
+        56
+      ],
+      "param_numel": 64,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 200704,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        64
+      ],
+      "x_min": -1.4475910663604736,
+      "x_max": 2.3678195476531982
+    },
+    {
+      "index": 3,
+      "name": "conv2_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        64,
+        56,
+        56
+      ],
+      "output_shape": [
+        1,
+        64,
+        56,
+        56
+      ],
+      "param_numel": 576,
+      "buffer_numel": 0,
+      "macs": 1806336,
+      "output_elements": 200704,
+      "note": "",
+      "in_channels": 64,
+      "out_channels": 64,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 64,
+      "weight_shape": [
+        64,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 4,
+      "name": "conv2_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        64,
+        56,
+        56
+      ],
+      "output_shape": [
+        1,
+        64,
+        56,
+        56
+      ],
+      "param_numel": 128,
+      "buffer_numel": 129,
+      "macs": null,
+      "output_elements": 200704,
+      "note": "",
+      "num_features": 64,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        64
+      ],
+      "bias_shape": [
+        64
+      ],
+      "running_mean_shape": [
+        64
+      ],
+      "running_var_shape": [
+        64
+      ]
+    },
+    {
+      "index": 5,
+      "name": "conv2_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        64,
+        56,
+        56
+      ],
+      "output_shape": [
+        1,
+        64,
+        56,
+        56
+      ],
+      "param_numel": 64,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 200704,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        64
+      ],
+      "x_min": -2.4408092498779297,
+      "x_max": 6.2871270179748535
+    },
+    {
+      "index": 6,
+      "name": "conv_23.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        64,
+        56,
+        56
+      ],
+      "output_shape": [
+        1,
+        128,
+        56,
+        56
+      ],
+      "param_numel": 8192,
+      "buffer_numel": 0,
+      "macs": 25690112,
+      "output_elements": 401408,
+      "note": "",
+      "in_channels": 64,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        64,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 7,
+      "name": "conv_23.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        56,
+        56
+      ],
+      "output_shape": [
+        1,
+        128,
+        56,
+        56
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 401408,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 8,
+      "name": "conv_23.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        128,
+        56,
+        56
+      ],
+      "output_shape": [
+        1,
+        128,
+        56,
+        56
+      ],
+      "param_numel": 128,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 401408,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        128
+      ],
+      "x_min": -0.9595906734466553,
+      "x_max": 5.07781982421875
+    },
+    {
+      "index": 9,
+      "name": "conv_23.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        56,
+        56
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 1152,
+      "buffer_numel": 0,
+      "macs": 903168,
+      "output_elements": 100352,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 128,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        2,
+        2
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 128,
+      "weight_shape": [
+        128,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 10,
+      "name": "conv_23.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 11,
+      "name": "conv_23.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        128
+      ],
+      "x_min": -2.122344732284546,
+      "x_max": 4.42881965637207
+    },
+    {
+      "index": 12,
+      "name": "conv_23.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 8192,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 64,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        64,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 13,
+      "name": "conv_23.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 129,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 64,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        64
+      ],
+      "bias_shape": [
+        64
+      ],
+      "running_mean_shape": [
+        64
+      ],
+      "running_var_shape": [
+        64
+      ]
+    },
+    {
+      "index": 14,
+      "name": "conv_3.model.0.0.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 8192,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 100352,
+      "note": "",
+      "in_channels": 64,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        64,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 15,
+      "name": "conv_3.model.0.0.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 16,
+      "name": "conv_3.model.0.0.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        128
+      ],
+      "x_min": -0.3975980281829834,
+      "x_max": 1.1086786985397339
+    },
+    {
+      "index": 17,
+      "name": "conv_3.model.0.0.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 1152,
+      "buffer_numel": 0,
+      "macs": 903168,
+      "output_elements": 100352,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 128,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 128,
+      "weight_shape": [
+        128,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 18,
+      "name": "conv_3.model.0.0.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 19,
+      "name": "conv_3.model.0.0.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        128
+      ],
+      "x_min": -0.5474601984024048,
+      "x_max": 2.7144813537597656
+    },
+    {
+      "index": 20,
+      "name": "conv_3.model.0.0.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 8192,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 64,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        64,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 21,
+      "name": "conv_3.model.0.0.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 129,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 64,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        64
+      ],
+      "bias_shape": [
+        64
+      ],
+      "running_mean_shape": [
+        64
+      ],
+      "running_var_shape": [
+        64
+      ]
+    },
+    {
+      "index": 22,
+      "name": "conv_3.model.0.1",
+      "type": "QuantAct",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 0,
+      "buffer_numel": 4,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "residual_add_output_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": false,
+      "x_min": -3.117239475250244,
+      "x_max": 4.086012840270996
+    },
+    {
+      "index": 23,
+      "name": "conv_3.model.1.0.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 8192,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 100352,
+      "note": "",
+      "in_channels": 64,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        64,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 24,
+      "name": "conv_3.model.1.0.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 25,
+      "name": "conv_3.model.1.0.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        128
+      ],
+      "x_min": -0.32354769110679626,
+      "x_max": 1.2947860956192017
+    },
+    {
+      "index": 26,
+      "name": "conv_3.model.1.0.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 1152,
+      "buffer_numel": 0,
+      "macs": 903168,
+      "output_elements": 100352,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 128,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 128,
+      "weight_shape": [
+        128,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 27,
+      "name": "conv_3.model.1.0.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 28,
+      "name": "conv_3.model.1.0.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        128
+      ],
+      "x_min": -0.9270885586738586,
+      "x_max": 3.636932849884033
+    },
+    {
+      "index": 29,
+      "name": "conv_3.model.1.0.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 8192,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 64,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        64,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 30,
+      "name": "conv_3.model.1.0.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 129,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 64,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        64
+      ],
+      "bias_shape": [
+        64
+      ],
+      "running_mean_shape": [
+        64
+      ],
+      "running_var_shape": [
+        64
+      ]
+    },
+    {
+      "index": 31,
+      "name": "conv_3.model.1.1",
+      "type": "QuantAct",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 0,
+      "buffer_numel": 4,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "residual_add_output_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": false,
+      "x_min": -3.387274742126465,
+      "x_max": 3.622286796569824
+    },
+    {
+      "index": 32,
+      "name": "conv_3.model.2.0.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 8192,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 100352,
+      "note": "",
+      "in_channels": 64,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        64,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 33,
+      "name": "conv_3.model.2.0.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 34,
+      "name": "conv_3.model.2.0.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        128
+      ],
+      "x_min": -0.29019972681999207,
+      "x_max": 1.4713294506072998
+    },
+    {
+      "index": 35,
+      "name": "conv_3.model.2.0.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 1152,
+      "buffer_numel": 0,
+      "macs": 903168,
+      "output_elements": 100352,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 128,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 128,
+      "weight_shape": [
+        128,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 36,
+      "name": "conv_3.model.2.0.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 37,
+      "name": "conv_3.model.2.0.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        128
+      ],
+      "x_min": -0.3107304573059082,
+      "x_max": 3.5743298530578613
+    },
+    {
+      "index": 38,
+      "name": "conv_3.model.2.0.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 8192,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 64,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        64,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 39,
+      "name": "conv_3.model.2.0.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 129,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 64,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        64
+      ],
+      "bias_shape": [
+        64
+      ],
+      "running_mean_shape": [
+        64
+      ],
+      "running_var_shape": [
+        64
+      ]
+    },
+    {
+      "index": 40,
+      "name": "conv_3.model.2.1",
+      "type": "QuantAct",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 0,
+      "buffer_numel": 4,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "residual_add_output_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": false,
+      "x_min": -5.423863887786865,
+      "x_max": 6.589082717895508
+    },
+    {
+      "index": 41,
+      "name": "conv_3.model.3.0.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 8192,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 100352,
+      "note": "",
+      "in_channels": 64,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        64,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 42,
+      "name": "conv_3.model.3.0.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 43,
+      "name": "conv_3.model.3.0.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        128
+      ],
+      "x_min": -0.3645729720592499,
+      "x_max": 1.991772174835205
+    },
+    {
+      "index": 44,
+      "name": "conv_3.model.3.0.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 1152,
+      "buffer_numel": 0,
+      "macs": 903168,
+      "output_elements": 100352,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 128,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 128,
+      "weight_shape": [
+        128,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 45,
+      "name": "conv_3.model.3.0.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 46,
+      "name": "conv_3.model.3.0.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        128
+      ],
+      "x_min": -0.6354346871376038,
+      "x_max": 3.720135450363159
+    },
+    {
+      "index": 47,
+      "name": "conv_3.model.3.0.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 8192,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 64,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        64,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 48,
+      "name": "conv_3.model.3.0.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 128,
+      "buffer_numel": 129,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 64,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        64
+      ],
+      "bias_shape": [
+        64
+      ],
+      "running_mean_shape": [
+        64
+      ],
+      "running_var_shape": [
+        64
+      ]
+    },
+    {
+      "index": 49,
+      "name": "conv_3.model.3.1",
+      "type": "QuantAct",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "param_numel": 0,
+      "buffer_numel": 4,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "residual_add_output_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": false,
+      "x_min": -8.75257682800293,
+      "x_max": 7.589846611022949
+    },
+    {
+      "index": 50,
+      "name": "conv_34.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        64,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        256,
+        28,
+        28
+      ],
+      "param_numel": 16384,
+      "buffer_numel": 0,
+      "macs": 12845056,
+      "output_elements": 200704,
+      "note": "",
+      "in_channels": 64,
+      "out_channels": 256,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        256,
+        64,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 51,
+      "name": "conv_34.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        256,
+        28,
+        28
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 200704,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 52,
+      "name": "conv_34.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        256,
+        28,
+        28
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 200704,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.28298792243003845,
+      "x_max": 1.499998688697815
+    },
+    {
+      "index": 53,
+      "name": "conv_34.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        28,
+        28
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 2304,
+      "buffer_numel": 0,
+      "macs": 451584,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 256,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        2,
+        2
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 256,
+      "weight_shape": [
+        256,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 54,
+      "name": "conv_34.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 55,
+      "name": "conv_34.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -1.6584945917129517,
+      "x_max": 2.974113941192627
+    },
+    {
+      "index": 56,
+      "name": "conv_34.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 25088,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        256,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 57,
+      "name": "conv_34.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 58,
+      "name": "conv_4.model.0.0.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 256,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        256,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 59,
+      "name": "conv_4.model.0.0.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 60,
+      "name": "conv_4.model.0.0.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.20248548686504364,
+      "x_max": 1.3485243320465088
+    },
+    {
+      "index": 61,
+      "name": "conv_4.model.0.0.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 2304,
+      "buffer_numel": 0,
+      "macs": 451584,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 256,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 256,
+      "weight_shape": [
+        256,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 62,
+      "name": "conv_4.model.0.0.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 63,
+      "name": "conv_4.model.0.0.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.3201037347316742,
+      "x_max": 2.105782985687256
+    },
+    {
+      "index": 64,
+      "name": "conv_4.model.0.0.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 25088,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        256,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 65,
+      "name": "conv_4.model.0.0.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 66,
+      "name": "conv_4.model.0.1",
+      "type": "QuantAct",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 0,
+      "buffer_numel": 4,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "residual_add_output_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": false,
+      "x_min": -2.30216121673584,
+      "x_max": 3.2521519660949707
+    },
+    {
+      "index": 67,
+      "name": "conv_4.model.1.0.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 256,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        256,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 68,
+      "name": "conv_4.model.1.0.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 69,
+      "name": "conv_4.model.1.0.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.1649332493543625,
+      "x_max": 0.8791435360908508
+    },
+    {
+      "index": 70,
+      "name": "conv_4.model.1.0.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 2304,
+      "buffer_numel": 0,
+      "macs": 451584,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 256,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 256,
+      "weight_shape": [
+        256,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 71,
+      "name": "conv_4.model.1.0.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 72,
+      "name": "conv_4.model.1.0.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.15431812405586243,
+      "x_max": 2.76716947555542
+    },
+    {
+      "index": 73,
+      "name": "conv_4.model.1.0.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 25088,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        256,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 74,
+      "name": "conv_4.model.1.0.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 75,
+      "name": "conv_4.model.1.1",
+      "type": "QuantAct",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 0,
+      "buffer_numel": 4,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "residual_add_output_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": false,
+      "x_min": -2.259183168411255,
+      "x_max": 3.2643392086029053
+    },
+    {
+      "index": 76,
+      "name": "conv_4.model.2.0.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 256,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        256,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 77,
+      "name": "conv_4.model.2.0.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 78,
+      "name": "conv_4.model.2.0.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.1971278041601181,
+      "x_max": 0.9220935702323914
+    },
+    {
+      "index": 79,
+      "name": "conv_4.model.2.0.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 2304,
+      "buffer_numel": 0,
+      "macs": 451584,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 256,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 256,
+      "weight_shape": [
+        256,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 80,
+      "name": "conv_4.model.2.0.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 81,
+      "name": "conv_4.model.2.0.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.16117532551288605,
+      "x_max": 3.0438568592071533
+    },
+    {
+      "index": 82,
+      "name": "conv_4.model.2.0.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 25088,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        256,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 83,
+      "name": "conv_4.model.2.0.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 84,
+      "name": "conv_4.model.2.1",
+      "type": "QuantAct",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 0,
+      "buffer_numel": 4,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "residual_add_output_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": false,
+      "x_min": -2.5491206645965576,
+      "x_max": 3.3017144203186035
+    },
+    {
+      "index": 85,
+      "name": "conv_4.model.3.0.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 256,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        256,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 86,
+      "name": "conv_4.model.3.0.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 87,
+      "name": "conv_4.model.3.0.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.1364833116531372,
+      "x_max": 0.960823655128479
+    },
+    {
+      "index": 88,
+      "name": "conv_4.model.3.0.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 2304,
+      "buffer_numel": 0,
+      "macs": 451584,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 256,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 256,
+      "weight_shape": [
+        256,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 89,
+      "name": "conv_4.model.3.0.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 90,
+      "name": "conv_4.model.3.0.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.4806644916534424,
+      "x_max": 3.624673366546631
+    },
+    {
+      "index": 91,
+      "name": "conv_4.model.3.0.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 25088,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        256,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 92,
+      "name": "conv_4.model.3.0.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 93,
+      "name": "conv_4.model.3.1",
+      "type": "QuantAct",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 0,
+      "buffer_numel": 4,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "residual_add_output_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": false,
+      "x_min": -2.6266443729400635,
+      "x_max": 3.4263200759887695
+    },
+    {
+      "index": 94,
+      "name": "conv_4.model.4.0.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 256,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        256,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 95,
+      "name": "conv_4.model.4.0.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 96,
+      "name": "conv_4.model.4.0.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.2898591458797455,
+      "x_max": 1.1090195178985596
+    },
+    {
+      "index": 97,
+      "name": "conv_4.model.4.0.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 2304,
+      "buffer_numel": 0,
+      "macs": 451584,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 256,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 256,
+      "weight_shape": [
+        256,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 98,
+      "name": "conv_4.model.4.0.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 99,
+      "name": "conv_4.model.4.0.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.5532326102256775,
+      "x_max": 2.7197790145874023
+    },
+    {
+      "index": 100,
+      "name": "conv_4.model.4.0.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 25088,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        256,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 101,
+      "name": "conv_4.model.4.0.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 102,
+      "name": "conv_4.model.4.1",
+      "type": "QuantAct",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 0,
+      "buffer_numel": 4,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "residual_add_output_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": false,
+      "x_min": -4.7037835121154785,
+      "x_max": 3.6945767402648926
+    },
+    {
+      "index": 103,
+      "name": "conv_4.model.5.0.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 256,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        256,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 104,
+      "name": "conv_4.model.5.0.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 105,
+      "name": "conv_4.model.5.0.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.24183405935764313,
+      "x_max": 1.0286678075790405
+    },
+    {
+      "index": 106,
+      "name": "conv_4.model.5.0.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 2304,
+      "buffer_numel": 0,
+      "macs": 451584,
+      "output_elements": 50176,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 256,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 256,
+      "weight_shape": [
+        256,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 107,
+      "name": "conv_4.model.5.0.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 108,
+      "name": "conv_4.model.5.0.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 50176,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.6711417436599731,
+      "x_max": 3.2283735275268555
+    },
+    {
+      "index": 109,
+      "name": "conv_4.model.5.0.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 6422528,
+      "output_elements": 25088,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        256,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 110,
+      "name": "conv_4.model.5.0.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 111,
+      "name": "conv_4.model.5.1",
+      "type": "QuantAct",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "param_numel": 0,
+      "buffer_numel": 4,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "residual_add_output_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": false,
+      "x_min": -6.100615501403809,
+      "x_max": 6.797799110412598
+    },
+    {
+      "index": 112,
+      "name": "conv_45.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        512,
+        14,
+        14
+      ],
+      "param_numel": 65536,
+      "buffer_numel": 0,
+      "macs": 12845056,
+      "output_elements": 100352,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 512,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        512,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 113,
+      "name": "conv_45.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        512,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        512,
+        14,
+        14
+      ],
+      "param_numel": 1024,
+      "buffer_numel": 1025,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "",
+      "num_features": 512,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        512
+      ],
+      "bias_shape": [
+        512
+      ],
+      "running_mean_shape": [
+        512
+      ],
+      "running_var_shape": [
+        512
+      ]
+    },
+    {
+      "index": 114,
+      "name": "conv_45.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        512,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        512,
+        14,
+        14
+      ],
+      "param_numel": 512,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 100352,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        512
+      ],
+      "x_min": -0.256062388420105,
+      "x_max": 1.0763914585113525
+    },
+    {
+      "index": 115,
+      "name": "conv_45.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        512,
+        14,
+        14
+      ],
+      "output_shape": [
+        1,
+        512,
+        7,
+        7
+      ],
+      "param_numel": 4608,
+      "buffer_numel": 0,
+      "macs": 225792,
+      "output_elements": 25088,
+      "note": "",
+      "in_channels": 512,
+      "out_channels": 512,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        2,
+        2
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 512,
+      "weight_shape": [
+        512,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 116,
+      "name": "conv_45.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        512,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        512,
+        7,
+        7
+      ],
+      "param_numel": 1024,
+      "buffer_numel": 1025,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "",
+      "num_features": 512,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        512
+      ],
+      "bias_shape": [
+        512
+      ],
+      "running_mean_shape": [
+        512
+      ],
+      "running_var_shape": [
+        512
+      ]
+    },
+    {
+      "index": 117,
+      "name": "conv_45.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        512,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        512,
+        7,
+        7
+      ],
+      "param_numel": 512,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        512
+      ],
+      "x_min": -2.0103464126586914,
+      "x_max": 2.2492220401763916
+    },
+    {
+      "index": 118,
+      "name": "conv_45.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        512,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "param_numel": 65536,
+      "buffer_numel": 0,
+      "macs": 3211264,
+      "output_elements": 6272,
+      "note": "",
+      "in_channels": 512,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        512,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 119,
+      "name": "conv_45.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 6272,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 120,
+      "name": "conv_5.model.0.0.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 1605632,
+      "output_elements": 12544,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 256,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        256,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 121,
+      "name": "conv_5.model.0.0.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 12544,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 122,
+      "name": "conv_5.model.0.0.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 12544,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.4806559979915619,
+      "x_max": 0.9166358709335327
+    },
+    {
+      "index": 123,
+      "name": "conv_5.model.0.0.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "param_numel": 2304,
+      "buffer_numel": 0,
+      "macs": 112896,
+      "output_elements": 12544,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 256,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 256,
+      "weight_shape": [
+        256,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 124,
+      "name": "conv_5.model.0.0.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 12544,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 125,
+      "name": "conv_5.model.0.0.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 12544,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.1636878252029419,
+      "x_max": 2.3540730476379395
+    },
+    {
+      "index": 126,
+      "name": "conv_5.model.0.0.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 1605632,
+      "output_elements": 6272,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        256,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 127,
+      "name": "conv_5.model.0.0.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 6272,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 128,
+      "name": "conv_5.model.0.1",
+      "type": "QuantAct",
+      "input_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "param_numel": 0,
+      "buffer_numel": 4,
+      "macs": null,
+      "output_elements": 6272,
+      "note": "residual_add_output_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": false,
+      "x_min": -2.3891208171844482,
+      "x_max": 2.6153173446655273
+    },
+    {
+      "index": 129,
+      "name": "conv_5.model.1.0.conv.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 1605632,
+      "output_elements": 12544,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 256,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        256,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 130,
+      "name": "conv_5.model.1.0.conv.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 12544,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 131,
+      "name": "conv_5.model.1.0.conv.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 12544,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.4501574635505676,
+      "x_max": 1.3369637727737427
+    },
+    {
+      "index": 132,
+      "name": "conv_5.model.1.0.conv_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "param_numel": 2304,
+      "buffer_numel": 0,
+      "macs": 112896,
+      "output_elements": 12544,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 256,
+      "kernel_size": [
+        3,
+        3
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        1,
+        1
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 256,
+      "weight_shape": [
+        256,
+        1,
+        3,
+        3
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 133,
+      "name": "conv_5.model.1.0.conv_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "param_numel": 512,
+      "buffer_numel": 513,
+      "macs": null,
+      "output_elements": 12544,
+      "note": "",
+      "num_features": 256,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        256
+      ],
+      "bias_shape": [
+        256
+      ],
+      "running_mean_shape": [
+        256
+      ],
+      "running_var_shape": [
+        256
+      ]
+    },
+    {
+      "index": 134,
+      "name": "conv_5.model.1.0.conv_dw.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "param_numel": 256,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 12544,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        256
+      ],
+      "x_min": -0.5260478854179382,
+      "x_max": 2.9629030227661133
+    },
+    {
+      "index": 135,
+      "name": "conv_5.model.1.0.project.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        256,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "param_numel": 32768,
+      "buffer_numel": 0,
+      "macs": 1605632,
+      "output_elements": 6272,
+      "note": "",
+      "in_channels": 256,
+      "out_channels": 128,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        128,
+        256,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 136,
+      "name": "conv_5.model.1.0.project.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 6272,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    },
+    {
+      "index": 137,
+      "name": "conv_5.model.1.1",
+      "type": "QuantAct",
+      "input_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "param_numel": 0,
+      "buffer_numel": 4,
+      "macs": null,
+      "output_elements": 6272,
+      "note": "residual_add_output_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": false,
+      "x_min": -3.932542324066162,
+      "x_max": 2.900538444519043
+    },
+    {
+      "index": 138,
+      "name": "conv_6_sep.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        128,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        512,
+        7,
+        7
+      ],
+      "param_numel": 65536,
+      "buffer_numel": 0,
+      "macs": 3211264,
+      "output_elements": 25088,
+      "note": "",
+      "in_channels": 128,
+      "out_channels": 512,
+      "kernel_size": [
+        1,
+        1
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 1,
+      "weight_shape": [
+        512,
+        128,
+        1,
+        1
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 139,
+      "name": "conv_6_sep.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        512,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        512,
+        7,
+        7
+      ],
+      "param_numel": 1024,
+      "buffer_numel": 1025,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "",
+      "num_features": 512,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        512
+      ],
+      "bias_shape": [
+        512
+      ],
+      "running_mean_shape": [
+        512
+      ],
+      "running_var_shape": [
+        512
+      ]
+    },
+    {
+      "index": 140,
+      "name": "conv_6_sep.prelu",
+      "type": "QuantActPreLu",
+      "input_shape": [
+        1,
+        512,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        512,
+        7,
+        7
+      ],
+      "param_numel": 512,
+      "buffer_numel": 0,
+      "macs": null,
+      "output_elements": 25088,
+      "note": "prelu_then_activation_quant",
+      "activation_bit": 8,
+      "full_precision": false,
+      "running_stat": true,
+      "prelu_weight_shape": [
+        512
+      ],
+      "x_min": -0.133229598402977,
+      "x_max": 2.2294070720672607
+    },
+    {
+      "index": 141,
+      "name": "output_layer.conv_6_dw.conv",
+      "type": "Quant_Conv2d",
+      "input_shape": [
+        1,
+        512,
+        7,
+        7
+      ],
+      "output_shape": [
+        1,
+        512,
+        1,
+        1
+      ],
+      "param_numel": 25088,
+      "buffer_numel": 0,
+      "macs": 25088,
+      "output_elements": 512,
+      "note": "",
+      "in_channels": 512,
+      "out_channels": 512,
+      "kernel_size": [
+        7,
+        7
+      ],
+      "stride": [
+        1,
+        1
+      ],
+      "padding": [
+        0,
+        0
+      ],
+      "dilation": [
+        1,
+        1
+      ],
+      "groups": 512,
+      "weight_shape": [
+        512,
+        1,
+        7,
+        7
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 142,
+      "name": "output_layer.conv_6_dw.bn",
+      "type": "BatchNorm2d",
+      "input_shape": [
+        1,
+        512,
+        1,
+        1
+      ],
+      "output_shape": [
+        1,
+        512,
+        1,
+        1
+      ],
+      "param_numel": 1024,
+      "buffer_numel": 1025,
+      "macs": null,
+      "output_elements": 512,
+      "note": "",
+      "num_features": 512,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        512
+      ],
+      "bias_shape": [
+        512
+      ],
+      "running_mean_shape": [
+        512
+      ],
+      "running_var_shape": [
+        512
+      ]
+    },
+    {
+      "index": 143,
+      "name": "output_layer.linear",
+      "type": "Quant_Linear",
+      "input_shape": [
+        1,
+        512
+      ],
+      "output_shape": [
+        1,
+        128
+      ],
+      "param_numel": 65536,
+      "buffer_numel": 0,
+      "macs": 65536,
+      "output_elements": 128,
+      "note": "",
+      "in_features": 512,
+      "out_features": 128,
+      "weight_shape": [
+        128,
+        512
+      ],
+      "bias_shape": null,
+      "weight_bit": 8,
+      "full_precision": false
+    },
+    {
+      "index": 144,
+      "name": "output_layer.bn",
+      "type": "BatchNorm1d",
+      "input_shape": [
+        1,
+        128
+      ],
+      "output_shape": [
+        1,
+        128
+      ],
+      "param_numel": 256,
+      "buffer_numel": 257,
+      "macs": null,
+      "output_elements": 128,
+      "note": "",
+      "num_features": 128,
+      "eps": 1e-05,
+      "momentum": 0.1,
+      "affine": true,
+      "track_running_stats": true,
+      "weight_shape": [
+        128
+      ],
+      "bias_shape": [
+        128
+      ],
+      "running_mean_shape": [
+        128
+      ],
+      "running_var_shape": [
+        128
+      ]
+    }
+  ]
+}
