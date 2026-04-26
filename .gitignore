@@ -17,3 +17,6 @@ hardware/frontend/sim/xrun.log
 hardware/frontend/sim/xrun.history
 hardware/frontend/sim/waves.shm/
 hardware/frontend/sim/*.key
+
+//zpx add: 
+software/c_model_fixed/build/
