@@ -5,14 +5,16 @@
 
 module mfn_addr_gen #(
     parameter int AWIDTH = 32,
-    parameter int M_ADDR_WIDTH = 18
+    parameter int M_ADDR_WIDTH = 20
 )(
     input  logic                    clk,
     input  logic                    rst_n,
     
     input  logic                    reset_ptr,
     input  logic                    inc_write,
-    input  logic                    ping_pong,  // 0: rd=0x00000,wr=0x10000; 1: rd=0x10000,wr=0x00000
+    input  logic [1:0]              rd_buf,
+    input  logic [1:0]              wr_buf,
+    input  logic                    read_res,
     
     // Coordinates from Controller
     input  logic signed [8:0]       x_in,
@@ -23,6 +25,7 @@ module mfn_addr_gen #(
     input  logic [7:0]              width_in,
     input  logic [7:0]              height_in,
     input  logic [9:0]              in_ch_in,
+    input  logic [9:0]              out_ch_in,
     
     output logic [M_ADDR_WIDTH-1:0] sram_rd_addr,
     output logic [M_ADDR_WIDTH-1:0] sram_wr_addr,
@@ -36,13 +39,32 @@ module mfn_addr_gen #(
 
     // Read/Write base addresses
     logic [M_ADDR_WIDTH-1:0] rd_base, wr_base;
-    assign rd_base = ping_pong ? 19'h2A000 : 19'h00000;
-    assign wr_base = ping_pong ? 19'h00000 : 19'h2A000;
+    logic [1:0] res_buf;
+    logic [1:0] active_rd_buf;
+    
+    assign res_buf = 2'd3 - rd_buf - wr_buf;
+    assign active_rd_buf = read_res ? res_buf : rd_buf;
+
+    always_comb begin
+        case(active_rd_buf)
+            2'd0: rd_base = 20'h00000;
+            2'd1: rd_base = 20'h54000;
+            2'd2: rd_base = 20'hA8000;
+            default: rd_base = 20'h00000;
+        endcase
+        case(wr_buf)
+            2'd0: wr_base = 20'h00000;
+            2'd1: wr_base = 20'h54000;
+            2'd2: wr_base = 20'hA8000;
+            default: wr_base = 20'h00000;
+        endcase
+    end
 
     // 1. Padding Check
     always_comb begin
         if (x_in < 0 || x_in >= $signed({1'b0, width_in}) || 
-            y_in < 0 || y_in >= $signed({1'b0, height_in})) begin
+            y_in < 0 || y_in >= $signed({1'b0, height_in}) ||
+            {1'b0, c_in} >= {1'b0, in_ch_in}) begin
             is_pad_comb = 1'b1;
         end else begin
             is_pad_comb = 1'b0;
@@ -63,7 +85,11 @@ module mfn_addr_gen #(
         
         row_offset   = y_in * $signed({1'b0, width_in});
         pixel_offset = row_offset + x_in;
-        calc_rd_addr = M_ADDR_WIDTH'(pixel_offset * $signed({1'b0, in_ch_in}) + $signed({1'b0, c_in}));
+        // Use out_ch_in for residual buffer, in_ch_in for normal read
+        if (read_res)
+            calc_rd_addr = M_ADDR_WIDTH'(pixel_offset * $signed({1'b0, out_ch_in}) + $signed({1'b0, c_in}));
+        else
+            calc_rd_addr = M_ADDR_WIDTH'(pixel_offset * $signed({1'b0, in_ch_in}) + $signed({1'b0, c_in}));
     end
 
     assign sram_rd_addr = rd_base + calc_rd_addr[M_ADDR_WIDTH-1:0];

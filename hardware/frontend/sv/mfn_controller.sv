@@ -20,14 +20,15 @@ module mfn_controller #(
     output logic [5:0]        layer_idx,
     input  logic [63:0]       layer_config,
     input  logic              layer_is_pw,
+    input  logic              layer_is_res,
     
     // Addr Gen Interface
     output logic              reset_ptr,
     output logic              inc_write,
+    output logic              read_res,
     output logic signed [8:0] x_out,
     output logic signed [8:0] y_out,
     output logic [9:0]        c_in_out,
-    output logic              ping_pong_out,   // for addr_gen read/write base
     
     // Component Control
     output logic              load_pixel,
@@ -56,7 +57,10 @@ module mfn_controller #(
         STATE_FETCH_PIXELS,
         STATE_CALC_PSUM,
         STATE_MAC_FLUSH,
+        STATE_MAC_FLUSH_2,
         STATE_CH_IN_LOOP,
+        STATE_READ_RESIDUAL,
+        STATE_ADD_RESIDUAL,
         STATE_WRITE_BACK,
         STATE_SPATIAL_LOOP,
         STATE_NEXT_LAYER,
@@ -128,17 +132,21 @@ module mfn_controller #(
     assign pixel_idx  = k_reg_d1;
     assign load_pixel = load_pixel_d1;
     
-    // MAC pipeline delay tracking
-    logic [9:0] c_out_d1;
-    logic       calc_psum_d1;
+    // MAC pipeline delay tracking (2 stages now)
+    logic [9:0] c_out_d1, c_out_d2;
+    logic       calc_psum_d1, calc_psum_d2;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             c_out_d1     <= '0;
+            c_out_d2     <= '0;
             calc_psum_d1 <= 1'b0;
+            calc_psum_d2 <= 1'b0;
         end else begin
             c_out_d1     <= c_out_reg;
+            c_out_d2     <= c_out_d1;
             calc_psum_d1 <= (state_reg == STATE_CALC_PSUM);
+            calc_psum_d2 <= calc_psum_d1;
         end
     end
 
@@ -160,10 +168,14 @@ module mfn_controller #(
     assign layer_idx      = layer_idx_reg;
     assign x_out          = x_reg + {{7{kx_offset[1]}}, kx_offset};
     assign y_out          = y_reg + {{7{ky_offset[1]}}, ky_offset};
-    // DW-Conv: c_in follows c_out; Standard: c_in is independent
-    assign c_in_out       = layer_is_dw ? c_out_reg : c_in_reg;
-    assign ping_pong_out  = layer_pp;
+    // DW-Conv: c_in follows c_out
+    // PW-Conv: c_in is c_in_reg + k_reg (fetch 9 channels)
+    // Standard: c_in is independent
+    // Residual: c_in follows c_out during WRITE_BACK/READ_RES
+    assign c_in_out       = (layer_is_dw || state_reg == STATE_READ_RESIDUAL || state_reg == STATE_WRITE_BACK) ? c_out_reg : 
+                            (layer_is_pw ? (c_in_reg + {6'd0, k_reg}) : c_in_reg);
     assign bias_addr      = bias_base_reg + c_out_reg;
+    assign read_res       = (state_reg == STATE_READ_RESIDUAL);
 
     // --------------------------------------------------------------------------
     // Next State & Output Logic
@@ -203,6 +215,15 @@ module mfn_controller #(
                 // Precompute wgt_step
                 if (layer_is_dw)
                     wgt_step_next = 18'd9;   // DW: only 9 weights per channel
+                else if (layer_is_pw) begin
+                    case (layer_in_ch)
+                        10'd64:  wgt_step_next = 18'd72;
+                        10'd128: wgt_step_next = 18'd135;
+                        10'd256: wgt_step_next = 18'd261;
+                        10'd512: wgt_step_next = 18'd522;
+                        default: wgt_step_next = 18'd72;
+                    endcase
+                end
                 else
                     wgt_step_next = {layer_in_ch, 3'b0} + {8'b0, layer_in_ch}; // in_ch*9
                 wgt_cin_base_next = '0;
@@ -227,9 +248,9 @@ module mfn_controller #(
 
             STATE_FETCH_PIXELS: begin
                 if (layer_is_pw) begin
-                    // Pointwise: Fetch 1 pixel (k=0), wait 1 cycle for SRAM (k=1), then CALC (k=2)
-                    if (k_reg < 4'd2) begin
-                        load_pixel_comb = (k_reg == 4'd0);
+                    // Pointwise: Fetch 9 channels over 9 cycles
+                    if (k_reg < 4'd9) begin
+                        load_pixel_comb = 1'b1;
                         k_next = k_reg + 1'b1;
                     end else begin
                         load_pixel_comb = 1'b0;
@@ -271,6 +292,10 @@ module mfn_controller #(
             end
 
             STATE_MAC_FLUSH: begin
+                state_next = STATE_MAC_FLUSH_2;
+            end
+            
+            STATE_MAC_FLUSH_2: begin
                 if (layer_is_dw)
                     state_next = STATE_WRITE_BACK;  // DW: skip CH_IN_LOOP
                 else
@@ -278,21 +303,61 @@ module mfn_controller #(
             end
             
             STATE_CH_IN_LOOP: begin
-                // Only reached in standard conv mode
-                if (c_in_reg == layer_in_ch - 1) begin
-                    c_in_next  = '0;
-                    state_next = STATE_WRITE_BACK;
+                // Only reached in standard/PW conv mode
+                if (layer_is_pw) begin
+                    if (c_in_reg + 10'd9 >= layer_in_ch) begin
+                        c_in_next  = '0;
+                        state_next = STATE_WRITE_BACK;
+                    end else begin
+                        c_in_next  = c_in_reg + 10'd9;
+                        wgt_cin_base_next = wgt_cin_base_reg + 18'd9; // +9 weight lines
+                        state_next = STATE_FETCH_PIXELS;
+                    end
                 end else begin
-                    c_in_next = c_in_reg + 1'b1;
-                    wgt_cin_base_next = wgt_cin_base_reg + 18'd9;
-                    state_next = STATE_FETCH_PIXELS;
+                    if (c_in_reg == layer_in_ch - 1) begin
+                        c_in_next  = '0;
+                        state_next = STATE_WRITE_BACK;
+                    end else begin
+                        c_in_next = c_in_reg + 1'b1;
+                        wgt_cin_base_next = wgt_cin_base_reg + 18'd9;
+                        state_next = STATE_FETCH_PIXELS;
+                    end
                 end
             end
             
             STATE_WRITE_BACK: begin
+                if (layer_is_res) begin
+                    // Before writing, read the residual
+                    state_next = STATE_READ_RESIDUAL;
+                end else begin
+                    inc_write = 1'b1;
+                    if (layer_is_dw) begin
+                        if (c_out_reg == layer_out_ch - 1) begin
+                            c_out_next = '0;
+                            state_next = STATE_SPATIAL_LOOP;
+                        end else begin
+                            c_out_next = c_out_reg + 1'b1;
+                            wgt_cin_base_next = wgt_cin_base_reg + 18'd9;
+                            state_next = STATE_INIT_PSUM;
+                        end
+                    end else begin
+                        if (c_out_reg == layer_out_ch - 1) begin
+                            c_out_next = '0;
+                            state_next = STATE_SPATIAL_LOOP;
+                        end else begin
+                            c_out_next = c_out_reg + 1'b1;
+                        end
+                    end
+                end
+            end
+            
+            STATE_READ_RESIDUAL: begin
+                state_next = STATE_ADD_RESIDUAL;
+            end
+            
+            STATE_ADD_RESIDUAL: begin
                 inc_write = 1'b1;
                 if (layer_is_dw) begin
-                    // DW: write 1 channel, then next channel or spatial
                     if (c_out_reg == layer_out_ch - 1) begin
                         c_out_next = '0;
                         state_next = STATE_SPATIAL_LOOP;
@@ -302,12 +367,12 @@ module mfn_controller #(
                         state_next = STATE_INIT_PSUM;
                     end
                 end else begin
-                    // Standard: write all out_ch, then spatial
                     if (c_out_reg == layer_out_ch - 1) begin
                         c_out_next = '0;
                         state_next = STATE_SPATIAL_LOOP;
                     end else begin
                         c_out_next = c_out_reg + 1'b1;
+                        state_next = STATE_READ_RESIDUAL;
                     end
                 end
             end
@@ -330,7 +395,7 @@ module mfn_controller #(
             end
             
             STATE_NEXT_LAYER: begin
-                if (layer_idx_reg >= 5'd2) begin   // Stop after Layer 2
+                if (layer_idx_reg >= 5'd7) begin   // Stop after Layer 7
                     state_next = STATE_DONE;
                 end else begin
                     // Accumulate bias base for next layer
@@ -357,14 +422,17 @@ module mfn_controller #(
                 psum_mem[0] <= mac_bias_in;          // DW: always index 0
             else
                 psum_mem[c_out_reg] <= mac_bias_in;  // Standard: per c_out
-        end else if (calc_psum_d1) begin
+        end else if (calc_psum_d2) begin
             if (layer_is_dw)
                 psum_mem[0] <= psum_mem[0] + mac_data_in;
             else
-                psum_mem[c_out_d1] <= psum_mem[c_out_d1] + mac_data_in;
+                psum_mem[c_out_d2] <= psum_mem[c_out_d2] + mac_data_in;
         end
     end
     
+    // Residual Addition happens externally? No, psum_to_act is output to mfn_activation.
+    // mfn_activation clamps it. But residual addition happens after PW2!
+    // Wait, mfn_activation needs to add residual.
     assign psum_to_act = layer_is_dw ? psum_mem[0] : psum_mem[c_out_reg];
 
     // --------------------------------------------------------------------------

@@ -6,7 +6,7 @@
 module mfn_frontend_top #(
     parameter int DWIDTH = 16,
     parameter int AWIDTH = 40,
-    parameter int M_ADDR_WIDTH = 18
+    parameter int M_ADDR_WIDTH = 20
 )(
     input  logic                    clk,
     input  logic                    rst_n,
@@ -29,12 +29,13 @@ module mfn_frontend_top #(
     logic [9:0]  in_ch, out_ch;
     logic [7:0]  img_w, img_h;
     logic [1:0]  layer_stride;
-    logic        layer_is_pw, layer_is_dw;
+    logic        layer_is_pw, layer_is_dw, layer_is_res;
+    logic [1:0]  layer_rd_buf, layer_wr_buf;
     
     // Internal Signals
     logic        reset_ptr;
     logic        inc_write;
-    logic        ping_pong;
+    logic        read_res;
     
     logic signed [8:0] x_ctrl, y_ctrl;
     logic [9:0]        c_in_ctrl;
@@ -64,12 +65,13 @@ module mfn_frontend_top #(
         .layer_idx(layer_idx),
         .layer_config(layer_config),
         .layer_is_pw(layer_is_pw),
+        .layer_is_res(layer_is_res),
         .reset_ptr(reset_ptr),
         .inc_write(inc_write),
+        .read_res(read_res),
         .x_out(x_ctrl),
         .y_out(y_ctrl),
         .c_in_out(c_in_ctrl),
-        .ping_pong_out(ping_pong),
         .load_pixel(load_pixel),
         .pixel_idx(pixel_idx),
         .weight_addr(weight_addr),
@@ -93,8 +95,11 @@ module mfn_frontend_top #(
     assign img_w  = layer_config[27:20];
     assign img_h  = layer_config[35:28];
     assign layer_stride = layer_config[37:36];
-    assign layer_is_pw = layer_config[40];
-    assign layer_is_dw = layer_config[41];
+    assign layer_is_res = layer_config[39];
+    assign layer_is_pw  = layer_config[40];
+    assign layer_is_dw  = layer_config[41];
+    assign layer_rd_buf = layer_config[61:60];
+    assign layer_wr_buf = layer_config[63:62];
 
     // Internal write address (before pipeline delay)
     logic [M_ADDR_WIDTH-1:0] sram_wr_addr_raw;
@@ -108,13 +113,16 @@ module mfn_frontend_top #(
         .rst_n(rst_n),
         .reset_ptr(reset_ptr),
         .inc_write(inc_write),
-        .ping_pong(ping_pong),
+        .rd_buf(layer_rd_buf),
+        .wr_buf(layer_wr_buf),
+        .read_res(read_res),
         .x_in(x_ctrl),
         .y_in(y_ctrl),
         .c_in(c_in_ctrl),
         .width_in(img_w),
         .height_in(img_h),
         .in_ch_in(in_ch),
+        .out_ch_in(out_ch),
         .sram_rd_addr(sram_rd_addr),
         .sram_wr_addr(sram_wr_addr_raw),
         .is_pad(is_pad)
@@ -194,6 +202,8 @@ module mfn_frontend_top #(
         .p_out(psum_val),
         .has_prelu(layer_config[38]),
         .prelu_w(prelu_val_rom),
+        .layer_is_res(layer_is_res),
+        .residual_in(pixel_in),
         .pixel_out(pixel_out),
         .valid_out(valid_out)
     );

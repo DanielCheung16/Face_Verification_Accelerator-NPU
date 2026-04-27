@@ -17,6 +17,8 @@ module mfn_activation #(
     input  logic signed [AWIDTH-1:0]        p_out,      // Q20 accumulator
     input  logic                            has_prelu,
     input  logic signed [DWIDTH-1:0]        prelu_w,    // Q10 PReLU alpha
+    input  logic                            layer_is_res,
+    input  logic signed [DWIDTH-1:0]        residual_in,
     
     output logic                            valid_out,
     output logic signed [DWIDTH-1:0]        pixel_out
@@ -46,16 +48,22 @@ module mfn_activation #(
     assign prelu_prod    = $signed(clamped) * $signed(prelu_w);  // Q10 * Q10 = Q20
     assign prelu_shifted = prelu_prod >>> F_BITS;                // Q20 >> 10 = Q10
 
-    // Step 4: Select result
+    // Step 4: Select result & Residual Addition
+    logic signed [31:0] result_raw;
     always_comb begin
         if (has_prelu && (clamped < 0)) begin
-            // Clamp PReLU result
-            if (prelu_shifted > 32767)       result = 16'sd32767;
-            else if (prelu_shifted < -32768) result = -16'sd32768;
-            else                             result = DWIDTH'(prelu_shifted);
+            result_raw = prelu_shifted;
         end else begin
-            result = clamped;
+            result_raw = clamped;
         end
+        
+        if (layer_is_res) begin
+            result_raw = result_raw + residual_in;
+        end
+        
+        if (result_raw > 32767)       result = 16'sd32767;
+        else if (result_raw < -32768) result = -16'sd32768;
+        else                          result = DWIDTH'(result_raw);
     end
 
     // Registered output

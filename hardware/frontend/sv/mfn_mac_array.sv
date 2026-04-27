@@ -30,11 +30,17 @@ module mfn_mac_array #(
         end
     end
 
-    // Stage 2: Combinational adder tree
+    // Stage 2: Combinational adder tree -> Registered Output
+    logic signed [AWIDTH-1:0] mac_sum;
     always_comb begin
-        mac_out = '0;
+        mac_sum = '0;
         for (int i = 0; i < NUM_MACS; i++)
-            mac_out = mac_out + AWIDTH'(prod_reg[i]);
+            mac_sum = mac_sum + AWIDTH'(prod_reg[i]);
+    end
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) mac_out <= '0;
+        else        mac_out <= mac_sum;
     end
 
 endmodule

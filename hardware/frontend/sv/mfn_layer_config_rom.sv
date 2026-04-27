@@ -1,8 +1,8 @@
 // ==============================================================================
 // Module: mfn_layer_config_rom
 // Description: Configuration ROM (64-bit packed)
-// Format: {reserved(5), wgt_base(18), is_dw(1), is_pw(1), pp(1), prelu(1), stride(2),
-//          h(8), w(8), out_ch(10), in_ch(10)}
+// Format: {wr_buf(2), rd_buf(2), wgt_base(18), is_dw(1), is_pw(1), is_res(1),
+//          prelu(1), stride(2), h(8), w(8), out_ch(10), in_ch(10)}
 // ==============================================================================
 
 module mfn_layer_config_rom #(
