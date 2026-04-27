@@ -1,191 +1,203 @@
 // ==============================================================================
 // Module: mfn_frontend_top
-// Description: Top-level wrapper for the MobileFaceNet Frontend.
-//              Instantiates Datapath (Window, MAC, Act) and Control Path 
-//              (FSM, Addr Gen) using strict Two-Process methodology.
+// Description: Top-level for MobileFaceNet Frontend (supports DW-Conv).
 // ==============================================================================
 
 module mfn_frontend_top #(
     parameter int DWIDTH = 16,
-    parameter int AWIDTH = 32,
+    parameter int AWIDTH = 40,
     parameter int M_ADDR_WIDTH = 18
 )(
-    input  logic clk,
-    input  logic rst_n,
+    input  logic                    clk,
+    input  logic                    rst_n,
     
-    // Global Control
-    input  logic start_inference,
-    output logic inference_done,
+    input  logic                    start_inference,
+    output logic                    inference_done,
     
-    // Input Stream (From SRAM A or External)
-    input  logic valid_in,
+    // SRAM Interface
+    output logic [M_ADDR_WIDTH-1:0] sram_rd_addr,
     input  logic signed [DWIDTH-1:0] pixel_in,
     
-    // Output Stream (To SRAM B)
-    output logic valid_out,
-    output logic signed [DWIDTH-1:0] pixel_out,
-    
-    // SRAM Address Control
-    output logic [M_ADDR_WIDTH-1:0] sram_rd_addr,
-    output logic [M_ADDR_WIDTH-1:0] sram_wr_addr
+    output logic [M_ADDR_WIDTH-1:0] sram_wr_addr,
+    output logic                    valid_out,
+    output logic signed [DWIDTH-1:0] pixel_out
 );
 
-    // Internal Control Signals from FSM
-    logic clear_acc, enable_mac, enable_shift;
-    logic reset_ptr, inc_read, inc_write;
+    // Internal Signals
+    logic [5:0]  layer_idx;
+    logic [63:0] layer_config;
+    logic        reset_ptr;
+    logic        inc_write;
+    logic        ping_pong;
     
-    // ROM interfaces
-    logic [5:0] layer_idx;
-    logic [9:0] wgt_rom_addr;
+    logic signed [8:0] x_ctrl, y_ctrl;
+    logic [9:0]        c_in_ctrl;
+    logic [7:0]        img_w, img_h;
+    logic [9:0]        in_ch, out_ch;
+    logic              is_pad;
     
-    // Layer Config
-    logic [9:0] in_ch, out_ch;
-    logic [7:0] img_width, img_height;
-    logic [1:0] stride;
-    logic has_prelu, ping_pong;
-
-    // Weight and Bias from ROM
-    logic signed [DWIDTH-1:0] wgt_in [0:8];
-    logic signed [AWIDTH-1:0] bias_in;
-    logic signed [DWIDTH-1:0] prelu_weight;
-
-    // Datapath Interconnects
-    logic is_pad;
-    logic signed [DWIDTH-1:0] actual_pixel;
-    logic signed [DWIDTH-1:0] window [0:8];
-    logic valid_window;
+    logic              load_pixel;
+    logic [3:0]        pixel_idx;
+    logic [17:0]       weight_addr;
+    logic              enable_mac;
+    logic [AWIDTH-1:0] mac_bias_in;
+    logic [AWIDTH-1:0] mac_res;
+    logic [AWIDTH-1:0] psum_val;
+    logic [9:0]        bias_addr;
     
-    logic signed [AWIDTH-1:0] mac_result;
-    logic valid_mac;
+    logic signed [DWIDTH-1:0] win_data [0:8];
+    logic signed [DWIDTH-1:0] wgt_data [0:8];
 
-    // --------------------------------------------------------------------------
-    // Padding Multiplexer (MUX)
-    // --------------------------------------------------------------------------
-    assign actual_pixel = is_pad ? 16'h0000 : pixel_in;
-
-    // --------------------------------------------------------------------------
-    // 1. Controller (FSM)
-    // --------------------------------------------------------------------------
-    mfn_controller u_ctrl (
-        .clk             (clk),
-        .rst_n           (rst_n),
-        .start_inference (start_inference),
-        .inference_done  (inference_done),
-        .clear_acc       (clear_acc),
-        .enable_mac      (enable_mac),
-        .enable_shift    (enable_shift),
-        .reset_ptr       (reset_ptr),
-        .inc_read        (inc_read),
-        .inc_write       (inc_write),
-        .layer_in_ch     (in_ch),
-        .layer_out_ch    (out_ch),
-        .layer_width     (img_width),
-        .layer_height    (img_height),
-        .layer_stride    (stride),
-        .layer_idx       (layer_idx),
-        .wgt_rom_addr    (wgt_rom_addr)
+    // 1. Controller
+    mfn_controller #(
+        .DWIDTH(DWIDTH),
+        .AWIDTH(AWIDTH)
+    ) u_ctrl (
+        .clk(clk),
+        .rst_n(rst_n),
+        .start(start_inference),
+        .done(inference_done),
+        .layer_idx(layer_idx),
+        .layer_config(layer_config),
+        .reset_ptr(reset_ptr),
+        .inc_write(inc_write),
+        .x_out(x_ctrl),
+        .y_out(y_ctrl),
+        .c_in_out(c_in_ctrl),
+        .ping_pong_out(ping_pong),
+        .load_pixel(load_pixel),
+        .pixel_idx(pixel_idx),
+        .weight_addr(weight_addr),
+        .enable_mac(enable_mac),
+        .clear_mac_acc(),
+        .mac_bias_in(mac_bias_in),
+        .bias_addr(bias_addr),
+        .mac_data_in(mac_res),
+        .psum_to_act(psum_val)
     );
 
-    // --------------------------------------------------------------------------
-    // 1.5 Configuration ROM
-    // --------------------------------------------------------------------------
-    mfn_layer_config_rom #(
-        .ADDR_WIDTH(6)
-    ) u_config_rom (
-        .clk                (clk),
-        .addr               (layer_idx),
-        .out_in_ch          (in_ch),
-        .out_out_ch         (out_ch),
-        .out_width          (img_width),
-        .out_height         (img_height),
-        .out_stride         (stride),
-        .out_has_prelu      (has_prelu),
-        .out_ping_pong_flag (ping_pong)
+    // 2. Config ROM (64-bit)
+    mfn_layer_config_rom u_cfg_rom (
+        .clk(clk),
+        .addr(layer_idx),
+        .data_out(layer_config)
     );
+    
+    assign in_ch  = layer_config[9:0];
+    assign out_ch = layer_config[19:10];
+    assign img_w  = layer_config[27:20];
+    assign img_h  = layer_config[35:28];
 
-    // --------------------------------------------------------------------------
-    // 2. Address Generator
-    // --------------------------------------------------------------------------
+    // Internal write address (before pipeline delay)
+    logic [M_ADDR_WIDTH-1:0] sram_wr_addr_raw;
+
+    // 3. Address Generator (with ping-pong)
     mfn_addr_gen #(
-        .AWIDTH(M_ADDR_WIDTH)
+        .AWIDTH(AWIDTH),
+        .M_ADDR_WIDTH(M_ADDR_WIDTH)
     ) u_addr_gen (
-        .clk          (clk),
-        .rst_n        (rst_n),
-        .reset_ptr    (reset_ptr),
-        .inc_read     (inc_read),
-        .inc_write    (inc_write),
-        .img_width    (img_width),
-        .img_height   (img_height),
-        .sram_rd_addr (sram_rd_addr),
-        .sram_wr_addr (sram_wr_addr),
-        .is_pad       (is_pad)
+        .clk(clk),
+        .rst_n(rst_n),
+        .reset_ptr(reset_ptr),
+        .inc_write(inc_write),
+        .ping_pong(ping_pong),
+        .x_in(x_ctrl),
+        .y_in(y_ctrl),
+        .c_in(c_in_ctrl),
+        .width_in(img_w),
+        .height_in(img_h),
+        .in_ch_in(in_ch),
+        .sram_rd_addr(sram_rd_addr),
+        .sram_wr_addr(sram_wr_addr_raw),
+        .is_pad(is_pad)
     );
 
-    // --------------------------------------------------------------------------
-    // 2.5 Weight ROM
-    // --------------------------------------------------------------------------
-    mfn_weight_rom #(
-        .ADDR_WIDTH(10),
-        .DWIDTH(DWIDTH),
-        .BWIDTH(AWIDTH)
-    ) u_weight_rom (
-        .clk              (clk),
-        .addr             (wgt_rom_addr),
-        .wgt_out          (wgt_in),
-        .bias_out         (bias_in),
-        .prelu_weight_out (prelu_weight)
-    );
+    // Delay write address by 1 cycle to align with Activation pipeline
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n)
+            sram_wr_addr <= '0;
+        else
+            sram_wr_addr <= sram_wr_addr_raw;
+    end
 
-    // --------------------------------------------------------------------------
-    // 3. Sliding Window (Line Buffer)
-    // --------------------------------------------------------------------------
+    // 4. Sliding Window
     mfn_sliding_window #(
-        .DWIDTH(DWIDTH),
-        .MAX_WIDTH(96)
-    ) u_sliding_window (
-        .clk        (clk),
-        .rst_n      (rst_n),
-        .valid_in   (valid_in && enable_shift),
-        .pixel_in   (actual_pixel), // Feed MUXed pixel
-        .valid_out  (valid_window),
-        .window_out (window)
+        .DWIDTH(DWIDTH)
+    ) u_window (
+        .clk(clk),
+        .rst_n(rst_n),
+        .clear(reset_ptr),
+        .load_en(load_pixel),
+        .load_idx(pixel_idx),
+        .pixel_in(is_pad ? {DWIDTH{1'b0}} : pixel_in),
+        .window_out(win_data)
     );
 
-    // --------------------------------------------------------------------------
-    // 4. Multiplier-Accumulator (MAC) Array
-    // --------------------------------------------------------------------------
+    // 5. Weight ROM
+    mfn_weight_rom #(
+        .DWIDTH(DWIDTH)
+    ) u_wgt_rom (
+        .clk(clk),
+        .addr(weight_addr),
+        .weights_out(wgt_data)
+    );
+
+    logic signed [DWIDTH-1:0] prelu_val_rom;
+    logic signed [31:0] bias_32;
+
+    // 5b. Bias ROM (uses bias_addr from controller, includes layer base)
+    mfn_bias_rom #(
+        .DWIDTH(32)
+    ) u_bias_rom (
+        .addr(bias_addr),
+        .bias_out(bias_32)
+    );
+    assign mac_bias_in = $signed(bias_32);
+
+    // 5c. PReLU ROM (uses same bias_addr for per-channel indexing)
+    mfn_prelu_rom #(
+        .DWIDTH(DWIDTH)
+    ) u_prelu_rom (
+        .addr(bias_addr),
+        .prelu_out(prelu_val_rom)
+    );
+
+    // 6. MAC Array (Pipelined)
     mfn_mac_array #(
         .NUM_MACS(9),
         .DWIDTH(DWIDTH),
         .AWIDTH(AWIDTH)
-    ) u_mac_array (
-        .clk       (clk),
-        .rst_n     (rst_n),
-        .valid_in  (valid_window && enable_mac),
-        .act_in    (window),
-        .wgt_in    (wgt_in),     // From ROM
-        .bias_in   (bias_in),    // From ROM
-        .clear_acc (clear_acc),
-        .valid_out (valid_mac),
-        .mac_out   (mac_result)
+    ) u_mac (
+        .clk(clk),
+        .rst_n(rst_n),
+        .act_in(win_data),
+        .wgt_in(wgt_data),
+        .mac_out(mac_res)
     );
 
-    // --------------------------------------------------------------------------
-    // 5. Activation (PReLU & Quantization)
-    // --------------------------------------------------------------------------
+    // 7. Activation & Quantization
     mfn_activation #(
         .DWIDTH(DWIDTH),
-        .AWIDTH(AWIDTH),
-        .F_BITS(10) // Fixed to Q5.10 scaling factor
-    ) u_activation (
-        .clk          (clk),
-        .rst_n        (rst_n),
-        .valid_in     (valid_mac),
-        .mac_in       (mac_result),
-        .do_prelu     (has_prelu),   // From Config ROM
-        .prelu_weight (prelu_weight),// From Weight ROM
-        .valid_out    (valid_out),
-        .act_out      (pixel_out)
+        .AWIDTH(AWIDTH)
+    ) u_act (
+        .clk(clk),
+        .rst_n(rst_n),
+        .valid_in(inc_write), 
+        .p_out(psum_val),
+        .has_prelu(layer_config[38]),
+        .prelu_w(prelu_val_rom),
+        .pixel_out(pixel_out),
+        .valid_out(valid_out)
     );
+
+    // DEBUG: MAC inputs for Layer 1 first calculation
+    integer l1_calc_cnt = 0;
+    always @(posedge clk) begin
+        if (u_ctrl.state_reg == u_ctrl.STATE_CALC_PSUM && u_ctrl.layer_idx_reg == 1 && l1_calc_cnt < 5) begin
+            $display("Time=%0t | L1 MAC | win=%p | wgt=%p | bias=%d | psum_out=%d",
+                     $time, win_data, wgt_data, mac_bias_in, u_ctrl.psum_to_act);
+            l1_calc_cnt = l1_calc_cnt + 1;
+        end
+    end
 
 endmodule

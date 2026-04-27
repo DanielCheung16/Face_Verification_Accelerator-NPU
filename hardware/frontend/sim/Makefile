@@ -26,6 +26,8 @@ ALL_SV_SRC     := $(SV_DIR)/mfn_frontend_top.sv \
                   $(SV_DIR)/mfn_mac_array.sv \
                   $(SV_DIR)/mfn_activation.sv \
                   $(SV_DIR)/mfn_weight_rom.sv \
+                  $(SV_DIR)/mfn_bias_rom.sv \
+                  $(SV_DIR)/mfn_prelu_rom.sv \
                   $(SV_DIR)/mfn_layer_config_rom.sv
 
 # Testbenches

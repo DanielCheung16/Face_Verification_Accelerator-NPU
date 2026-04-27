@@ -1,105 +1,84 @@
 // ==============================================================================
 // Module: mfn_addr_gen
-// Description: Address Generator for SRAM buffers.
-//              Uses coordinate accumulators to avoid expensive multipliers.
-//              Follows Two-Process Methodology. Now includes padding logic.
+// Description: Address generator with HWC layout and ping-pong support.
 // ==============================================================================
 
 module mfn_addr_gen #(
-    parameter int AWIDTH = 18 // Maximum SRAM Depth: 256K (sufficient for 172K words)
+    parameter int AWIDTH = 32,
+    parameter int M_ADDR_WIDTH = 18
 )(
-    input  logic              clk,
-    input  logic              rst_n,
+    input  logic                    clk,
+    input  logic                    rst_n,
     
-    // Control signals from FSM
-    input  logic              reset_ptr,    // Resets pointers to 0 at start of layer
-    input  logic              inc_read,     // Increment SRAM Read Address
-    input  logic              inc_write,    // Increment SRAM Write Address
+    input  logic                    reset_ptr,
+    input  logic                    inc_write,
+    input  logic                    ping_pong,  // 0: rd=0x00000,wr=0x10000; 1: rd=0x10000,wr=0x00000
     
-    // Image dimensions from Config ROM
-    input  logic [7:0]        img_width,
-    input  logic [7:0]        img_height,
-
-    // Output Addresses & Flags
-    output logic [AWIDTH-1:0] sram_rd_addr,
-    output logic [AWIDTH-1:0] sram_wr_addr,
-    output logic              is_pad
+    // Coordinates from Controller
+    input  logic signed [8:0]       x_in,
+    input  logic signed [8:0]       y_in,
+    input  logic [9:0]              c_in,
+    
+    // Layer Params
+    input  logic [7:0]              width_in,
+    input  logic [7:0]              height_in,
+    input  logic [9:0]              in_ch_in,
+    
+    output logic [M_ADDR_WIDTH-1:0] sram_rd_addr,
+    output logic [M_ADDR_WIDTH-1:0] sram_wr_addr,
+    output logic                    is_pad
 );
 
-    // --------------------------------------------------------------------------
-    // Registers & Next-State Signals
-    // --------------------------------------------------------------------------
-    logic [AWIDTH-1:0] rd_reg, rd_next;
-    logic [AWIDTH-1:0] wr_reg, wr_next;
-    
-    logic [7:0] x_reg, x_next;
-    logic [7:0] y_reg, y_next;
+    logic [M_ADDR_WIDTH-1:0] wr_ptr_reg;
+    logic [AWIDTH-1:0]       calc_rd_addr;
+    logic                    is_pad_comb;
+    logic                    is_pad_reg;
 
-    // --------------------------------------------------------------------------
-    // Process 1: Combinational Logic
-    // --------------------------------------------------------------------------
+    // Read/Write base addresses
+    logic [M_ADDR_WIDTH-1:0] rd_base, wr_base;
+    assign rd_base = ping_pong ? 18'h10000 : 18'h00000;
+    assign wr_base = ping_pong ? 18'h00000 : 18'h10000;
+
+    // 1. Padding Check
     always_comb begin
-        if (reset_ptr) begin
-            rd_next = '0;
-            wr_next = '0;
-            x_next  = '0;
-            y_next  = '0;
-            is_pad  = 1'b0;
+        if (x_in < 0 || x_in >= $signed({1'b0, width_in}) || 
+            y_in < 0 || y_in >= $signed({1'b0, height_in})) begin
+            is_pad_comb = 1'b1;
         end else begin
-            rd_next = rd_reg;
-            wr_next = wr_reg;
-            x_next  = x_reg;
-            y_next  = y_reg;
-            
-            // If virtual coordinate is on the boundary (assuming 1-pixel padding)
-            if (x_reg == 0 || x_reg == img_width + 1 || y_reg == 0 || y_reg == img_height + 1) begin
-                is_pad = 1'b1;
-            end else begin
-                is_pad = 1'b0;
-            end
-            
-            if (inc_read) begin
-                // Only increment real SRAM read address if we are NOT reading a pad
-                if (!is_pad) begin
-                    rd_next = rd_reg + 1'b1;
-                end
-                
-                // Advance virtual coordinates
-                if (x_reg == img_width + 1) begin
-                    x_next = '0;
-                    y_next = y_reg + 1'b1;
-                end else begin
-                    x_next = x_reg + 1'b1;
-                end
-            end
-            
-            if (inc_write) begin
-                wr_next = wr_reg + 1'b1;
-            end
+            is_pad_comb = 1'b0;
         end
     end
 
-    // --------------------------------------------------------------------------
-    // Process 2: Sequential Logic
-    // --------------------------------------------------------------------------
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) is_pad_reg <= 1'b0;
+        else        is_pad_reg <= is_pad_comb;
+    end
+
+    assign is_pad = is_pad_reg;
+
+    // 2. Read Address (HWC Layout): Addr = rd_base + (y * W + x) * InCh + c
+    always_comb begin
+        automatic logic signed [15:0] row_offset;
+        automatic logic signed [15:0] pixel_offset;
+        
+        row_offset   = y_in * $signed({1'b0, width_in});
+        pixel_offset = row_offset + x_in;
+        calc_rd_addr = AWIDTH'(pixel_offset * $signed({1'b0, in_ch_in}) + $signed({1'b0, c_in}));
+    end
+
+    assign sram_rd_addr = rd_base + calc_rd_addr[M_ADDR_WIDTH-1:0];
+
+    // 3. Write Address (Sequential with ping-pong base)
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            rd_reg <= '0;
-            wr_reg <= '0;
-            x_reg  <= '0;
-            y_reg  <= '0;
-        end else begin
-            rd_reg <= rd_next;
-            wr_reg <= wr_next;
-            x_reg  <= x_next;
-            y_reg  <= y_next;
+            wr_ptr_reg <= '0;
+        end else if (reset_ptr) begin
+            wr_ptr_reg <= '0;
+        end else if (inc_write) begin
+            wr_ptr_reg <= wr_ptr_reg + 1'b1;
         end
     end
 
-    // --------------------------------------------------------------------------
-    // Output Assignment
-    // --------------------------------------------------------------------------
-    assign sram_rd_addr = rd_reg;
-    assign sram_wr_addr = wr_reg;
+    assign sram_wr_addr = wr_base + wr_ptr_reg;
 
 endmodule
