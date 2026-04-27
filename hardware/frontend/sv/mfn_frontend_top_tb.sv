@@ -80,10 +80,10 @@ module mfn_frontend_top_tb;
                 $display(">>> Time=%0t | LAYER CHANGE: Finished Layer %d", $time, dut.u_ctrl.layer_idx);
                 $display("    Saving intermediate results to rtl_out_layer%0d.hex...", dut.u_ctrl.layer_idx);
                 case (dut.u_ctrl.layer_idx)
-                    0: $writememh("rtl_out_layer0.hex", sram_mem);
-                    1: $writememh("rtl_out_layer1.hex", sram_mem);
-                    2: $writememh("rtl_out_layer2.hex", sram_mem);
-                    default: $writememh("rtl_out.hex", sram_mem);
+                    0: $writememh("hex/rtl_out_layer0.hex", sram_mem);
+                    1: $writememh("hex/rtl_out_layer1.hex", sram_mem);
+                    2: $writememh("hex/rtl_out_layer2.hex", sram_mem);
+                    default: $writememh("hex/rtl_out.hex", sram_mem);
                 endcase
                 
                 // Stop after Layer 2 (PW-Conv)
@@ -122,7 +122,7 @@ module mfn_frontend_top_tb;
         start_inference = 0;
         
         for (int i=0; i<(1<<M_ADDR_WIDTH); i++) sram_mem[i] = '0;
-        $readmemh("input.hex", sram_mem);
+        $readmemh("hex/input.hex", sram_mem);
 
         $display("Starting MobileFaceNet Layer 0 + Layer 1 + Layer 2 Test...");
         
@@ -136,7 +136,7 @@ module mfn_frontend_top_tb;
         $display("Total Cycles: %0d", cycle_count);
         $display("========================================");
         
-        $writememh("rtl_out.hex", sram_mem);
+        $writememh("hex/rtl_out.hex", sram_mem);
         #100;
         $finish;
     end

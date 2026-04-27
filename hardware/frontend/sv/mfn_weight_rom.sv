@@ -15,7 +15,7 @@ module mfn_weight_rom #(
 
     initial begin
         for (int i=0; i<262144; i++) mem[i] = '0;
-        $readmemh("weights.hex", mem);
+        $readmemh("hex/weights.hex", mem);
     end
 
     // Combinatorial Read

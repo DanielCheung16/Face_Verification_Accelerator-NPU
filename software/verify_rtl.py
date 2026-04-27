@@ -27,10 +27,10 @@ C, H_out, W_out = params["C"], params["H"], params["W"]
 RTL_OUTPUT_OFFSET = params["offset"]
 
 GOLDEN_FILE = f"software/golden/{params['golden']}"
-RTL_HEX_FILE = f"hardware/frontend/sim/rtl_out_layer{layer}.hex"
+RTL_HEX_FILE = f"hardware/frontend/sim/hex/rtl_out_layer{layer}.hex"
 # Fallback for compatibility
 if not os.path.exists(RTL_HEX_FILE):
-    RTL_HEX_FILE = "hardware/frontend/sim/rtl_out.hex"
+    RTL_HEX_FILE = "hardware/frontend/sim/hex/rtl_out.hex"
 
 if not os.path.exists(RTL_HEX_FILE):
     print(f"Error: RTL hex file not found (tried layer{layer} and default). Run 'make top' first.")

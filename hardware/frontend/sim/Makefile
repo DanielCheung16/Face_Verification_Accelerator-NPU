@@ -61,5 +61,5 @@ top_gui:
 	source $(ENV_FILE); xrun $(XFLAGS) -gui $(ALL_SV_SRC) $(TOP_TB)
 
 clean:
-	rm -rf xcelium.d INCA_libs xrun.log xrun.history waves.shm *.key
+	rm -rf xcelium.d INCA_libs xrun.log xrun.history waves.shm *.key hex/*.hex
 	@echo "Cleaned."

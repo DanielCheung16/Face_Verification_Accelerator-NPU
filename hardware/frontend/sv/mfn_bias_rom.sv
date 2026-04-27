@@ -14,7 +14,7 @@ module mfn_bias_rom #(
 
     initial begin
         for (int i=0; i<1024; i++) mem[i] = '0;
-        $readmemh("bias.hex", mem);
+        $readmemh("hex/bias.hex", mem);
     end
 
     assign bias_out = mem[addr];

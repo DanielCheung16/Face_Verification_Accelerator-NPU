@@ -14,7 +14,7 @@ module mfn_prelu_rom #(
 
     initial begin
         for (int i=0; i<1024; i++) mem[i] = '0;
-        $readmemh("prelu.hex", mem);
+        $readmemh("hex/prelu.hex", mem);
     end
 
     assign prelu_out = mem[addr];

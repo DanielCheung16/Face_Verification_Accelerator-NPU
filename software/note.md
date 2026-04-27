@@ -5,12 +5,37 @@
 
 目前專案已從單層驗證（v0）升級為 **全網端到端推論 (End-to-End Inference)**，支援從圖片輸入到輸出 128D Embedding 的完整流程。
 
-### 資料夾結構
-位於 `software/` 目錄下的架構：
-- `python/`：包含 MobileFaceNet 的 PyTorch 推論腳本、模型權重匯出工具、以及 C/Python 雙軌比對驗證程式。
-- `c_model/`：C Reference Model 實作原始碼，包含積木驗證模組與全網推論引擎。
-- `golden/`：存放用於 **Block-by-Block (單一模組)** 驗證的中繼純文字檔案 (Weights, Biases, Activation I/O)。
-- `golden_weights/`：存放 **全網推論 (End-to-End)** 所需的 150+ 個已融合 (Fused) 參數檔案。
+### 資料夾結構與用途 (Detailed)
+位於 `software/` 目錄下的主要架構與其在開發流程中的角色：
+
+1. **`software/golden/` (存放測試輸入與標準結果)**
+   - **內容**：包含測試影像輸入 (`layer0_in.txt`) 以及每一層運算後的標準答案（Golden Output）。
+   - **差異**：你會看到檔名結尾有不同後綴：
+     - `_pytorch.txt`: PyTorch 浮點數結果（原始參考）。
+     - `_c.txt`: C 語言模型浮點數結果。
+     - **`_fixed.txt`**: 定點數（Fixed-point）模擬結果，這是硬體最精確的參考對象。
+   - **誰在使用**：**`verify_rtl.py`**。它會讀取這裡的 `_fixed.txt` 檔案，拿來跟 RTL 跑出的 `.hex` 結果做位元級（Bit-true）比對。
+
+2. **`software/golden_weights/` (原始浮點數權重)**
+   - **內容**：包含所有層的原始浮點數權重、Bias 與 PReLU 參數。
+   - **用途**：這是還沒經過量化（Quantization）的原始資料，通常提供給 C 語言浮點數模型或 PyTorch 腳本使用。
+
+3. **`software/golden_weights_fixed/` (量化後的定點數權重)**
+   - **內容**：包含已經量化成整數（例如 16-bit Q10 或 32-bit Q20）的權重與參數。
+   - **差異**：這裡的數值是硬體（RTL）可以直接處理的整數格式。
+   - **誰在使用**：**`gen_hex.py`**。它會讀取這裡的定點數權重，並把它們打包成硬體模擬所需的 `.hex` 檔案。
+
+#### 總結對照表
+
+| 資料夾 | 主要內容 | `verify_rtl.py` 用它嗎？ | `gen_hex.py` 用它嗎？ |
+| :--- | :--- | :---: | :---: |
+| **`golden/`** | 輸入資料與各層**標準結果** | **是** (讀取 `_fixed.txt` 比對) | 否 |
+| **`golden_weights/`** | 原始**浮點數**權重 | 否 | 否 |
+| **`golden_weights_fixed/`** | 量化後的**定點數**權重 | 否 | **是** (讀取權重轉成 `hex`) |
+
+**快速指南：**
+- 如果你要**產生給硬體跑的資料**，請找 `golden_weights_fixed`。
+- 如果你要**檢查硬體跑得對不對**，請看 `golden` 目錄下的 `_fixed.txt` 結果。
 
 ---
 

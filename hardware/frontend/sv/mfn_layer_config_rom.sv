@@ -17,7 +17,7 @@ module mfn_layer_config_rom #(
 
     initial begin
         for (int i = 0; i < 64; i++) rom_data[i] = '0;
-        $readmemh("config.hex", rom_data);
+        $readmemh("hex/config.hex", rom_data);
     end
 
     always_ff @(posedge clk) begin
