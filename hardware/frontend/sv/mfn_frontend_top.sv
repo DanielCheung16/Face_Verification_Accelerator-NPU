@@ -23,17 +23,21 @@ module mfn_frontend_top #(
     output logic signed [DWIDTH-1:0] pixel_out
 );
 
-    // Internal Signals
-    logic [5:0]  layer_idx;
+    // Layer Configuration Wires
     logic [63:0] layer_config;
+    logic [5:0]  layer_idx;
+    logic [9:0]  in_ch, out_ch;
+    logic [7:0]  img_w, img_h;
+    logic [1:0]  layer_stride;
+    logic        layer_is_pw, layer_is_dw;
+    
+    // Internal Signals
     logic        reset_ptr;
     logic        inc_write;
     logic        ping_pong;
     
     logic signed [8:0] x_ctrl, y_ctrl;
     logic [9:0]        c_in_ctrl;
-    logic [7:0]        img_w, img_h;
-    logic [9:0]        in_ch, out_ch;
     logic              is_pad;
     
     logic              load_pixel;
@@ -59,6 +63,7 @@ module mfn_frontend_top #(
         .done(inference_done),
         .layer_idx(layer_idx),
         .layer_config(layer_config),
+        .layer_is_pw(layer_is_pw),
         .reset_ptr(reset_ptr),
         .inc_write(inc_write),
         .x_out(x_ctrl),
@@ -87,6 +92,9 @@ module mfn_frontend_top #(
     assign out_ch = layer_config[19:10];
     assign img_w  = layer_config[27:20];
     assign img_h  = layer_config[35:28];
+    assign layer_stride = layer_config[37:36];
+    assign layer_is_pw = layer_config[40];
+    assign layer_is_dw = layer_config[41];
 
     // Internal write address (before pipeline delay)
     logic [M_ADDR_WIDTH-1:0] sram_wr_addr_raw;

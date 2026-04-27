@@ -1,7 +1,7 @@
 // ==============================================================================
 // Module: mfn_layer_config_rom
-// Description: Configuration ROM (64-bit packed) with DW-Conv and wgt_base.
-// Format: {reserved(5), wgt_base(18), is_dw(1), pp(1), prelu(1), stride(2),
+// Description: Configuration ROM (64-bit packed)
+// Format: {reserved(5), wgt_base(18), is_dw(1), is_pw(1), pp(1), prelu(1), stride(2),
 //          h(8), w(8), out_ch(10), in_ch(10)}
 // ==============================================================================
 

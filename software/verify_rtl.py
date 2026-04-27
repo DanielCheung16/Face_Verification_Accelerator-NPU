@@ -13,12 +13,13 @@ layer = int(sys.argv[1]) if len(sys.argv) > 1 else 1  # default: Layer 1
 
 # Layer parameters
 LAYER_PARAMS = {
-    0: {"C": 64, "H": 56, "W": 48, "golden": "layer0_out_fixed.txt", "offset": 0x10000},
+    0: {"C": 64, "H": 56, "W": 48, "golden": "layer0_out_fixed.txt", "offset": 0x2A000},
     1: {"C": 64, "H": 56, "W": 48, "golden": "layer1_out_fixed.txt", "offset": 0x00000},  # ping-pong back
+    2: {"C": 128, "H": 56, "W": 48, "golden": "layer2_out_fixed.txt", "offset": 0x2A000}, # ping-pong again
 }
 
 if layer not in LAYER_PARAMS:
-    print(f"Error: Layer {layer} not supported. Use 0 or 1.")
+    print(f"Error: Layer {layer} not supported.")
     exit(1)
 
 params = LAYER_PARAMS[layer]
@@ -26,10 +27,13 @@ C, H_out, W_out = params["C"], params["H"], params["W"]
 RTL_OUTPUT_OFFSET = params["offset"]
 
 GOLDEN_FILE = f"software/golden/{params['golden']}"
-RTL_HEX_FILE = "hardware/frontend/sim/rtl_out.hex"
+RTL_HEX_FILE = f"hardware/frontend/sim/rtl_out_layer{layer}.hex"
+# Fallback for compatibility
+if not os.path.exists(RTL_HEX_FILE):
+    RTL_HEX_FILE = "hardware/frontend/sim/rtl_out.hex"
 
 if not os.path.exists(RTL_HEX_FILE):
-    print(f"Error: {RTL_HEX_FILE} not found. Please run 'make top' first.")
+    print(f"Error: RTL hex file not found (tried layer{layer} and default). Run 'make top' first.")
     exit(1)
 
 if not os.path.exists(GOLDEN_FILE):

@@ -19,6 +19,7 @@ module mfn_controller #(
     // Config ROM Interface
     output logic [5:0]        layer_idx,
     input  logic [63:0]       layer_config,
+    input  logic              layer_is_pw,
     
     // Addr Gen Interface
     output logic              reset_ptr,
@@ -84,18 +85,22 @@ module mfn_controller #(
     // Kernel offset LUT (replaces k%3 and k/3)
     logic signed [1:0] kx_offset, ky_offset;
     always_comb begin
-        case (k_reg)
-            4'd0: begin kx_offset = -2'sd1; ky_offset = -2'sd1; end
-            4'd1: begin kx_offset =  2'sd0; ky_offset = -2'sd1; end
-            4'd2: begin kx_offset =  2'sd1; ky_offset = -2'sd1; end
-            4'd3: begin kx_offset = -2'sd1; ky_offset =  2'sd0; end
-            4'd4: begin kx_offset =  2'sd0; ky_offset =  2'sd0; end
-            4'd5: begin kx_offset =  2'sd1; ky_offset =  2'sd0; end
-            4'd6: begin kx_offset = -2'sd1; ky_offset =  2'sd1; end
-            4'd7: begin kx_offset =  2'sd0; ky_offset =  2'sd1; end
-            4'd8: begin kx_offset =  2'sd1; ky_offset =  2'sd1; end
-            default: begin kx_offset = 2'sd0; ky_offset = 2'sd0; end
-        endcase
+        if (layer_is_pw) begin
+            kx_offset = 2'sd0; ky_offset = 2'sd0;
+        end else begin
+            case (k_reg)
+                4'd0: begin kx_offset = -2'sd1; ky_offset = -2'sd1; end
+                4'd1: begin kx_offset =  2'sd0; ky_offset = -2'sd1; end
+                4'd2: begin kx_offset =  2'sd1; ky_offset = -2'sd1; end
+                4'd3: begin kx_offset = -2'sd1; ky_offset =  2'sd0; end
+                4'd4: begin kx_offset =  2'sd0; ky_offset =  2'sd0; end
+                4'd5: begin kx_offset =  2'sd1; ky_offset =  2'sd0; end
+                4'd6: begin kx_offset = -2'sd1; ky_offset =  2'sd1; end
+                4'd7: begin kx_offset =  2'sd0; ky_offset =  2'sd1; end
+                4'd8: begin kx_offset =  2'sd1; ky_offset =  2'sd1; end
+                default: begin kx_offset = 2'sd0; ky_offset = 2'sd0; end
+            endcase
+        end
     end
 
     // Incremental weight addressing
@@ -138,7 +143,7 @@ module mfn_controller #(
     end
 
     // Partial Sum Register File
-    logic signed [AWIDTH-1:0] psum_mem [0:63];
+    logic signed [AWIDTH-1:0] psum_mem [0:127];
 
     // --------------------------------------------------------------------------
     // Config Decoding (64-bit)
@@ -149,8 +154,8 @@ module mfn_controller #(
     assign layer_h       = layer_config[35:28];
     assign layer_stride  = layer_config[37:36];
     assign layer_pp      = layer_config[39];
-    assign layer_is_dw   = layer_config[40];
-    assign layer_wgt_base = layer_config[58:41];
+    assign layer_is_dw   = layer_config[41];
+    assign layer_wgt_base = layer_config[59:42];
     
     assign layer_idx      = layer_idx_reg;
     assign x_out          = x_reg + {{7{kx_offset[1]}}, kx_offset};
@@ -221,14 +226,28 @@ module mfn_controller #(
             end
 
             STATE_FETCH_PIXELS: begin
-                if (k_reg < 4'd9) begin
-                    load_pixel_comb = 1'b1;
-                    k_next = k_reg + 1'b1;
+                if (layer_is_pw) begin
+                    // Pointwise: Fetch 1 pixel (k=0), wait 1 cycle for SRAM (k=1), then CALC (k=2)
+                    if (k_reg < 4'd2) begin
+                        load_pixel_comb = (k_reg == 4'd0);
+                        k_next = k_reg + 1'b1;
+                    end else begin
+                        load_pixel_comb = 1'b0;
+                        k_next = '0;
+                        wgt_addr_next = wgt_cin_base_reg;
+                        state_next = STATE_CALC_PSUM;
+                    end
                 end else begin
-                    load_pixel_comb = 1'b0;
-                    k_next = '0;
-                    wgt_addr_next = wgt_cin_base_reg;
-                    state_next = STATE_CALC_PSUM;
+                    // Standard/Depthwise: Fetch 3x3 window (9 pixels)
+                    if (k_reg < 4'd9) begin
+                        load_pixel_comb = 1'b1;
+                        k_next = k_reg + 1'b1;
+                    end else begin
+                        load_pixel_comb = 1'b0;
+                        k_next = '0;
+                        wgt_addr_next = wgt_cin_base_reg;
+                        state_next = STATE_CALC_PSUM;
+                    end
                 end
             end
             
@@ -311,7 +330,7 @@ module mfn_controller #(
             end
             
             STATE_NEXT_LAYER: begin
-                if (layer_idx_reg >= 5'd1) begin   // Stop after Layer 1
+                if (layer_idx_reg >= 5'd2) begin   // Stop after Layer 2
                     state_next = STATE_DONE;
                 end else begin
                     // Accumulate bias base for next layer

@@ -227,3 +227,15 @@ python3 software/verify_rtl.py    # 嚴格比對 (±1)
 - gen_hex.py：將 Config ROM 升級為 64-bit 格式，並實作串接 Layer 0 與 Layer 1 weights、biases 與 prelu 參數的腳本。
 verify_rtl.py：擴充為支援輸入參數選擇驗證哪一層 (e.g., python3 verify_rtl.py 1)，並且會自動調整那一層對應的 SRAM offset 來比較資料。
 現在兩層跑完的總耗時為 3,370,758 cycles，而且準確度完美。
+
+
+# Layer 2 (1x1 Pointwise Convolution) 
+
+這次 Layer 2 的錯誤主要來自我發現的這幾個設計上的小缺陷，我都已經修復了：
+
+1. **psum_mem 暫存器深度問題** : 在 mfn_controller.sv 中，計算 Channel 大於 64 的 PSum 時，原先的 [0:63] 不夠放 128 Channels，導致硬體跑出 x (未知值)。我已經擴充至 128！
+2. **記憶體 Ping-Pong 碰撞覆寫**: 原先的 mfn_addr_gen.sv 裡 ping_pong 邏輯寫死為 0x10000 (65,536)，但 Layer 1 的輸出 Feature Map 共有 172,032 筆資料。因為 Layer 2 開始寫入的位址是 65,536，導致它直接把要讀的 Layer 1 輸出給覆寫掉了！我把 ping-pong 兩邊的位移距離調大到 0x2A000 (172,032)。
+3. **位址乘法溢位 (16-bit 限制)**: 負責生成位址的變數 pixel_offset 寬度只有 16-bit，在乘上 64 Channel 時導致數值溢位歸零。我幫你把它改成 M_ADDR_WIDTH (19-bit) 就可以順利乘法了！
+4. **更新 C-Model 的順序以產生正確 Golden**: 舊的 c_model 裡的 Quantization/PReLU 邏輯順序有誤，導致我一開始以為有錯，後來我自己幫你寫了一個 gen_pw_golden.py 來當真正的驗證依據。
+
+目前 Layer 1 (Depthwise Conv) 和 Layer 2 (Pointwise Conv) 兩個階段的功能都已經 完全正確 實作了！我們能夠跑完完整的 MobileFaceNet 前三個 Convolution。接下來你要我馬上幫你處理之前提到的 MAC Array 加法樹 Pipelining 優化、位址增量 (Incremental Address) 計算優化，還是繼續實作 Bottleneck Block 裡面的 Shortcut/Residual 加法呢？

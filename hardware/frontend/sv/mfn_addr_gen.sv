@@ -30,14 +30,14 @@ module mfn_addr_gen #(
 );
 
     logic [M_ADDR_WIDTH-1:0] wr_ptr_reg;
-    logic [AWIDTH-1:0]       calc_rd_addr;
+    logic [M_ADDR_WIDTH-1:0]       calc_rd_addr;
     logic                    is_pad_comb;
     logic                    is_pad_reg;
 
     // Read/Write base addresses
     logic [M_ADDR_WIDTH-1:0] rd_base, wr_base;
-    assign rd_base = ping_pong ? 18'h10000 : 18'h00000;
-    assign wr_base = ping_pong ? 18'h00000 : 18'h10000;
+    assign rd_base = ping_pong ? 19'h2A000 : 19'h00000;
+    assign wr_base = ping_pong ? 19'h00000 : 19'h2A000;
 
     // 1. Padding Check
     always_comb begin
@@ -58,12 +58,12 @@ module mfn_addr_gen #(
 
     // 2. Read Address (HWC Layout): Addr = rd_base + (y * W + x) * InCh + c
     always_comb begin
-        automatic logic signed [15:0] row_offset;
-        automatic logic signed [15:0] pixel_offset;
+        automatic logic signed [M_ADDR_WIDTH-1:0] row_offset;
+        automatic logic signed [M_ADDR_WIDTH-1:0] pixel_offset;
         
         row_offset   = y_in * $signed({1'b0, width_in});
         pixel_offset = row_offset + x_in;
-        calc_rd_addr = AWIDTH'(pixel_offset * $signed({1'b0, in_ch_in}) + $signed({1'b0, c_in}));
+        calc_rd_addr = M_ADDR_WIDTH'(pixel_offset * $signed({1'b0, in_ch_in}) + $signed({1'b0, c_in}));
     end
 
     assign sram_rd_addr = rd_base + calc_rd_addr[M_ADDR_WIDTH-1:0];

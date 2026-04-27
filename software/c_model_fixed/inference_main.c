@@ -107,6 +107,10 @@ int main(int argc, char** argv) {
             if (!connect) free_tensor_3d(x); // Free early if not using shortcut
             x = next;
             
+            if (block_idx == 0) {
+                dump_tensor_3d("../golden/layer2_out_fixed.txt", x);
+            }
+            
             // DW
             next = run_conv_block_infer(prefix_dw, x, inplanes * t, 3, 3, stride, 1, 1, 1);
             free_tensor_3d(x); x = next;
