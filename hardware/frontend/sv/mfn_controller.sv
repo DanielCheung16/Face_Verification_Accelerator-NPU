@@ -33,13 +33,13 @@ module mfn_controller #(
     // Component Control
     output logic              load_pixel,
     output logic [3:0]        pixel_idx,
-    output logic [17:0]       weight_addr,
+    output logic [19:0]       weight_addr,
     output logic              enable_mac,
     output logic              clear_mac_acc,
     input  logic [AWIDTH-1:0] mac_bias_in,
     
-    // Bias/PReLU address (includes layer base offset)
-    output logic [9:0]        bias_addr,
+    // Bias/PReLU address (includes layer base offset, needs 14 bits for 48 layers)
+    output logic [13:0]       bias_addr,
     
     // Accumulation Output
     input  logic [AWIDTH-1:0] mac_data_in,
@@ -73,12 +73,11 @@ module mfn_controller #(
     // Registers
     // --------------------------------------------------------------------------
     logic [5:0]  layer_idx_reg, layer_idx_next;
-    logic [7:0]  layer_w, layer_h;
+    logic [6:0]  layer_w, layer_h;
     logic [9:0]  layer_in_ch, layer_out_ch;
     logic [1:0]  layer_stride;
     logic        layer_is_dw;
-    logic        layer_pp;
-    logic [17:0] layer_wgt_base;
+    logic [19:0] layer_wgt_base;
     
     logic signed [8:0] x_reg, x_next;
     logic signed [8:0] y_reg, y_next;
@@ -107,13 +106,13 @@ module mfn_controller #(
         end
     end
 
-    // Incremental weight addressing
+    // Incremental weight addressing (relative within layer, 18-bit sufficient)
     logic [17:0] wgt_addr_reg, wgt_addr_next;
     logic [17:0] wgt_cin_base_reg, wgt_cin_base_next;
     logic [17:0] wgt_step_reg, wgt_step_next;
 
-    // Bias/PReLU base per layer (accumulates out_ch per layer)
-    logic [9:0] bias_base_reg, bias_base_next;
+    // Bias/PReLU base per layer (accumulates out_ch per layer, needs 14 bits for 48 layers)
+    logic [13:0] bias_base_reg, bias_base_next;
 
     // Timing alignment
     logic [3:0]  k_reg_d1;
@@ -150,31 +149,28 @@ module mfn_controller #(
         end
     end
 
-    // Partial Sum Register File
-    logic signed [AWIDTH-1:0] psum_mem [0:127];
+    // Partial Sum Register File (needs 512 entries for max 512ch output layers)
+    logic signed [AWIDTH-1:0] psum_mem [0:511];
 
     // --------------------------------------------------------------------------
     // Config Decoding (64-bit)
+    // New layout: {wr_buf(2),rd_buf(2),wgt_base(20),is_dw(1),is_pw(1),is_res(1),
+    //              prelu(1),stride(2),h(7),w(7),out_ch(10),in_ch(10)}
     // --------------------------------------------------------------------------
-    assign layer_in_ch   = layer_config[9:0];
-    assign layer_out_ch  = layer_config[19:10];
-    assign layer_w       = layer_config[27:20];
-    assign layer_h       = layer_config[35:28];
-    assign layer_stride  = layer_config[37:36];
-    assign layer_pp      = layer_config[39];
-    assign layer_is_dw   = layer_config[41];
-    assign layer_wgt_base = layer_config[59:42];
+    assign layer_in_ch    = layer_config[9:0];
+    assign layer_out_ch   = layer_config[19:10];
+    assign layer_w        = layer_config[26:20];
+    assign layer_h        = layer_config[33:27];
+    assign layer_stride   = layer_config[35:34];
+    assign layer_is_dw    = layer_config[39];
+    assign layer_wgt_base = layer_config[59:40];
     
     assign layer_idx      = layer_idx_reg;
     assign x_out          = x_reg + {{7{kx_offset[1]}}, kx_offset};
     assign y_out          = y_reg + {{7{ky_offset[1]}}, ky_offset};
-    // DW-Conv: c_in follows c_out
-    // PW-Conv: c_in is c_in_reg + k_reg (fetch 9 channels)
-    // Standard: c_in is independent
-    // Residual: c_in follows c_out during WRITE_BACK/READ_RES
-    assign c_in_out       = (layer_is_dw || state_reg == STATE_READ_RESIDUAL || state_reg == STATE_WRITE_BACK) ? c_out_reg : 
+    assign c_in_out       = (layer_is_dw || state_reg == STATE_READ_RESIDUAL || state_reg == STATE_WRITE_BACK) ? c_out_reg :
                             (layer_is_pw ? (c_in_reg + {6'd0, k_reg}) : c_in_reg);
-    assign bias_addr      = bias_base_reg + c_out_reg;
+    assign bias_addr      = bias_base_reg + {4'd0, c_out_reg};
     assign read_res       = (state_reg == STATE_READ_RESIDUAL);
 
     // --------------------------------------------------------------------------
@@ -216,11 +212,12 @@ module mfn_controller #(
                 if (layer_is_dw)
                     wgt_step_next = 18'd9;   // DW: only 9 weights per channel
                 else if (layer_is_pw) begin
+                    // step = ceil(in_ch/9)*9 (packed weight groups per output channel)
                     case (layer_in_ch)
-                        10'd64:  wgt_step_next = 18'd72;
-                        10'd128: wgt_step_next = 18'd135;
-                        10'd256: wgt_step_next = 18'd261;
-                        10'd512: wgt_step_next = 18'd522;
+                        10'd64:  wgt_step_next = 18'd72;   // ceil(64/9)=8,  8*9=72
+                        10'd128: wgt_step_next = 18'd135;  // ceil(128/9)=15, 15*9=135
+                        10'd256: wgt_step_next = 18'd261;  // ceil(256/9)=29, 29*9=261
+                        10'd512: wgt_step_next = 18'd513;  // ceil(512/9)=57, 57*9=513
                         default: wgt_step_next = 18'd72;
                     endcase
                 end
@@ -274,7 +271,7 @@ module mfn_controller #(
             
             STATE_CALC_PSUM: begin
                 enable_mac  = 1'b1;
-                weight_addr = layer_wgt_base + wgt_addr_reg;
+                weight_addr = layer_wgt_base + {2'b0, wgt_addr_reg};
                 wgt_addr_next = wgt_addr_reg + wgt_step_reg;
                 
                 if (layer_is_dw) begin
@@ -395,7 +392,7 @@ module mfn_controller #(
             end
             
             STATE_NEXT_LAYER: begin
-                if (layer_idx_reg >= 5'd7) begin   // Stop after Layer 7
+                if (layer_idx_reg >= 6'd47) begin  // Stop after Layer 47 (Conv2)
                     state_next = STATE_DONE;
                 end else begin
                     // Accumulate bias base for next layer
@@ -446,7 +443,7 @@ module mfn_controller #(
             wgt_addr_reg     <= '0;
             wgt_cin_base_reg <= '0;
             wgt_step_reg     <= '0;
-            bias_base_reg    <= '0;
+            bias_base_reg    <= 14'd0;
         end else begin
             state_reg        <= state_next;
             layer_idx_reg    <= layer_idx_next;

@@ -7,21 +7,21 @@ module mfn_weight_rom #(
     parameter int DWIDTH = 16
 )(
     input  logic              clk,
-    input  logic [17:0]       addr,
+    input  logic [19:0]       addr,
     output logic signed [DWIDTH-1:0] weights_out [0:8]
 );
 
-    logic signed [DWIDTH-1:0] mem [0:262143];
+    logic signed [DWIDTH-1:0] mem [0:1048575];
 
     initial begin
-        for (int i=0; i<262144; i++) mem[i] = '0;
+        for (int i=0; i<1048576; i++) mem[i] = '0;
         $readmemh("hex/weights.hex", mem);
     end
 
     // Combinatorial Read
     always_comb begin
         for (int i = 0; i < 9; i++) begin
-            if (addr + i < 262144)
+            if (addr + i < 1048576)
                 weights_out[i] = mem[addr + i];
             else
                 weights_out[i] = '0;

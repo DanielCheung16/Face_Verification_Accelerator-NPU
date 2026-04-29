@@ -2,14 +2,20 @@
 
 ## 目前狀態摘要
 
-| Layer | 類型 | 狀態 |
-|-------|------|------|
-| Layer 0 | 3×3 Standard Conv | ✅ RTL 與 Fixed C-model **100.00% Exact Match** |
-| Layer 1 | 3×3 Depthwise Conv | ✅ RTL 與 Fixed C-model **100.00% Exact Match** |
-| Layer 2 | 1×1 Pointwise Conv | ✅ **效能優化版** (9-lane parallel) **100.00% Exact Match** |
-| Layer 3 | Residual Shortcut  | ✅ **3-Buffer 輪轉** (Resid-Add) **100.00% Exact Match** |
+| 範圍 | 內容 | 狀態 |
+|------|------|------|
+| Layer 0 | Conv1 (3→64, stride 2) | ✅ **100.00% Exact Match** |
+| Layer 1 | DW1 (64ch, stride 1) | ✅ **100.00% Exact Match** |
+| Layer 2–4 | Bottleneck Block 0 (stride 2, 64ch) | ✅ **100.00% Exact Match** |
+| Layer 5–7 | Bottleneck Block 1 (stride 1, 64ch, Residual) | ✅ **100.00% Exact Match** |
+| Layer 8–16 | Bottleneck Block 2–4 (stride 1, 64ch, Residual) | ✅ **100.00% Exact Match** |
+| Layer 17–19 | Bottleneck Block 5 (stride 2, 64→256→128ch) | ✅ **100.00% Exact Match** |
+| Layer 20–37 | Bottleneck Block 6–11 (stride 1, 128ch, Residual) | ✅ **100.00% Exact Match** |
+| Layer 38–40 | Bottleneck Block 12 (stride 2, 128→512→128ch) | ✅ **100.00% Exact Match** |
+| Layer 41–46 | Bottleneck Block 13–14 (stride 1, 128ch, Residual) | ✅ **100.00% Exact Match** |
+| Layer 47 | Conv2 (128→512, 1×1) | ✅ **100.00% Exact Match** |
 
-> **Layer 0 ~ 3 總執行時間：7,730,700 cycles** (含 Pointwise 9x 加速)
+> **全 48 層總執行時間：41,694,006 cycles**
 
 ---
 
@@ -447,10 +453,18 @@ input → 9 multipliers → register → adder tree → output
 
 | Layer | Type | Input | Output | 狀態 |
 |-------|------|-------|--------|------|
-| Layer 0 | 3×3 Standard Conv | 3×112×96 | 64×56×48 | ✅ 100.00% Exact Match |
-| Layer 1 | 3×3 Depthwise Conv | 64×56×48 | 64×56×48 | ✅ 100.00% Exact Match |
-| Layer 2 | 1×1 Pointwise Conv | 64×56×48 | 64×56×48 | ✅ 100.00% Exact Match (9-lane opt) |
-| Layer 3 | Residual Addition  | 64×56×48 | 64×56×48 | ✅ 100.00% Exact Match (Resid-Add) |
+| L0 | Conv1 (3×3 stride 2) | 3×112×96 | 64×56×48 | ✅ 100.00% |
+| L1 | DW1 (3×3 stride 1) | 64×56×48 | 64×56×48 | ✅ 100.00% |
+| L2–L4 | Block0 (PW1/DW s2/PW2) | 64×56×48 | 64×28×24 | ✅ 100.00% |
+| L5–L7 | Block1 (PW1/DW/PW2+Res) | 64×28×24 | 64×28×24 | ✅ 100.00% |
+| L8–L16 | Block2–4 (×3, Residual) | 64×28×24 | 64×28×24 | ✅ 100.00% |
+| L17–L19 | Block5 (PW1 256ch/DW s2/PW2) | 64×28×24 | 128×14×12 | ✅ 100.00% |
+| L20–L37 | Block6–11 (×6, Residual) | 128×14×12 | 128×14×12 | ✅ 100.00% |
+| L38–L40 | Block12 (PW1 512ch/DW s2/PW2) | 128×14×12 | 128×7×6 | ✅ 100.00% |
+| L41–L46 | Block13–14 (×2, Residual) | 128×7×6 | 128×7×6 | ✅ 100.00% |
+| L47 | Conv2 (1×1, 128→512) | 128×7×6 | 512×7×6 | ✅ 100.00% |
+| — | linear7 (7×6 DW) | 512×7×6 | 512×1×1 | ❌ 硬體不支援（large kernel）|
+| — | linear1 (1×1, 512→128) | 512×1×1 | 128×1×1 | ⬜ 待驗證 |
 
 ---
 
@@ -541,6 +555,9 @@ python3 software/verify_rtl.py 2
 | 2026-04-27 | Pointwise 效能優化 | 實作 9-lane 並行讀取，效能提升 ~9x |
 | 2026-04-27 | 殘差連接與 3-Buffer | 實作 3-buffer 輪轉與 Resid-Add，Layer 3 驗證成功 |
 | 2026-04-27 | Pipeline 時序優化 | MAC Array 加入二級 pipeline，修正控制器 delay 對齊 |
+| 2026-04-29 | Config 位元重排 | h/w 8b→7b，wgt_base 18b→20b，bias_addr 10b→14b，psum_mem 擴為 512 |
+| 2026-04-29 | gen_hex.py 完整重寫 | 支援全 48 層，總權重 922,176 entries，總 bias 9,152 entries |
+| 2026-04-29 | 全 48 層 RTL 驗證通過 | L0–L47 全部 100.00% Exact Match，41,694,006 cycles |
 
 ---
 
@@ -705,10 +722,205 @@ MobileFaceNet Frontend RTL 已從單層 3×3 Conv 推進到前三個 convolution
 *   **gen_hex.py**: 更新 Buffer 輪轉順序（Layer 6 改寫入 Buffer 0），避免在殘差加法前覆寫原始輸入 (Buffer 1)。
 *   **verify_rtl.py**: 更新至支援 8 層自動化比對。
 
-## 20. 下一步工作 (Next Steps)
+## 20. 下一步工作 (2026-04-29 更新前)
 
 1. **全網路配置自動化**：開發指令碼從 PyTorch/ONNX 直接提取 50 餘層的權重與 Config，生成完整的 `config.hex` 與 `weights.hex`。
 2. **多 Buffer 策略優化**：考慮加入更智慧的 Buffer 分配算法，以支援更高解析度或更深通道的 Feature Maps。
 3. **前端系統整合**：目前僅在 TB 運作，需準備 AXI-Stream 接口與外部 DMA 接軌。
+
+---
+
+## 21. Phase F：全網路擴展 L0–L47 (2026-04-29)
+
+### 21.1 目標
+
+將 RTL 模擬從已驗證的 **8 層 (L0–L7)** 擴展至完整的 **48 層 (L0–L47)**，涵蓋：
+- Conv1, DW1
+- 15 個 Bottleneck Block（Blocks 0–14）
+- Conv2
+
+> **不包含** `linear7`（7×6 global DW，硬體 3×3 sliding window 無法支援）與 `linear1`（1×1 FC 層）。
+
+---
+
+### 21.2 RTL 修改：位址空間擴展
+
+#### 問題根因
+
+| 問題 | 說明 |
+|------|------|
+| `wgt_base` 只有 18-bit | 48 層總權重 922,176 entries，超過 18-bit 上限 262,144 |
+| `bias_addr` 只有 10-bit | 9,152 bias entries 超過 10-bit 上限 1,024 |
+| `psum_mem` 深度為 128 | Block 12 PW1 output channel 達 512，超出索引範圍 |
+| `wgt_step` in_ch=512 寫錯 | 原為 `18'd522`，正確為 `18'd513`（ceil(512/9)×9）|
+
+#### 解法：Config 位元重排
+
+原有 `h/w` 欄位各 8-bit（上限 255），但實際最大值為 112/96，7-bit（上限 127）已足夠。  
+縮減 h/w 各 1-bit，釋出 2-bit 給 `wgt_base`，使其從 18-bit 擴展為 **20-bit**。
+
+**新 64-bit Config 格式：**
+
+```
+[9:0]   in_ch      (10-bit)
+[19:10] out_ch     (10-bit)
+[26:20] w          (7-bit)   ← 縮減 1-bit
+[33:27] h          (7-bit)   ← 縮減 1-bit
+[35:34] stride     (2-bit)
+[36]    has_prelu  (1-bit)
+[37]    is_res     (1-bit)
+[38]    is_pw      (1-bit)
+[39]    is_dw      (1-bit)
+[59:40] wgt_base   (20-bit)  ← 從 18-bit 擴展
+[61:60] rd_buf     (2-bit)
+[63:62] wr_buf     (2-bit)
+```
+
+#### 修改的 RTL 檔案
+
+| 檔案 | 修改內容 |
+|------|----------|
+| `mfn_controller.sv` | `wgt_base` 18→20-bit；`bias_addr`/`bias_base_reg` 10→14-bit；`psum_mem` 深度 128→512；修正 `wgt_step` in_ch=512 為 `18'd513`；停止條件改為 `layer_idx_reg >= 6'd47` |
+| `mfn_weight_rom.sv` | addr 18→20-bit；mem 大小 262,144→1,048,576 |
+| `mfn_bias_rom.sv` | addr 10→14-bit；mem 大小 1,024→16,384 |
+| `mfn_prelu_rom.sv` | addr 10→14-bit；mem 大小 1,024→16,384 |
+| `mfn_frontend_top.sv` | `img_w`/`img_h` 8→7-bit；`weight_addr`/`bias_addr` 更新；Config decode 欄位同步更新 |
+| `mfn_addr_gen.sv` | `width_in`/`height_in` 8→7-bit |
+
+---
+
+### 21.3 Software 修改
+
+#### `hardware/frontend/sim/gen_hex.py`（完整重寫）
+
+- 新增 `make_config()` 函式，對應新的 64-bit 位元佈局
+- 載入全部 48 層的 weight / bias / PReLU（blocks_0–blocks_14、conv2）
+- 正確計算各層 PW weight packing：`wgt_step = ceil(in_ch/9) * 9`
+- 輸出：`weights.hex`（922,176 entries，< 2²⁰）、`bias.hex`（9,152 entries，< 2¹⁴）、`config.hex`（48 entries）
+- 含 assertion 驗證不超出位址空間
+
+**Buffer 輪轉策略（全 48 層）：**
+
+三個 Buffer（B0=0x00000，B1=0x54000，B2=0xA8000，各 344,064 words），  
+`res_buf = 3 - rd_buf - wr_buf` 自動為 DW 層保留 residual source。
+
+| Layer 範圍 | 說明 | wr_buf |
+|-----------|------|--------|
+| L0 Conv1 | rd=B0, wr=B1 | B1 |
+| L1 DW1 | rd=B1, wr=B2 | B2 |
+| L2–L4 Block0 | PW1/DW/PW2 輪轉 B1/B2/B1 | — |
+| L5–L7 Block1 | PW1→B2, DW→B0, PW2+Res→B2 | B2 |
+| L8–L47 | 繼續按 (rd,wr) = cyclic 三輪 | 依層決定 |
+| L47 Conv2 | rd=B2, wr=B1 | B1 |
+
+#### `software/gen_all_golden.py`（新增 L8–L47）
+
+新增兩個向量化函式以加速大通道層（256ch、512ch）的 golden 計算：
+
+```python
+def pw_conv_fast(inp, wgt, bias, alpha, has_prelu):
+    # 矩陣乘法實作 1×1 conv，全 spatial 位置一次計算
+    # W(c_out,c_in) @ I(c_in,h*w) → Q20 >> 10 → clamp → PReLU
+
+def dw_conv_fast(inp, wgt, bias, alpha, stride, has_prelu):
+    # 對 3×3 kernel 展開 loop（9次），向量化 channel 維度
+    # 使用 int64 防止 overflow
+```
+
+Residual addition 使用正確的 int32 中間型別後 clamp：
+
+```python
+def res_add(a, b):
+    return np.clip(a.astype(np.int32) + b.astype(np.int32), -32768, 32767).astype(np.int16)
+```
+
+新增 `bottleneck_fast(inp, name, c_mid, c_out, stride, l_start)` 統一處理每個 Block 的 PW1→DW→PW2 三層。
+
+#### `hardware/frontend/sv/mfn_frontend_top_tb.sv`（更新）
+
+- `case (layer_idx)` 擴展至 L0–L47，每層完成後 `$writememh` 存一份 SRAM snapshot
+- 停止條件從 `layer_idx == 7` 改為 `layer_idx == 6'd47`
+- 移除僅用於 debug 的冗長 `$display` 輸出
+
+#### `software/verify_rtl.py`（更新）
+
+新增 `LAYER_PARAMS` 中全部 48 層的輸出維度與 SRAM offset：
+
+| 層級 | (C, H, W) | offset |
+|------|-----------|--------|
+| L0 | (64, 56, 48) | B1 |
+| L3 | (128, 28, 24) | B2 |（stride 2）|
+| L17 | (256, 28, 24) | B2 |（64→256 expansion）|
+| L18 | (256, 14, 12) | B0 |（stride 2）|
+| L38 | (512, 14, 12) | B1 |（128→512 expansion）|
+| L39 | (512, 7, 6) | B0 |（stride 2）|
+| L47 | (512, 7, 6) | B1 |（Conv2）|
+| … | … | … |
+
+---
+
+### 21.4 驗證結果
+
+```
+=== 全 48 層 100.00% Exact Match ===
+總執行時間：41,694,006 cycles
+```
+
+| Layer | 類型 | 輸出 (C,H,W) | 結果 |
+|-------|------|-------------|------|
+| 0 | Conv1 | (64,56,48) | ✅ 100% |
+| 1 | DW1 | (64,56,48) | ✅ 100% |
+| 2–4 | Block0 | 64ch, 28×24 | ✅ 100% |
+| 5–7 | Block1 | 64ch, 28×24 | ✅ 100% |
+| 8–16 | Block2–4 | 64ch, 28×24 | ✅ 100% |
+| 17 | B5-PW1 | (256,28,24) | ✅ 100% |
+| 18 | B5-DW | (256,14,12) | ✅ 100% |
+| 19–37 | Block5–11 | 128ch, 14×12 | ✅ 100% |
+| 38 | B12-PW1 | (512,14,12) | ✅ 100% |
+| 39 | B12-DW | (512,7,6) | ✅ 100% |
+| 40–46 | Block12–14 | 128ch, 7×6 | ✅ 100% |
+| 47 | Conv2 | (512,7,6) | ✅ 100% |
+
+---
+
+### 21.5 驗證步驟（完整流程）
+
+```bash
+# Step 1：產生 HEX（從 sim 目錄執行）
+cd hardware/frontend/sim
+python3 gen_hex.py
+
+# Step 2：產生全部 Golden
+cd ../../..
+python3 software/gen_all_golden.py
+
+# Step 3：RTL 模擬（Xcelium）
+cd hardware/frontend/sim
+make top
+
+# Step 4：逐層比對
+cd ../../..
+for i in $(seq 0 47); do python3 software/verify_rtl.py $i; done
+```
+
+---
+
+## 22. 下一步 TODO（2026-04-29）
+
+### 硬體功能
+
+- [ ] **`linear7` 支援**：7×6 global DW conv（`linear7` 層）目前硬體 3×3 sliding window 無法支援，需要為 global pooling / large-kernel DW 設計獨立路徑或 special mode。
+- [ ] **`linear1` 支援**：1×1 PW conv（512→128）原理上與現有 PW 相同，但 out_ch=128 < in_ch=512，可直接套用現有 PW 路徑驗證。
+
+### 時序優化（Synthesis）
+
+- [ ] **`mfn_addr_gen.sv` 拆分 2-stage**：`pixel_offset = y * W + x`（Stage 1）→ `addr = pixel_offset * C + c`（Stage 2），降低組合邏輯深度。
+- [ ] **`mfn_activation.sv` PReLU pipeline**：PReLU 乘法器後插一級暫存器，縮短 critical path。
+- [ ] **Design Compiler 跑 timing report**：確認 100MHz target 下的 setup/hold violation。
+
+### 系統整合
+
+- [ ] **AXI-Stream / DMA 介面**：目前僅在 TB 內部 SRAM 運作，需接 AXI-Stream 供外部 DMA 存取 feature map。
+- [ ] **多組測試向量**：目前只驗證一張 112×96 input image，補充多組測試向量以提高覆蓋率。
 
 

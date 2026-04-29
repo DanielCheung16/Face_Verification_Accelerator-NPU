@@ -95,3 +95,113 @@ l7_res = l7_conv + l4_out # Shortcut from l4_out
 save_fixed("layer7_out_fixed.txt", l7_res)
 
 print("Layer 0-7 Golden Generated.")
+
+# ---- Vectorized helpers for L8-L47 ----------------------------------------
+
+def pw_conv_fast(inp, wgt, bias, alpha, has_prelu):
+    """Pointwise (1x1) conv in Q10 fixed-point, vectorized over all spatial positions."""
+    c_in, h, w = inp.shape[1], inp.shape[2], inp.shape[3]
+    c_out = wgt.shape[0]
+    W = wgt[:, :, 0, 0].astype(np.int64)                       # (c_out, c_in)
+    I = inp[0].reshape(c_in, h * w).astype(np.int64)           # (c_in, h*w)
+    out = (W @ I) + bias[:, np.newaxis].astype(np.int64)        # (c_out, h*w)
+    out = out >> 10
+    out = np.clip(out, -32768, 32767)
+    if has_prelu:
+        neg = out < 0
+        prelu = np.clip((out * alpha[:, np.newaxis].astype(np.int64)) >> 10, -32768, 32767)
+        out = np.where(neg, prelu, out)
+    return out.reshape(1, c_out, h, w).astype(np.int16)
+
+
+def dw_conv_fast(inp, wgt, bias, alpha, stride, has_prelu):
+    """Depthwise 3x3 conv in Q10 fixed-point, vectorized over channels."""
+    c = inp.shape[1]
+    h_in, w_in = inp.shape[2], inp.shape[3]
+    h_out = (h_in - 1) // stride + 1
+    w_out = (w_in - 1) // stride + 1
+    padded = np.pad(inp[0], ((0, 0), (1, 1), (1, 1)), mode='constant').astype(np.int64)
+    out = np.zeros((c, h_out, w_out), dtype=np.int64)
+    for kh in range(3):
+        for kw in range(3):
+            out += wgt[:, 0, kh, kw][:, np.newaxis, np.newaxis] * \
+                   padded[:, kh::stride, kw::stride][:, :h_out, :w_out]
+    out += bias[:, np.newaxis, np.newaxis].astype(np.int64)
+    out = out >> 10
+    out = np.clip(out, -32768, 32767)
+    if has_prelu:
+        neg = out < 0
+        prelu = np.clip((out * alpha[:, np.newaxis, np.newaxis].astype(np.int64)) >> 10, -32768, 32767)
+        out = np.where(neg, prelu, out)
+    return out.reshape(1, c, h_out, w_out).astype(np.int16)
+
+
+def res_add(a, b):
+    """Residual addition with int16 clamping (matches hardware behavior)."""
+    return np.clip(a.astype(np.int32) + b.astype(np.int32), -32768, 32767).astype(np.int16)
+
+
+def bottleneck_fast(inp, name, c_mid, c_out, stride, l_start):
+    """Run one bottleneck block and save the three layer outputs."""
+    c_in = inp.shape[1]
+    # PW1
+    pw1 = pw_conv_fast(inp,
+                       load_fixed(f"{name}_pw1_weight.txt").reshape(c_mid, c_in, 1, 1),
+                       load_fixed(f"{name}_pw1_bias.txt"),
+                       load_fixed(f"{name}_pw1_prelu.txt"), True)
+    save_fixed(f"layer{l_start}_out_fixed.txt", pw1)
+    # DW
+    dw = dw_conv_fast(pw1,
+                      load_fixed(f"{name}_dw_weight.txt").reshape(c_mid, 1, 3, 3),
+                      load_fixed(f"{name}_dw_bias.txt"),
+                      load_fixed(f"{name}_dw_prelu.txt"), stride, True)
+    save_fixed(f"layer{l_start+1}_out_fixed.txt", dw)
+    # PW2
+    pw2 = pw_conv_fast(dw,
+                       load_fixed(f"{name}_pw2_weight.txt").reshape(c_out, c_mid, 1, 1),
+                       load_fixed(f"{name}_pw2_bias.txt"),
+                       None, False)
+    if stride == 1 and c_in == c_out:
+        pw2 = res_add(pw2, inp)
+    save_fixed(f"layer{l_start+2}_out_fixed.txt", pw2)
+    return pw2
+
+
+# ---- Layers 8-47 -----------------------------------------------------------
+print("Generating Golden for Layer 8-47...")
+
+# L8-10: Block 2 (64->128->64, stride 1, residual from L7)
+cur = bottleneck_fast(l7_res, "blocks_2", 128, 64, 1,  8)
+# L11-13: Block 3
+cur = bottleneck_fast(cur,    "blocks_3", 128, 64, 1, 11)
+# L14-16: Block 4
+cur = bottleneck_fast(cur,    "blocks_4", 128, 64, 1, 14)
+# L17-19: Block 5 (64->256->128, stride 2, no residual)
+cur = bottleneck_fast(cur,    "blocks_5", 256, 128, 2, 17)
+# L20-22: Block 6 (128->256->128, stride 1, residual)
+cur = bottleneck_fast(cur,    "blocks_6", 256, 128, 1, 20)
+# L23-25: Block 7
+cur = bottleneck_fast(cur,    "blocks_7", 256, 128, 1, 23)
+# L26-28: Block 8
+cur = bottleneck_fast(cur,    "blocks_8", 256, 128, 1, 26)
+# L29-31: Block 9
+cur = bottleneck_fast(cur,    "blocks_9", 256, 128, 1, 29)
+# L32-34: Block 10
+cur = bottleneck_fast(cur,    "blocks_10", 256, 128, 1, 32)
+# L35-37: Block 11
+cur = bottleneck_fast(cur,    "blocks_11", 256, 128, 1, 35)
+# L38-40: Block 12 (128->512->128, stride 2, no residual)
+cur = bottleneck_fast(cur,    "blocks_12", 512, 128, 2, 38)
+# L41-43: Block 13 (128->256->128, stride 1, residual)
+cur = bottleneck_fast(cur,    "blocks_13", 256, 128, 1, 41)
+# L44-46: Block 14
+cur = bottleneck_fast(cur,    "blocks_14", 256, 128, 1, 44)
+
+# L47: Conv2 (128->512, 1x1, PReLU)
+l47 = pw_conv_fast(cur,
+                   load_fixed("conv2_weight.txt").reshape(512, 128, 1, 1),
+                   load_fixed("conv2_bias.txt"),
+                   load_fixed("conv2_prelu.txt"), True)
+save_fixed("layer47_out_fixed.txt", l47)
+
+print("Layer 8-47 Golden Generated.")

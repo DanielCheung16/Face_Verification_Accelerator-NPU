@@ -27,7 +27,7 @@ module mfn_frontend_top #(
     logic [63:0] layer_config;
     logic [5:0]  layer_idx;
     logic [9:0]  in_ch, out_ch;
-    logic [7:0]  img_w, img_h;
+    logic [6:0]  img_w, img_h;
     logic [1:0]  layer_stride;
     logic        layer_is_pw, layer_is_dw, layer_is_res;
     logic [1:0]  layer_rd_buf, layer_wr_buf;
@@ -43,12 +43,12 @@ module mfn_frontend_top #(
     
     logic              load_pixel;
     logic [3:0]        pixel_idx;
-    logic [17:0]       weight_addr;
+    logic [19:0]       weight_addr;
     logic              enable_mac;
     logic [AWIDTH-1:0] mac_bias_in;
     logic [AWIDTH-1:0] mac_res;
     logic [AWIDTH-1:0] psum_val;
-    logic [9:0]        bias_addr;
+    logic [13:0]       bias_addr;
     
     logic signed [DWIDTH-1:0] win_data [0:8];
     logic signed [DWIDTH-1:0] wgt_data [0:8];
@@ -90,14 +90,16 @@ module mfn_frontend_top #(
         .data_out(layer_config)
     );
     
+    // Config format: {wr_buf(2),rd_buf(2),wgt_base(20),is_dw(1),is_pw(1),is_res(1),
+    //                 prelu(1),stride(2),h(7),w(7),out_ch(10),in_ch(10)}
     assign in_ch  = layer_config[9:0];
     assign out_ch = layer_config[19:10];
-    assign img_w  = layer_config[27:20];
-    assign img_h  = layer_config[35:28];
-    assign layer_stride = layer_config[37:36];
-    assign layer_is_res = layer_config[39];
-    assign layer_is_pw  = layer_config[40];
-    assign layer_is_dw  = layer_config[41];
+    assign img_w  = layer_config[26:20];
+    assign img_h  = layer_config[33:27];
+    assign layer_stride = layer_config[35:34];
+    assign layer_is_res = layer_config[37];
+    assign layer_is_pw  = layer_config[38];
+    assign layer_is_dw  = layer_config[39];
     assign layer_rd_buf = layer_config[61:60];
     assign layer_wr_buf = layer_config[63:62];
 
@@ -200,7 +202,7 @@ module mfn_frontend_top #(
         .rst_n(rst_n),
         .valid_in(inc_write), 
         .p_out(psum_val),
-        .has_prelu(layer_config[38]),
+        .has_prelu(layer_config[36]),
         .prelu_w(prelu_val_rom),
         .layer_is_res(layer_is_res),
         .residual_in(pixel_in),

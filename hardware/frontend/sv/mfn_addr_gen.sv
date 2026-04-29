@@ -22,8 +22,8 @@ module mfn_addr_gen #(
     input  logic [9:0]              c_in,
     
     // Layer Params
-    input  logic [7:0]              width_in,
-    input  logic [7:0]              height_in,
+    input  logic [6:0]              width_in,
+    input  logic [6:0]              height_in,
     input  logic [9:0]              in_ch_in,
     input  logic [9:0]              out_ch_in,
     

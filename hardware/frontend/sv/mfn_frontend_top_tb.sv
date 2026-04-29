@@ -1,7 +1,7 @@
 // ==============================================================================
 // Module: mfn_frontend_top_tb
 // Description: Integration testbench for MobileFaceNet Frontend.
-//              Runs Layer 0 (Conv1) + Layer 1 (DW-Conv1) with verification.
+//              Runs all 48 layers (L0-L47) and saves SRAM snapshots.
 // ==============================================================================
 
 module mfn_frontend_top_tb;
@@ -14,13 +14,13 @@ module mfn_frontend_top_tb;
     logic rst_n;
     logic start_inference;
     logic inference_done;
-    
+
     logic valid_in;
     logic signed [DWIDTH-1:0] pixel_in;
-    
+
     logic valid_out;
     logic signed [DWIDTH-1:0] pixel_out;
-    
+
     logic [M_ADDR_WIDTH-1:0] sram_rd_addr;
     logic [M_ADDR_WIDTH-1:0] sram_wr_addr;
 
@@ -40,61 +40,73 @@ module mfn_frontend_top_tb;
         forever #5 clk = ~clk;
     end
 
-    // SRAM Write Monitoring
-    integer l1_write_count = 0;
+    // SRAM write-back
     always @(posedge clk) begin
-        if (valid_out) begin
+        if (valid_out)
             sram_mem[sram_wr_addr] <= pixel_out;
-            if (sram_wr_addr == 18'h10000) begin
-                $display("CRITICAL: Write to 0x10000 at time=%0t | Layer=%0d | Pixel=%d | wr_buf=%b",
-                         $time, dut.u_ctrl.layer_idx_reg, pixel_out, dut.u_addr_gen.wr_buf);
-            end
-            if (sram_wr_addr[11:0] < 2) 
-                $display("Time=%0t | Layer=%0d | Addr=%d | Pixel=%d | wr_buf=%b", 
-                         $time, dut.u_ctrl.layer_idx_reg, sram_wr_addr, pixel_out,
-                         dut.u_addr_gen.wr_buf);
-            if (dut.u_ctrl.state_reg == 4'd5) begin // STATE_CALC_PSUM
-                if (dut.u_ctrl.layer_idx_reg == 2 && dut.u_ctrl.x_reg == 0 && dut.u_ctrl.y_reg == 0 && dut.u_ctrl.c_out_reg == 0) begin
-                    $display("Time=%0t | L2 MAC | cin=%0d | win='%p | wgt='%p | bias=%0d | psum_out=%0d", 
-                        $time, dut.u_ctrl.c_in_reg,
-                        dut.win_data, dut.wgt_data, 
-                        dut.mac_bias_in, dut.mac_res);
-                end
-            end
-            if (dut.u_ctrl.layer_idx_reg == 1 && l1_write_count < 5) begin
-                $display("  [L1 DEBUG] wr_addr=%d raw=%d wr_base=%d wr_ptr=%d wr_buf=%b",
-                         sram_wr_addr, dut.u_addr_gen.sram_wr_addr, 
-                         dut.u_addr_gen.wr_base, dut.u_addr_gen.wr_ptr_reg,
-                         dut.u_addr_gen.wr_buf);
-                l1_write_count = l1_write_count + 1;
-            end
-        end
     end
 
-    // Monitor layer transitions
+    // Save SRAM snapshot and stop at layer 47
     initial begin
         @(posedge rst_n);
         forever begin
             @(dut.u_ctrl.state_reg);
-            if (dut.u_ctrl.state_reg == dut.u_ctrl.STATE_NEXT_LAYER) begin 
-                $display(">>> Time=%0t | LAYER CHANGE: Finished Layer %d", $time, dut.u_ctrl.layer_idx);
-                $display("    Saving intermediate results to rtl_out_layer%0d.hex...", dut.u_ctrl.layer_idx);
+            if (dut.u_ctrl.state_reg == dut.u_ctrl.STATE_NEXT_LAYER) begin
+                $display(">>> Time=%0t | Finished Layer %0d", $time, dut.u_ctrl.layer_idx);
                 case (dut.u_ctrl.layer_idx)
-                    0: $writememh("hex/rtl_out_layer0.hex", sram_mem);
-                    1: $writememh("hex/rtl_out_layer1.hex", sram_mem);
-                    2: $writememh("hex/rtl_out_layer2.hex", sram_mem);
-                    3: $writememh("hex/rtl_out_layer3.hex", sram_mem);
-                    4: $writememh("hex/rtl_out_layer4.hex", sram_mem);
-                    5: $writememh("hex/rtl_out_layer5.hex", sram_mem);
-                    6: $writememh("hex/rtl_out_layer6.hex", sram_mem);
-                    7: $writememh("hex/rtl_out_layer7.hex", sram_mem);
-                    default: $writememh("hex/rtl_out.hex", sram_mem);
+                     6'd0:  $writememh("hex/rtl_out_layer0.hex",  sram_mem);
+                     6'd1:  $writememh("hex/rtl_out_layer1.hex",  sram_mem);
+                     6'd2:  $writememh("hex/rtl_out_layer2.hex",  sram_mem);
+                     6'd3:  $writememh("hex/rtl_out_layer3.hex",  sram_mem);
+                     6'd4:  $writememh("hex/rtl_out_layer4.hex",  sram_mem);
+                     6'd5:  $writememh("hex/rtl_out_layer5.hex",  sram_mem);
+                     6'd6:  $writememh("hex/rtl_out_layer6.hex",  sram_mem);
+                     6'd7:  $writememh("hex/rtl_out_layer7.hex",  sram_mem);
+                     6'd8:  $writememh("hex/rtl_out_layer8.hex",  sram_mem);
+                     6'd9:  $writememh("hex/rtl_out_layer9.hex",  sram_mem);
+                    6'd10:  $writememh("hex/rtl_out_layer10.hex", sram_mem);
+                    6'd11:  $writememh("hex/rtl_out_layer11.hex", sram_mem);
+                    6'd12:  $writememh("hex/rtl_out_layer12.hex", sram_mem);
+                    6'd13:  $writememh("hex/rtl_out_layer13.hex", sram_mem);
+                    6'd14:  $writememh("hex/rtl_out_layer14.hex", sram_mem);
+                    6'd15:  $writememh("hex/rtl_out_layer15.hex", sram_mem);
+                    6'd16:  $writememh("hex/rtl_out_layer16.hex", sram_mem);
+                    6'd17:  $writememh("hex/rtl_out_layer17.hex", sram_mem);
+                    6'd18:  $writememh("hex/rtl_out_layer18.hex", sram_mem);
+                    6'd19:  $writememh("hex/rtl_out_layer19.hex", sram_mem);
+                    6'd20:  $writememh("hex/rtl_out_layer20.hex", sram_mem);
+                    6'd21:  $writememh("hex/rtl_out_layer21.hex", sram_mem);
+                    6'd22:  $writememh("hex/rtl_out_layer22.hex", sram_mem);
+                    6'd23:  $writememh("hex/rtl_out_layer23.hex", sram_mem);
+                    6'd24:  $writememh("hex/rtl_out_layer24.hex", sram_mem);
+                    6'd25:  $writememh("hex/rtl_out_layer25.hex", sram_mem);
+                    6'd26:  $writememh("hex/rtl_out_layer26.hex", sram_mem);
+                    6'd27:  $writememh("hex/rtl_out_layer27.hex", sram_mem);
+                    6'd28:  $writememh("hex/rtl_out_layer28.hex", sram_mem);
+                    6'd29:  $writememh("hex/rtl_out_layer29.hex", sram_mem);
+                    6'd30:  $writememh("hex/rtl_out_layer30.hex", sram_mem);
+                    6'd31:  $writememh("hex/rtl_out_layer31.hex", sram_mem);
+                    6'd32:  $writememh("hex/rtl_out_layer32.hex", sram_mem);
+                    6'd33:  $writememh("hex/rtl_out_layer33.hex", sram_mem);
+                    6'd34:  $writememh("hex/rtl_out_layer34.hex", sram_mem);
+                    6'd35:  $writememh("hex/rtl_out_layer35.hex", sram_mem);
+                    6'd36:  $writememh("hex/rtl_out_layer36.hex", sram_mem);
+                    6'd37:  $writememh("hex/rtl_out_layer37.hex", sram_mem);
+                    6'd38:  $writememh("hex/rtl_out_layer38.hex", sram_mem);
+                    6'd39:  $writememh("hex/rtl_out_layer39.hex", sram_mem);
+                    6'd40:  $writememh("hex/rtl_out_layer40.hex", sram_mem);
+                    6'd41:  $writememh("hex/rtl_out_layer41.hex", sram_mem);
+                    6'd42:  $writememh("hex/rtl_out_layer42.hex", sram_mem);
+                    6'd43:  $writememh("hex/rtl_out_layer43.hex", sram_mem);
+                    6'd44:  $writememh("hex/rtl_out_layer44.hex", sram_mem);
+                    6'd45:  $writememh("hex/rtl_out_layer45.hex", sram_mem);
+                    6'd46:  $writememh("hex/rtl_out_layer46.hex", sram_mem);
+                    6'd47:  $writememh("hex/rtl_out_layer47.hex", sram_mem);
                 endcase
-                
-                // Stop after Layer 7 (Resid)
-                if (dut.u_ctrl.layer_idx == 7) begin
+
+                if (dut.u_ctrl.layer_idx == 6'd47) begin
                     $display("========================================");
-                    $display("DEBUG: Stopping after Layer 7 (Resid)");
+                    $display("All 48 layers complete.");
                     $display("========================================");
                     #100;
                     $finish;
@@ -125,22 +137,22 @@ module mfn_frontend_top_tb;
     initial begin
         rst_n = 0;
         start_inference = 0;
-        
+
         for (int i=0; i<(1<<M_ADDR_WIDTH); i++) sram_mem[i] = '0;
         $readmemh("hex/input.hex", sram_mem);
 
-        $display("Starting MobileFaceNet Layer 0 + Layer 1 + Layer 2 Test...");
-        
+        $display("Starting MobileFaceNet Full Inference (Layers 0-47)...");
+
         #50 rst_n = 1;
         #50 start_inference = 1;
         #10 start_inference = 0;
-        
+
         wait(inference_done);
         $display("========================================");
-        $display("Success: Inference Done at %0t", $time);
+        $display("Inference Done at %0t", $time);
         $display("Total Cycles: %0d", cycle_count);
         $display("========================================");
-        
+
         $writememh("hex/rtl_out.hex", sram_mem);
         #100;
         $finish;
@@ -149,7 +161,7 @@ module mfn_frontend_top_tb;
     // SRAM Read Response
     always_ff @(posedge clk) begin
         pixel_in <= sram_mem[sram_rd_addr];
-        valid_in <= 1'b1; 
+        valid_in <= 1'b1;
     end
 
 endmodule
