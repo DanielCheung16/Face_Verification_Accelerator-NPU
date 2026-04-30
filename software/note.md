@@ -67,6 +67,53 @@
 3. **`python3 compare_similarity.py` (全網比對整合測試)**
    - 用途：這是最高層級的驗證。程式內建了 `PyTorchEngine` 和 `CModelEngine` 兩個 Class。它會吃進 `tfrecord` 裡的人臉圖片，同時呼叫 PyTorch 與編譯好的 C 程式 `./c_inference_model`，然後印出兩者的 Cosine Similarity 進行絕對精確比對。
 
+4. **`python3 compare_rtl_cmodel.py` (RTL vs C 定點數模型比對)**
+   - 位置：`software/compare_rtl_cmodel.py`
+   - 用途：將 RTL 模擬輸出（`make top` → `rtl_out_layer49.hex`）與 C 定點數模型（`c_inference_model_fixed`）的 128D embedding 進行 bit-level 比對，並計算人臉對的 Cosine Similarity，驗證 RTL 硬體在真實人臉圖片上的推論正確性。
+   - **與 `compare_similarity.py` 的差異**：前者比較 PyTorch vs C float model；本工具比較 **RTL simulation vs C fixed-point model**，是硬體最終正確性的端到端驗證。
+
+   **快速使用：**
+
+   ```bash
+   # 只跑 C 定點數模型（快，秒級），適合多張圖片的相似度比較：
+   python3 software/compare_rtl_cmodel.py \
+     --images software/python/test_images/img_191.jpg \
+                software/python/test_images/img_275.jpg \
+                software/python/test_images/img_1018.jpg \
+     --no-rtl
+
+   # 同時跑 RTL 模擬（慢，每張 ~5 分鐘），驗證前 N 張圖的 RTL 輸出：
+   python3 software/compare_rtl_cmodel.py \
+     --images software/python/test_images/img_191.jpg \
+                software/python/test_images/img_275.jpg \
+     --rtl-count 1 --save-cache
+
+   # 下次直接讀快取，不重新跑模擬：
+   python3 software/compare_rtl_cmodel.py \
+     --images software/python/test_images/img_191.jpg \
+                software/python/test_images/img_275.jpg \
+     --load-cache --no-rtl
+   ```
+
+   **輸出格式：**
+   ```
+   COSINE SIMILARITY MATRIX — C Fixed Model
+   ─────────────────────────────────────────────
+                  img_191.jpg   img_275.jpg
+   img_191.jpg       1.0000        0.0179
+   img_275.jpg       0.0179        1.0000
+
+   RTL vs C MODEL — Embedding Exact Match
+   ─────────────────────────────────────────────
+   Image               Exact Match   Max Diff   Mean AbsErr
+   img_191.jpg            128/128          0        0.0000
+   ```
+
+   **注意事項：**
+   - C model 需從自己的目錄執行（script 已自動處理 `cwd`）
+   - RTL 每次模擬會覆寫 `software/golden/layer0_in.txt` 與所有 hex 檔，若需保留原始 hex 請先備份
+   - 快取檔案存在 `software/embedding_cache.json`，跨 session 有效
+
 ### B. C 語言端：純 C 參考模型
 請進入 `c_model/` 資料夾並執行 `make` 進行編譯：
 
