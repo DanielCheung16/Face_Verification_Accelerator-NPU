@@ -205,3 +205,56 @@ l47 = pw_conv_fast(cur,
 save_fixed("layer47_out_fixed.txt", l47)
 
 print("Layer 8-47 Golden Generated.")
+
+# L48: linear7 (global DW, 7×6 kernel, 512ch, no PReLU, no residual)
+print("Generating Golden for Layer 48 (linear7)...")
+
+l48_wgt = load_fixed("linear7_weight.txt")  # 512 * 42 = 21504 entries
+l48_bias = load_fixed("linear7_bias.txt")   # 512 entries
+
+# Reshape: (512, 1, 7, 6) for DW conv
+wgt48 = np.array(l48_wgt).reshape(512, 1, 7, 6).astype(np.int64)
+bias48 = np.array(l48_bias).astype(np.int64)
+
+# Input is l47: (1, 512, 7, 6) — output of L47 (Conv2)
+inp48 = l47[0].astype(np.int64)  # (512, 7, 6)
+
+# Global DW: no padding, kernel = input spatial → output is (512, 1, 1)
+out48 = np.zeros((512,), dtype=np.int64)
+for c in range(512):
+    acc = bias48[c]
+    for kh in range(7):
+        for kw in range(6):
+            acc += inp48[c, kh, kw] * wgt48[c, 0, kh, kw]
+    val = acc >> 10
+    val = int(np.clip(val, -32768, 32767))
+    out48[c] = val
+
+l48 = out48.reshape(1, 512, 1, 1).astype(np.int16)
+save_fixed("layer48_out_fixed.txt", l48)
+
+print("Layer 48 (linear7) Golden Generated.")
+
+# L49: linear1 (1x1 PW, 512->128, no PReLU)
+print("Generating Golden for Layer 49 (linear1)...")
+
+l49_wgt = load_fixed("linear1_weight.txt")  # 128 * 512 = 65536 entries
+l49_bias = load_fixed("linear1_bias.txt")   # 128 entries
+
+wgt49 = np.array(l49_wgt).reshape(128, 512).astype(np.int64)
+bias49 = np.array(l49_bias).astype(np.int64)
+
+# Input is l48: (1, 512, 1, 1) → flatten to (512,)
+inp49 = l48[0, :, 0, 0].astype(np.int64)  # (512,)
+
+out49 = np.zeros((128,), dtype=np.int64)
+for oc in range(128):
+    acc = bias49[oc] + np.sum(inp49 * wgt49[oc])
+    val = acc >> 10
+    val = int(np.clip(val, -32768, 32767))
+    out49[oc] = val
+
+l49 = out49.reshape(1, 128, 1, 1).astype(np.int16)
+save_fixed("layer49_out_fixed.txt", l49)
+
+print("Layer 49 (linear1) Golden Generated.")

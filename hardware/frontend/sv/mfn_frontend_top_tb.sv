@@ -102,11 +102,13 @@ module mfn_frontend_top_tb;
                     6'd45:  $writememh("hex/rtl_out_layer45.hex", sram_mem);
                     6'd46:  $writememh("hex/rtl_out_layer46.hex", sram_mem);
                     6'd47:  $writememh("hex/rtl_out_layer47.hex", sram_mem);
+                    6'd48:  $writememh("hex/rtl_out_layer48.hex", sram_mem);
+                    6'd49:  $writememh("hex/rtl_out_layer49.hex", sram_mem);
                 endcase
 
-                if (dut.u_ctrl.layer_idx == 6'd47) begin
+                if (dut.u_ctrl.layer_idx == 6'd49) begin
                     $display("========================================");
-                    $display("All 48 layers complete.");
+                    $display("All 50 layers complete (L0-L49).");
                     $display("========================================");
                     #100;
                     $finish;

@@ -14,8 +14,10 @@
 | Layer 38–40 | Bottleneck Block 12 (stride 2, 128→512→128ch) | ✅ **100.00% Exact Match** |
 | Layer 41–46 | Bottleneck Block 13–14 (stride 1, 128ch, Residual) | ✅ **100.00% Exact Match** |
 | Layer 47 | Conv2 (128→512, 1×1) | ✅ **100.00% Exact Match** |
+| Layer 48 | linear7 (Global DW 7×6, 512ch → 1×1) | ✅ **100.00% Exact Match** |
+| Layer 49 | linear1 (1×1 PW, 512→128) | ✅ **100.00% Exact Match** |
 
-> **全 48 層總執行時間：41,694,006 cycles**
+> **全 50 層總執行時間：41,732,515 cycles**
 
 ---
 
@@ -463,8 +465,8 @@ input → 9 multipliers → register → adder tree → output
 | L38–L40 | Block12 (PW1 512ch/DW s2/PW2) | 128×14×12 | 128×7×6 | ✅ 100.00% |
 | L41–L46 | Block13–14 (×2, Residual) | 128×7×6 | 128×7×6 | ✅ 100.00% |
 | L47 | Conv2 (1×1, 128→512) | 128×7×6 | 512×7×6 | ✅ 100.00% |
-| — | linear7 (7×6 DW) | 512×7×6 | 512×1×1 | ❌ 硬體不支援（large kernel）|
-| — | linear1 (1×1, 512→128) | 512×1×1 | 128×1×1 | ⬜ 待驗證 |
+| L48 | linear7 (7×6 Global DW) | 512×7×6 | 512×1×1 | ✅ 100.00% |
+| L49 | linear1 (1×1, 512→128) | 512×1×1 | 128×1×1 | ✅ 100.00% |
 
 ---
 
@@ -558,24 +560,26 @@ python3 software/verify_rtl.py 2
 | 2026-04-29 | Config 位元重排 | h/w 8b→7b，wgt_base 18b→20b，bias_addr 10b→14b，psum_mem 擴為 512 |
 | 2026-04-29 | gen_hex.py 完整重寫 | 支援全 48 層，總權重 922,176 entries，總 bias 9,152 entries |
 | 2026-04-29 | 全 48 層 RTL 驗證通過 | L0–L47 全部 100.00% Exact Match，41,694,006 cycles |
+| 2026-04-29 | linear7 Global DW 實作 | L48 100.00% Exact Match，41,724,218 cycles（+30,212 cycles）|
+| 2026-04-29 | linear1 全模型完成 | L49 100.00% Exact Match，41,732,515 cycles（+8,297 cycles）|
 
 ---
 
 ## 15. 總結
 
-MobileFaceNet Frontend RTL 已從單層 3×3 Conv 推進到前三個 convolution stages。
+MobileFaceNet Frontend RTL 已完成全 50 層（L0–L49）的硬體實作與驗證。
 
 **最重要的成果：**
 
 1. **Pointwise (1x1) 卷積優化**：透過 9 通道並行讀取，大幅提升計算效率。
 2. **殘差連接 (Residual) 支援**：建立 3-buffer 管理機制，支援 `output = f(input) + shortcut`。
 3. **時序與流水線優化**：MAC Array 具備 2-stage pipeline，有利於 100MHz+ 合成。
-4. **驗證進度**：Layer 0, 1, 2, 3 全部達到 **100.00% Exact Match**。
+4. **linear7 Global DW**：5-group × 9-MAC 方案，重用現有 3×3 kernel 路徑支援 7×6 global depthwise conv。
+5. **全模型驗證**：Layer 0–49 全部達到 **100.00% Exact Match**，總執行時間 41,732,515 cycles。
 
 **下一階段重點：**
-- [ ] **全模型自動化測試**：修改 `gen_hex.py` 載入 MobileFaceNet 完整 50 層權重。
 - [ ] **Synthesis 驗證**：在 moore server 上使用 Design Compiler 檢查實時時序 (Timing Closure)。
-- [ ] **特殊層支援**：針對 `linear7` (7x6 kernel) 調整位址產生器邏輯。
+- [ ] **AXI-Stream / DMA 介面**：目前僅在 TB 內部 SRAM 運作，需接 AXI-Stream 供外部 DMA 存取。
 
 ---
 
@@ -905,12 +909,306 @@ for i in $(seq 0 47); do python3 software/verify_rtl.py $i; done
 
 ---
 
-## 22. 下一步 TODO（2026-04-29）
+## 22. Phase G：linear7 Global DW Conv 實作 (2026-04-29)
+
+### 22.1 設計挑戰
+
+`linear7` 使用 7×6=42 tap depthwise kernel，但現有硬體只有：
+- 9-slot sliding window（`mfn_sliding_window`）
+- 9-element MAC array（`mfn_mac_array`）
+- 3×3 kernel addressing（`kx_offset/ky_offset` LUT）
+
+直接擴展 kernel 大小代價高昂（需要大量修改且影響 timing）。
+
+---
+
+### 22.2 設計決策：5-Group × 9-MAC 方案
+
+**核心思路：** 將 42 個 kernel tap 分成 5 組，每組 9 個（最後一組僅 6 個有效，3 個補 0），重用現有 9-MAC 陣列，每次 STATE_FETCH_PIXELS 載入 1 組，連續執行 5 次累加後再進行 write-back。
+
+```
+Group 0: tap  0– 8  → k_global  0.. 8  → (ky,kx) valid
+Group 1: tap  9–17  → k_global  9..17  → (ky,kx) valid
+Group 2: tap 18–26  → k_global 18..26  → (ky,kx) valid
+Group 3: tap 27–35  → k_global 27..35  → (ky,kx) valid
+Group 4: tap 36–44  → k_global 36..44  → 36..41 valid, 42..44 OOB → is_pad → ×0
+```
+
+---
+
+### 22.3 Config Encoding：is_pw && is_dw
+
+64-bit config 位元已全部用完。注意到 `is_pw=1 && is_dw=1` 在原有 48 層中從未同時出現（pointwise 與 depthwise 是互斥的），因此將此組合重新定義為 **global DW** 模式：
+
+```systemverilog
+logic is_global_dw;
+assign is_global_dw = layer_is_pw & layer_is_dw;
+```
+
+L48 config 設定：`make_config(..., is_pw=1, is_dw=1, ...)`
+
+---
+
+### 22.4 Controller 修改（mfn_controller.sv）
+
+#### 新增暫存器與 LUT
+
+```systemverilog
+logic [2:0] group_idx_reg, group_idx_next;  // 追蹤目前是第幾組 (0–4)
+
+// gdw_lut: 計算 k_global_comb = group_base + k_reg
+// → (gdw_ky = k_global / 6, gdw_kx = k_global % 6)
+// k_global >= 42 → OOB → is_pad → zero multiply
+always_comb begin : gdw_lut
+    case (group_idx_reg)
+        3'd0: group_base = 6'd0;
+        3'd1: group_base = 6'd9;
+        3'd2: group_base = 6'd18;
+        3'd3: group_base = 6'd27;
+        3'd4: group_base = 6'd36;
+        default: group_base = 6'd0;
+    endcase
+    k_global_comb = group_base + {2'b0, k_reg};
+    if (k_global_comb < 6'd42) begin
+        gdw_ky = k_global_comb / 4'd6;
+        gdw_kx = k_global_comb % 4'd6;
+    end else begin
+        gdw_ky = 4'd7;   // OOB → addr_gen 觸發 is_pad
+        gdw_kx = 4'd6;
+    end
+end
+```
+
+#### x_out / y_out 多路選擇
+
+```systemverilog
+assign x_out = is_global_dw ? $signed({5'b0, gdw_kx})
+                            : (x_reg + {{7{kx_offset[1]}}, kx_offset});
+assign y_out = is_global_dw ? $signed({5'b0, gdw_ky})
+                            : (y_reg + {{7{ky_offset[1]}}, ky_offset});
+```
+
+#### STATE_FETCH_PIXELS：group > 0 不重置 wgt_addr
+
+```systemverilog
+if (!is_global_dw || group_idx_reg == 3'd0)
+    wgt_addr_next = wgt_cin_base_reg;  // 只有第一組才 reset weight pointer
+```
+
+#### STATE_CALC_PSUM：5-group 流程控制
+
+```systemverilog
+if (is_global_dw) begin
+    if (group_idx_reg == 3'd4) begin
+        group_idx_next = '0;
+        state_next = STATE_MAC_FLUSH;   // 所有 5 組都完成 → flush
+    end else begin
+        group_idx_next = group_idx_reg + 1'b1;
+        state_next = STATE_FETCH_PIXELS; // 繼續下一組
+    end
+end
+```
+
+#### wgt_cin_base 每 channel 前進步長
+
+```systemverilog
+// Global DW 每 channel 佔 45 entries (5 groups × 9)；Regular DW 佔 9
+wgt_cin_base_next = wgt_cin_base_reg + (is_global_dw ? 18'd45 : 18'd9);
+```
+
+#### STATE_SPATIAL_LOOP：global DW 直接跳到 NEXT_LAYER
+
+Global DW output 永遠是 1×1，spatial 迴圈只有一個位置，但 layer_h=7、layer_w=6 是 **input** 維度，如果照標準空間迴圈走會錯誤地迭代 7×6 次：
+
+```systemverilog
+if (is_global_dw) begin
+    state_next = STATE_NEXT_LAYER;  // 直接結束，無 spatial 迭代
+end else begin
+    // 標準 x/y 邊界判斷
+end
+```
+
+#### 停止條件
+
+```systemverilog
+// 原本 >= 6'd47 改為 >= 6'd48
+if (layer_idx_reg >= 6'd48) state_next = STATE_IDLE;
+```
+
+---
+
+### 22.5 gen_hex.py 修改
+
+新增 `pack_global_dw_weights()` 函式：
+
+```python
+def pack_global_dw_weights(wgt_raw, channels, kh, kw):
+    taps = kh * kw                       # 42 for 7×6
+    group_size = ((taps + 8) // 9) * 9  # 45 (5 groups × 9, last group zero-padded)
+    packed = []
+    for c in range(channels):
+        ch_weights = wgt_raw[c * taps : (c + 1) * taps]
+        for w in ch_weights: packed.append(w)
+        for _ in range(group_size - taps): packed.append(0)  # padding to 45
+    return packed
+```
+
+L48 config 行：
+```python
+make_config(512, 512, 6, 7, 1, 0, 0, 1, 1, wb[48], 1, 0)
+# (in_ch, out_ch, w, h, stride, has_prelu, is_res, is_pw, is_dw, wgt_base, rd_buf, wr_buf)
+```
+
+Weight 統計：
+- L47 之前：922,176 entries（wgt_base < 2²⁰ ✅）
+- 加入 L48（512 ch × 45）= +23,040 entries → 總計 **945,216 entries**
+- Bias 加入 L48（512 entries）= +512 → 總計 **9,664 entries**
+
+---
+
+### 22.6 gen_all_golden.py 修改
+
+```python
+# L48: linear7 (global DW, 7×6 kernel, 512ch, no PReLU)
+l48_wgt = load_fixed("linear7_weight.txt")   # 512 * 42 = 21,504 entries
+l48_bias = load_fixed("linear7_bias.txt")    # 512 entries
+wgt48 = np.array(l48_wgt).reshape(512, 1, 7, 6).astype(np.int64)
+bias48 = np.array(l48_bias).astype(np.int64)
+inp48 = l47[0].astype(np.int64)              # (512, 7, 6)  ← 注意用 l47，不是 cur
+
+out48 = np.zeros((512,), dtype=np.int64)
+for c in range(512):
+    acc = bias48[c]
+    for kh in range(7):
+        for kw in range(6):
+            acc += inp48[c, kh, kw] * wgt48[c, 0, kh, kw]
+    out48[c] = int(np.clip(acc >> 10, -32768, 32767))
+
+l48 = out48.reshape(1, 512, 1, 1).astype(np.int16)
+```
+
+> **Bug fix**：最初誤用 `cur[0]`（Block 14 output，128ch）作為 L48 輸入，導致 `IndexError: index 128 out of bounds for axis 0 with size 128`。正確來源應為 `l47[0]`（Conv2 output，512ch）。
+
+---
+
+### 22.7 testbench & verify_rtl.py 修改
+
+**mfn_frontend_top_tb.sv**：
+- 新增 `6'd48: $writememh("hex/rtl_out_layer48.hex", sram_mem);`
+- 停止條件從 `layer_idx == 6'd47` 改為 `layer_idx == 6'd48`
+- 完成訊息更新為「All 49 layers complete (L0–L48)」
+
+**verify_rtl.py**：
+- 新增 `48: {"C": 512, "H": 1, "W": 1, "offset": B0}`
+
+---
+
+### 22.8 驗證結果
+
+```
+=== Layer 48 Verification ===
+Comparing 512 pixels (C=512, H=1, W=1)
+Exact match:  100.00% (512/512)
+Mean abs err: 0.00
+Max abs err:  0
+```
+
+L0–L48 全 49 層均達 **100.00% Exact Match**。  
+總執行時間：**41,724,218 cycles**（linear7 增加約 30,212 cycles）
+
+---
+
+## 23. Phase H：linear1 全模型完成 (2026-04-29)
+
+### 23.1 linear1 層特性
+
+| 項目 | 數值 |
+|------|------|
+| 類型 | 1×1 Pointwise Conv |
+| Input | 512×1×1（來自 linear7 L48 output，wr_buf=B0）|
+| Output | 128×1×1 |
+| in_ch | 512 |
+| out_ch | 128 |
+| Spatial | 1×1 |
+| PReLU | 無 |
+| Residual | 無 |
+| wgt_step | ceil(512/9)×9 = 57×9 = 513（已有）|
+
+此層可直接套用現有 PW 路徑，不需任何 RTL 修改。
+
+---
+
+### 23.2 修改的檔案
+
+#### `hardware/frontend/sv/mfn_controller.sv`
+
+```systemverilog
+// 停止條件：>= 6'd48 → >= 6'd49
+if (layer_idx_reg >= 6'd49) begin  // Stop after Layer 49 (linear1)
+    state_next = STATE_DONE;
+```
+
+#### `hardware/frontend/sim/gen_hex.py`
+
+```python
+# L49: linear1 (1x1 PW, 512->128, no PReLU)
+w49 = pack_pw_weights(load_fixed("linear1_weight.txt"), 128, 512)
+b49 = load_fixed("linear1_bias.txt")
+p49 = [0]*128
+
+# L49 config: rd=B0 (linear7 output), wr=B1, w=1, h=1
+make_config(512, 128, 1, 1, 1, 0, 0, 1, 0, wb[49], 0, 1)
+```
+
+Weight 統計：
+- 加入 L49（128 ch × 513）= +65,664 entries → 總計 **1,010,880 entries**（20-bit max: 1,048,576 ✅）
+- Bias 加入 L49（128 entries）= +128 → 總計 **9,792 entries**（14-bit max: 16,384 ✅）
+
+#### `software/gen_all_golden.py`
+
+```python
+# L49: linear1 (1x1 PW, 512->128, no PReLU)
+wgt49 = np.array(l49_wgt).reshape(128, 512).astype(np.int64)
+inp49 = l48[0, :, 0, 0].astype(np.int64)  # (512,)
+
+for oc in range(128):
+    acc = bias49[oc] + np.sum(inp49 * wgt49[oc])
+    out49[oc] = int(np.clip(acc >> 10, -32768, 32767))
+```
+
+#### `hardware/frontend/sv/mfn_frontend_top_tb.sv`
+
+- 新增 `6'd49: $writememh("hex/rtl_out_layer49.hex", sram_mem);`
+- 停止條件從 `layer_idx == 6'd48` 改為 `layer_idx == 6'd49`
+- 完成訊息更新為「All 50 layers complete (L0–L49)」
+
+#### `software/verify_rtl.py`
+
+- 新增 `49: {"C": 128, "H": 1, "W": 1, "offset": B1}`
+
+---
+
+### 23.3 驗證結果
+
+```
+=== Layer 49 Verification ===
+Comparing 128 pixels (C=128, H=1, W=1)
+Exact match:  100.00% (128/128)
+Mean abs err: 0.00
+Max abs err:  0
+```
+
+**MobileFaceNet Frontend RTL 全 50 層（L0–L49）100.00% Exact Match。**  
+總執行時間：**41,732,515 cycles**
+
+---
+
+## 24. 下一步 TODO（2026-04-29）
 
 ### 硬體功能
 
-- [ ] **`linear7` 支援**：7×6 global DW conv（`linear7` 層）目前硬體 3×3 sliding window 無法支援，需要為 global pooling / large-kernel DW 設計獨立路徑或 special mode。
-- [ ] **`linear1` 支援**：1×1 PW conv（512→128）原理上與現有 PW 相同，但 out_ch=128 < in_ch=512，可直接套用現有 PW 路徑驗證。
+- [x] **`linear7` 支援**：已實作 5-group global DW 模式，is_pw=1&&is_dw=1 作為 encoding，L48 達 100.00% Exact Match。
+- [x] **`linear1` 支援**：1×1 PW conv（512→128），直接套用現有 PW 路徑，L49 達 100.00% Exact Match。全 50 層完整驗證通過。
 
 ### 時序優化（Synthesis）
 

@@ -84,11 +84,44 @@ module mfn_controller #(
     logic [9:0]        c_in_reg, c_in_next;
     logic [9:0]        c_out_reg, c_out_next;
     logic [3:0]        k_reg, k_next;
-    
-    // Kernel offset LUT (replaces k%3 and k/3)
+
+    // Global DW (linear7): is_pw=1 && is_dw=1 used as combined flag
+    logic is_global_dw;
+    assign is_global_dw = layer_is_pw & layer_is_dw;
+
+    // group_idx: which of the 5 groups of 9 we are processing for global DW
+    logic [2:0] group_idx_reg, group_idx_next;  // 0..4
+
+    // Global DW kernel position decoder: maps (group_idx, k_reg) → (gdw_ky, gdw_kx)
+    logic [5:0] k_global_comb;
+    logic [5:0] group_base;
+    logic [3:0] gdw_kx, gdw_ky;
+
+    always_comb begin : gdw_lut
+        case (group_idx_reg)
+            3'd0: group_base = 6'd0;
+            3'd1: group_base = 6'd9;
+            3'd2: group_base = 6'd18;
+            3'd3: group_base = 6'd27;
+            3'd4: group_base = 6'd36;
+            default: group_base = 6'd0;
+        endcase
+        k_global_comb = group_base + {2'b0, k_reg};
+        if (k_global_comb < 6'd42) begin
+            gdw_ky = k_global_comb / 4'd6;  // 0..6
+            gdw_kx = k_global_comb % 4'd6;  // 0..5
+        end else begin
+            gdw_ky = 4'd7;  // out-of-bounds → is_pad
+            gdw_kx = 4'd6;  // out-of-bounds → is_pad
+        end
+    end
+
+    // Kernel offset LUT (replaces k%3 and k/3) — used for non-global-DW layers
     logic signed [1:0] kx_offset, ky_offset;
     always_comb begin
-        if (layer_is_pw) begin
+        if (is_global_dw) begin
+            kx_offset = 2'sd0; ky_offset = 2'sd0;  // unused; gdw_kx/ky used instead
+        end else if (layer_is_pw) begin
             kx_offset = 2'sd0; ky_offset = 2'sd0;
         end else begin
             case (k_reg)
@@ -166,8 +199,10 @@ module mfn_controller #(
     assign layer_wgt_base = layer_config[59:40];
     
     assign layer_idx      = layer_idx_reg;
-    assign x_out          = x_reg + {{7{kx_offset[1]}}, kx_offset};
-    assign y_out          = y_reg + {{7{ky_offset[1]}}, ky_offset};
+    assign x_out = is_global_dw ? $signed({5'b0, gdw_kx}) :
+                   (x_reg + {{7{kx_offset[1]}}, kx_offset});
+    assign y_out = is_global_dw ? $signed({5'b0, gdw_ky}) :
+                   (y_reg + {{7{ky_offset[1]}}, ky_offset});
     assign c_in_out       = (layer_is_dw || state_reg == STATE_READ_RESIDUAL || state_reg == STATE_WRITE_BACK) ? c_out_reg :
                             (layer_is_pw ? (c_in_reg + {6'd0, k_reg}) : c_in_reg);
     assign bias_addr      = bias_base_reg + {4'd0, c_out_reg};
@@ -189,6 +224,7 @@ module mfn_controller #(
         wgt_step_next     = wgt_step_reg;
         bias_base_next    = bias_base_reg;
         
+        group_idx_next  = group_idx_reg;
         reset_ptr       = 1'b0;
         inc_write       = 1'b0;
         load_pixel_comb = 1'b0;
@@ -245,14 +281,16 @@ module mfn_controller #(
 
             STATE_FETCH_PIXELS: begin
                 if (layer_is_pw) begin
-                    // Pointwise: Fetch 9 channels over 9 cycles
+                    // Pointwise / Global-DW: Fetch 9 pixels over 9 cycles
                     if (k_reg < 4'd9) begin
                         load_pixel_comb = 1'b1;
                         k_next = k_reg + 1'b1;
                     end else begin
                         load_pixel_comb = 1'b0;
                         k_next = '0;
-                        wgt_addr_next = wgt_cin_base_reg;
+                        // For global DW groups > 0 keep wgt_addr where CALC_PSUM left it
+                        if (!is_global_dw || group_idx_reg == 3'd0)
+                            wgt_addr_next = wgt_cin_base_reg;
                         state_next = STATE_CALC_PSUM;
                     end
                 end else begin
@@ -273,12 +311,21 @@ module mfn_controller #(
                 enable_mac  = 1'b1;
                 weight_addr = layer_wgt_base + {2'b0, wgt_addr_reg};
                 wgt_addr_next = wgt_addr_reg + wgt_step_reg;
-                
-                if (layer_is_dw) begin
-                    // DW: only 1 MAC per channel, immediately flush
+
+                if (is_global_dw) begin
+                    // Global DW: 5 groups of 9 before flushing
+                    if (group_idx_reg == 3'd4) begin
+                        group_idx_next = '0;
+                        state_next = STATE_MAC_FLUSH;
+                    end else begin
+                        group_idx_next = group_idx_reg + 1'b1;
+                        state_next = STATE_FETCH_PIXELS;
+                    end
+                end else if (layer_is_dw) begin
+                    // Regular DW: single MAC per channel
                     state_next = STATE_MAC_FLUSH;
                 end else begin
-                    // Standard: iterate all out_ch
+                    // Standard/PW: iterate all out_ch
                     if (c_out_reg == layer_out_ch - 1) begin
                         c_out_next = '0;
                         state_next = STATE_MAC_FLUSH;
@@ -334,7 +381,8 @@ module mfn_controller #(
                             state_next = STATE_SPATIAL_LOOP;
                         end else begin
                             c_out_next = c_out_reg + 1'b1;
-                            wgt_cin_base_next = wgt_cin_base_reg + 18'd9;
+                            wgt_cin_base_next = wgt_cin_base_reg +
+                                (is_global_dw ? 18'd45 : 18'd9);
                             state_next = STATE_INIT_PSUM;
                         end
                     end else begin
@@ -360,7 +408,8 @@ module mfn_controller #(
                         state_next = STATE_SPATIAL_LOOP;
                     end else begin
                         c_out_next = c_out_reg + 1'b1;
-                        wgt_cin_base_next = wgt_cin_base_reg + 18'd9;
+                        wgt_cin_base_next = wgt_cin_base_reg +
+                            (is_global_dw ? 18'd45 : 18'd9);
                         state_next = STATE_INIT_PSUM;
                     end
                 end else begin
@@ -376,7 +425,10 @@ module mfn_controller #(
             
             STATE_SPATIAL_LOOP: begin
                 wgt_cin_base_next = '0;
-                if (x_reg >= (layer_w - layer_stride)) begin
+                if (is_global_dw) begin
+                    // 1×1 output: no spatial loop needed
+                    state_next = STATE_NEXT_LAYER;
+                end else if (x_reg >= (layer_w - layer_stride)) begin
                     x_next = '0;
                     if (y_reg >= (layer_h - layer_stride)) begin
                         y_next     = '0;
@@ -390,9 +442,9 @@ module mfn_controller #(
                     state_next = STATE_INIT_PSUM;
                 end
             end
-            
+
             STATE_NEXT_LAYER: begin
-                if (layer_idx_reg >= 6'd47) begin  // Stop after Layer 47 (Conv2)
+                if (layer_idx_reg >= 6'd49) begin  // Stop after Layer 49 (linear1)
                     state_next = STATE_DONE;
                 end else begin
                     // Accumulate bias base for next layer
@@ -444,6 +496,7 @@ module mfn_controller #(
             wgt_cin_base_reg <= '0;
             wgt_step_reg     <= '0;
             bias_base_reg    <= 14'd0;
+            group_idx_reg    <= '0;
         end else begin
             state_reg        <= state_next;
             layer_idx_reg    <= layer_idx_next;
@@ -456,6 +509,7 @@ module mfn_controller #(
             wgt_cin_base_reg <= wgt_cin_base_next;
             wgt_step_reg     <= wgt_step_next;
             bias_base_reg    <= bias_base_next;
+            group_idx_reg    <= group_idx_next;
         end
     end
 

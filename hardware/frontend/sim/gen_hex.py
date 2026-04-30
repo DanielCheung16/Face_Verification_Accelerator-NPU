@@ -11,6 +11,17 @@ def load_fixed(filename):
     with open(os.path.join(FIXED_W_DIR, filename), "r") as f:
         return [int(line.strip()) for line in f]
 
+def pack_global_dw_weights(wgt_raw, channels, kh, kw):
+    """Pack global-DW weights: per channel, pad kh*kw taps to groups of 9."""
+    taps = kh * kw                     # 42 for 7×6
+    group_size = ((taps + 8) // 9) * 9  # 45
+    packed = []
+    for c in range(channels):
+        ch_weights = wgt_raw[c * taps : (c + 1) * taps]
+        for w in ch_weights: packed.append(w)
+        for _ in range(group_size - taps): packed.append(0)  # zero-pad last group
+    return packed
+
 def pack_pw_weights(wgt_raw, out_ch, in_ch):
     """Pack PW weights: for each output channel, group input channels in blocks of 9."""
     wgt_np = np.array(wgt_raw).reshape((out_ch, in_ch))
@@ -130,6 +141,12 @@ w46 = pack_pw_weights(load_fixed("blocks_14_pw2_weight.txt"), 128, 256)
 # L47: Conv2 (1x1 PW, 128->512)
 w47 = pack_pw_weights(load_fixed("conv2_weight.txt"), 512, 128)
 
+# L48: linear7 (global DW, 7x6 kernel, 512ch, no PReLU)
+w48 = pack_global_dw_weights(load_fixed("linear7_weight.txt"), 512, 7, 6)
+
+# L49: linear1 (1x1 PW, 512->128, no PReLU)
+w49 = pack_pw_weights(load_fixed("linear1_weight.txt"), 128, 512)
+
 all_weights = (w0 + w1 + w2 + w3 + w4 + w5 + w6 + w7 +
                w8 + w9 + w10 + w11 + w12 + w13 + w14 + w15 + w16 +
                w17 + w18 + w19 +
@@ -138,7 +155,7 @@ all_weights = (w0 + w1 + w2 + w3 + w4 + w5 + w6 + w7 +
                w32 + w33 + w34 + w35 + w36 + w37 +
                w38 + w39 + w40 +
                w41 + w42 + w43 + w44 + w45 + w46 +
-               w47)
+               w47 + w48 + w49)
 print(f"Total weight entries: {len(all_weights)} (max 20-bit: {2**20})")
 assert len(all_weights) < 2**20, "Weight overflow!"
 with open(os.path.join(SIM_DIR, "weights.hex"), "w") as f:
@@ -195,6 +212,8 @@ b44 = load_fixed("blocks_14_pw1_bias.txt")
 b45 = load_fixed("blocks_14_dw_bias.txt")
 b46 = load_fixed("blocks_14_pw2_bias.txt")
 b47 = load_fixed("conv2_bias.txt")
+b48 = load_fixed("linear7_bias.txt")
+b49 = load_fixed("linear1_bias.txt")
 
 all_biases = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + b7 +
               b8 + b9 + b10 + b11 + b12 + b13 + b14 + b15 + b16 +
@@ -204,7 +223,7 @@ all_biases = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + b7 +
               b32 + b33 + b34 + b35 + b36 + b37 +
               b38 + b39 + b40 +
               b41 + b42 + b43 + b44 + b45 + b46 +
-              b47)
+              b47 + b48 + b49)
 print(f"Total bias entries: {len(all_biases)} (max 14-bit: {2**14})")
 assert len(all_biases) < 2**14, "Bias overflow!"
 with open(os.path.join(SIM_DIR, "bias.hex"), "w") as f:
@@ -261,6 +280,8 @@ p44 = load_fixed("blocks_14_pw1_prelu.txt")
 p45 = load_fixed("blocks_14_dw_prelu.txt")
 p46 = [0]*128
 p47 = load_fixed("conv2_prelu.txt")
+p48 = [0]*512   # linear7: no PReLU
+p49 = [0]*128   # linear1: no PReLU
 
 all_prelus = (p0 + p1 + p2 + p3 + p4 + p5 + p6 + p7 +
               p8 + p9 + p10 + p11 + p12 + p13 + p14 + p15 + p16 +
@@ -270,7 +291,7 @@ all_prelus = (p0 + p1 + p2 + p3 + p4 + p5 + p6 + p7 +
               p32 + p33 + p34 + p35 + p36 + p37 +
               p38 + p39 + p40 +
               p41 + p42 + p43 + p44 + p45 + p46 +
-              p47)
+              p47 + p48 + p49)
 assert len(all_prelus) == len(all_biases), "Bias/PReLU count mismatch!"
 with open(os.path.join(SIM_DIR, "prelu.hex"), "w") as f:
     for p in all_prelus: f.write(f"{(p & 0xFFFF):04x}\n")
@@ -295,7 +316,7 @@ weights_list = [w0,w1,w2,w3,w4,w5,w6,w7,
                 w32,w33,w34,w35,w36,w37,
                 w38,w39,w40,
                 w41,w42,w43,w44,w45,w46,
-                w47]
+                w47,w48,w49]
 
 # Compute cumulative weight bases
 wb = [0]
@@ -415,12 +436,16 @@ configs = [
     make_config(256, 128,  6,   7, 1, 0, 1, 1, 0, wb[46], 0, 2),
     # L47: Conv2, 128->512, rd=B2, wr=B1, 7x6
     make_config(128, 512,  6,   7, 1, 1, 0, 1, 0, wb[47], 2, 1),
+    # L48: linear7, global DW 7x6, 512ch, is_pw=1 & is_dw=1, rd=B1, wr=B0
+    make_config(512, 512,  6,   7, 1, 0, 0, 1, 1, wb[48], 1, 0),
+    # L49: linear1, 1x1 PW, 512->128, rd=B0, wr=B1, 1x1, no PReLU
+    make_config(512, 128,  1,   1, 1, 0, 0, 1, 0, wb[49], 0, 1),
 ]
 
-assert len(configs) == 48, f"Expected 48 configs, got {len(configs)}"
+assert len(configs) == 50, f"Expected 50 configs, got {len(configs)}"
 with open(os.path.join(SIM_DIR, "config.hex"), "w") as f:
     for cfg in configs: f.write(f"{cfg:016x}\n")
     for _ in range(64 - len(configs)): f.write("0000000000000000\n")
 
-print(f"Generated hex files for 48 layers (L0-L47).")
-print(f"Weight base for last layer (L47): {wb[47]} (0x{wb[47]:05x})")
+print(f"Generated hex files for 50 layers (L0-L49).")
+print(f"Weight base for last layer (L49): {wb[49]} (0x{wb[49]:05x})")

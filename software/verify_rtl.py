@@ -65,10 +65,12 @@ LAYER_PARAMS = {
     45: {"C": 256, "H":  7, "W":  6, "offset": B0},  # B14-DW
     46: {"C": 128, "H":  7, "W":  6, "offset": B2},  # B14-PW2+Res
     47: {"C": 512, "H":  7, "W":  6, "offset": B1},  # Conv2   (128->512)
+    48: {"C": 512, "H":  1, "W":  1, "offset": B0},  # linear7 (global DW, 1×1 out)
+    49: {"C": 128, "H":  1, "W":  1, "offset": B1},  # linear1 (1×1 PW, 512->128)
 }
 
 if layer not in LAYER_PARAMS:
-    print(f"Error: Layer {layer} not in range 0-47.")
+    print(f"Error: Layer {layer} not in range 0-48.")
     exit(1)
 
 params = LAYER_PARAMS[layer]
