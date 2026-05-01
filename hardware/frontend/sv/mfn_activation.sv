@@ -1,8 +1,10 @@
 // ==============================================================================
 // Module: mfn_activation
 // Description: Handles Post-Quantization (Shift & Clamp) then PReLU.
-//   Order matches c_model_fixed: first quantize Q20->Q10, then PReLU on Q10.
-//   Uses 16x16=32-bit multiplier (synthesis friendly).
+//   2-stage pipeline to break critical path:
+//     Stage 1 register: shift + clamp (p_out → clamped)
+//     Stage 2 register: PReLU multiply + MUX + residual add + clamp → output
+//   Caller must extend sram_wr_addr delay to 2 cycles to match valid_out timing.
 // ==============================================================================
 
 module mfn_activation #(
@@ -12,69 +14,98 @@ module mfn_activation #(
 )(
     input  logic                            clk,
     input  logic                            rst_n,
-    
+
     input  logic                            valid_in,
-    input  logic signed [AWIDTH-1:0]        p_out,      // Q20 accumulator
+    input  logic signed [AWIDTH-1:0]        p_out,
     input  logic                            has_prelu,
-    input  logic signed [DWIDTH-1:0]        prelu_w,    // Q10 PReLU alpha
+    input  logic signed [DWIDTH-1:0]        prelu_w,
     input  logic                            layer_is_res,
     input  logic signed [DWIDTH-1:0]        residual_in,
-    
+
     output logic                            valid_out,
     output logic signed [DWIDTH-1:0]        pixel_out
 );
 
-    logic signed [DWIDTH-1:0] out_reg;
-    logic                     valid_reg;
-    
-    // Combinational intermediate signals
+    // ---------------------------------------------------------------
+    // Stage 1 combinational: shift + clamp
+    // ---------------------------------------------------------------
     logic signed [AWIDTH-1:0] shifted;
     logic signed [DWIDTH-1:0] clamped;
-    logic signed [31:0]       prelu_prod;
-    logic signed [31:0]       prelu_shifted;
-    logic signed [DWIDTH-1:0] result;
 
-    // Step 1: Quantize Q20 -> Q10
     assign shifted = p_out >>> F_BITS;
 
-    // Step 2: Clamp to int16
     always_comb begin
-        if (shifted > 32767)       clamped = 16'sd32767;
+        if      (shifted > 32767)  clamped = 16'sd32767;
         else if (shifted < -32768) clamped = -16'sd32768;
         else                       clamped = DWIDTH'(shifted);
     end
 
-    // Step 3: PReLU multiply (16x16 = 32-bit, matching c_model_fixed)
-    assign prelu_prod    = $signed(clamped) * $signed(prelu_w);  // Q10 * Q10 = Q20
-    assign prelu_shifted = prelu_prod >>> F_BITS;                // Q20 >> 10 = Q10
+    // ---------------------------------------------------------------
+    // Stage 1 register: clamped value + sideband signals
+    // ---------------------------------------------------------------
+    logic signed [DWIDTH-1:0] clamped_s1;
+    logic                     has_prelu_s1;
+    logic signed [DWIDTH-1:0] prelu_w_s1;
+    logic                     layer_is_res_s1;
+    logic signed [DWIDTH-1:0] residual_s1;
+    logic                     valid_s1;
 
-    // Step 4: Select result & Residual Addition
-    logic signed [31:0] result_raw;
-    always_comb begin
-        if (has_prelu && (clamped < 0)) begin
-            result_raw = prelu_shifted;
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            clamped_s1      <= '0;
+            has_prelu_s1    <= 1'b0;
+            prelu_w_s1      <= '0;
+            layer_is_res_s1 <= 1'b0;
+            residual_s1     <= '0;
+            valid_s1        <= 1'b0;
         end else begin
-            result_raw = clamped;
+            clamped_s1      <= clamped;
+            has_prelu_s1    <= has_prelu;
+            prelu_w_s1      <= prelu_w;
+            layer_is_res_s1 <= layer_is_res;
+            residual_s1     <= residual_in;
+            valid_s1        <= valid_in;
         end
-        
-        if (layer_is_res) begin
-            result_raw = result_raw + residual_in;
-        end
-        
-        if (result_raw > 32767)       result = 16'sd32767;
+    end
+
+    // ---------------------------------------------------------------
+    // Stage 2 combinational: PReLU multiply + MUX + residual + clamp
+    // ---------------------------------------------------------------
+    logic signed [31:0]       prelu_prod;
+    logic signed [31:0]       prelu_shifted;
+    logic signed [31:0]       result_raw;
+    logic signed [DWIDTH-1:0] result;
+
+    assign prelu_prod    = $signed(clamped_s1) * $signed(prelu_w_s1);
+    assign prelu_shifted = prelu_prod >>> F_BITS;
+
+    always_comb begin
+        if (has_prelu_s1 && (clamped_s1 < 0))
+            result_raw = prelu_shifted;
+        else
+            result_raw = clamped_s1;
+
+        if (layer_is_res_s1)
+            result_raw = result_raw + residual_s1;
+
+        if      (result_raw > 32767)  result = 16'sd32767;
         else if (result_raw < -32768) result = -16'sd32768;
         else                          result = DWIDTH'(result_raw);
     end
 
-    // Registered output
+    // ---------------------------------------------------------------
+    // Stage 2 register: output
+    // ---------------------------------------------------------------
+    logic signed [DWIDTH-1:0] out_reg;
+    logic                     valid_reg;
+
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             out_reg   <= '0;
             valid_reg <= 1'b0;
         end else begin
-            if (valid_in)
-                out_reg <= result;
-            valid_reg <= valid_in;
+            if (valid_s1) out_reg <= result;
+            valid_reg <= valid_s1;
         end
     end
 

@@ -105,6 +105,7 @@ module mfn_frontend_top #(
 
     // Internal write address (before pipeline delay)
     logic [M_ADDR_WIDTH-1:0] sram_wr_addr_raw;
+    logic [M_ADDR_WIDTH-1:0] sram_wr_addr_r1;   // extra delay stage for activation 2-cycle pipeline
 
     // 3. Address Generator (with ping-pong)
     mfn_addr_gen #(
@@ -130,12 +131,15 @@ module mfn_frontend_top #(
         .is_pad(is_pad)
     );
 
-    // Delay write address by 1 cycle to align with Activation pipeline
+    // Delay write address by 2 cycles to align with 2-stage Activation pipeline
     always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n)
-            sram_wr_addr <= '0;
-        else
-            sram_wr_addr <= sram_wr_addr_raw;
+        if (!rst_n) begin
+            sram_wr_addr_r1 <= '0;
+            sram_wr_addr    <= '0;
+        end else begin
+            sram_wr_addr_r1 <= sram_wr_addr_raw;
+            sram_wr_addr    <= sram_wr_addr_r1;
+        end
     end
 
     // 4. Sliding Window
@@ -209,15 +213,5 @@ module mfn_frontend_top #(
         .pixel_out(pixel_out),
         .valid_out(valid_out)
     );
-
-    // DEBUG: MAC inputs for Layer 1 first calculation
-    integer l1_calc_cnt = 0;
-    always @(posedge clk) begin
-        if (u_ctrl.state_reg == u_ctrl.STATE_CALC_PSUM && u_ctrl.layer_idx_reg == 1 && l1_calc_cnt < 5) begin
-            $display("Time=%0t | L1 MAC | win=%p | wgt=%p | bias=%d | psum_out=%d",
-                     $time, win_data, wgt_data, mac_bias_in, u_ctrl.psum_to_act);
-            l1_calc_cnt = l1_calc_cnt + 1;
-        end
-    end
 
 endmodule

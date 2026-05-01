@@ -17,7 +17,7 @@
 | Layer 48 | linear7 (Global DW 7×6, 512ch → 1×1) | ✅ **100.00% Exact Match** |
 | Layer 49 | linear1 (1×1 PW, 512→128) | ✅ **100.00% Exact Match** |
 
-> **全 50 層總執行時間：41,732,515 cycles**
+> **全 50 層總執行時間：43,158,478 cycles**（含 addr_gen + activation 2-stage pipeline 優化，+3.4% vs 41,732,515）
 
 ---
 
@@ -562,6 +562,7 @@ python3 software/verify_rtl.py 2
 | 2026-04-29 | 全 48 層 RTL 驗證通過 | L0–L47 全部 100.00% Exact Match，41,694,006 cycles |
 | 2026-04-29 | linear7 Global DW 實作 | L48 100.00% Exact Match，41,724,218 cycles（+30,212 cycles）|
 | 2026-04-29 | linear1 全模型完成 | L49 100.00% Exact Match，41,732,515 cycles（+8,297 cycles）|
+| 2026-04-30 | Synthesis critical path pipeline 優化 | addr_gen 2-stage, activation 2-stage, 移除 synthesis blocker；43,158,478 cycles (+3.4%)；全 50 層仍 100.00% |
 
 ---
 
@@ -1203,18 +1204,290 @@ Max abs err:  0
 
 ---
 
-## 24. 下一步 TODO（2026-04-29）
+## 24. Phase I：Synthesis 前 Critical Path Pipeline 優化 (2026-04-30)
+
+### 24.1 背景與動機
+
+全 50 層驗證通過後，下一步是送入 Design Compiler 進行邏輯合成。在合成前，識別並修正下列會造成 timing violation 的 combinational critical path：
+
+1. **`mfn_addr_gen.sv` 雙乘法 critical path**：在單一 cycle 內連續執行 `y×W + x` 與 `×in_ch + c` 兩次乘法，是最長的組合邏輯路徑。
+2. **`mfn_activation.sv` PReLU + Residual critical path**：FF-to-FF 路徑包含 `shift → clamp → 16×16 multiply → shift → MUX → add → clamp`，延遲過長。
+3. **`mfn_frontend_top.sv` synthesis blocker**：`always @(posedge clk) $display(...)` 引用了 hierarchical path `u_ctrl.state_reg`（Design Compiler 無法跨層次引用），且 `integer l1_calc_cnt = 0` 的初始值在合成時會被忽略，為必修項目。
+
+---
+
+### 24.2 修改一：移除 Synthesis Blocker（`mfn_frontend_top.sv`）
+
+**刪除整段 debug block：**
+
+```systemverilog
+// 刪除前（約 8 行）：
+integer l1_calc_cnt = 0;
+always @(posedge clk) begin
+    if (dut.u_ctrl.state_reg == STATE_CALC_PSUM) begin
+        l1_calc_cnt++;
+        $display("[DEBUG] CALC_PSUM #%0d ...", l1_calc_cnt, ...);
+    end
+end
+```
+
+**原因：**
+- `u_ctrl.state_reg`：hierarchical reference，Design Compiler 不支援
+- `integer l1_calc_cnt = 0`：initial value 合成時忽略，初始值為 X
+- `$display`：simulation-only system task，合成工具報 warning/error
+
+**同步修改：** 將 `sram_wr_addr` 延遲由 1 cycle 擴展為 **2 cycle**，以對齊 `mfn_activation.sv` 新增的 2-stage pipeline（原為 1-cycle，現為 2-cycle latency）：
+
+```systemverilog
+logic [M_ADDR_WIDTH-1:0] sram_wr_addr_raw;
+logic [M_ADDR_WIDTH-1:0] sram_wr_addr_r1;   // 新增第二個暫存級
+
+always_ff @(posedge clk or negedge rst_n) begin
+    if (!rst_n) begin
+        sram_wr_addr_r1 <= '0;
+        sram_wr_addr    <= '0;
+    end else begin
+        sram_wr_addr_r1 <= sram_wr_addr_raw;
+        sram_wr_addr    <= sram_wr_addr_r1;
+    end
+end
+```
+
+---
+
+### 24.3 修改二：addr_gen 2-Stage Pipeline（`mfn_addr_gen.sv`）
+
+**舊設計（single-cycle combinational）：**
+
+```
+ctrl inputs (y, x, c, ch) → [comb] y×W+x → ×ch+c → sram_rd_addr
+```
+
+**新設計（2-stage pipelined）：**
+
+```
+Stage 1 register: pixel_offset = y×W+x, ch, c, rd_base
+Stage 2 comb:     calc_rd_addr = pixel_offset × ch + c
+```
+
+**新增 registers：**
+
+```systemverilog
+logic signed [M_ADDR_WIDTH-1:0] pixel_offset_s1;
+logic [9:0]                      ch_s1;
+logic [9:0]                      c_s1;
+logic [M_ADDR_WIDTH-1:0]         rd_base_s1;
+
+always_ff @(posedge clk or negedge rst_n) begin
+    pixel_offset_s1 <= $signed(y_in) * $signed({1'b0, width_in}) + $signed(x_in);
+    ch_s1           <= read_res ? out_ch_in : in_ch_in;
+    c_s1            <= c_in;
+    rd_base_s1      <= rd_base;
+end
+
+always_comb begin
+    calc_rd_addr = M_ADDR_WIDTH'($signed(pixel_offset_s1) * $signed({1'b0, ch_s1})
+                                 + $signed({1'b0, c_s1}));
+end
+assign sram_rd_addr = rd_base_s1 + calc_rd_addr;
+```
+
+**`is_pad` 也延遲 2 cycle** 以與新的 2-cycle 地址 pipeline 對齊：
+
+```systemverilog
+// is_pad_comb → is_pad_s1 (FF) → is_pad_reg (FF) → assign is_pad
+always_ff @(posedge clk or negedge rst_n) begin
+    is_pad_s1  <= is_pad_comb;
+    is_pad_reg <= is_pad_s1;
+end
+assign is_pad = is_pad_reg;
+```
+
+同時移除 `always_comb` 上不應存在的 `automatic` 關鍵字（synthesis 工具不支援 automatic storage class 在 always_comb）。
+
+---
+
+### 24.4 修改三：activation 2-Stage Pipeline（`mfn_activation.sv`）
+
+**舊設計（single FF stage）：**
+
+```
+p_out → [comb] shift→clamp→PReLU_mul→shift→MUX→res_add→clamp → [FF] → pixel_out
+```
+
+**新設計（2-stage pipeline）：**
+
+```
+Stage 1 register: shift + clamp
+Stage 2 register: PReLU_mul + shift + MUX + res_add + clamp
+```
+
+**Stage 1 registers：**
+
+```systemverilog
+logic signed [DWIDTH-1:0] clamped_s1;
+logic                     has_prelu_s1, layer_is_res_s1, valid_s1;
+logic signed [DWIDTH-1:0] prelu_w_s1, residual_s1;
+
+always_ff @(posedge clk or negedge rst_n) begin
+    clamped_s1      <= clamped;         // shift+clamp 結果
+    has_prelu_s1    <= has_prelu;
+    prelu_w_s1      <= prelu_w;
+    layer_is_res_s1 <= layer_is_res;
+    residual_s1     <= residual_in;
+    valid_s1        <= valid_in;
+end
+```
+
+**Stage 2 comb + register：**
+
+```systemverilog
+assign prelu_prod    = $signed(clamped_s1) * $signed(prelu_w_s1);
+assign prelu_shifted = prelu_prod >>> F_BITS;
+
+always_comb begin
+    if (has_prelu_s1 && (clamped_s1 < 0))
+        result_raw = prelu_shifted;
+    else
+        result_raw = clamped_s1;
+    if (layer_is_res_s1)
+        result_raw = result_raw + residual_s1;
+    // clamp to int16
+end
+
+always_ff @(posedge clk or negedge rst_n) begin
+    if (valid_s1) out_reg <= result;
+    valid_reg <= valid_s1;
+end
+```
+
+---
+
+### 24.5 Controller 配套修改（`mfn_controller.sv`）
+
+addr_gen pipeline 新增 1 cycle latency，activation 新增 1 cycle latency，控制器需對應調整。
+
+#### 24.5.1 State Enum 擴展
+
+state enum 從 `logic [3:0]`（15 states，1 spare）擴充為 `logic [4:0]`（17 states）以容納 2 個新 state：
+
+```systemverilog
+typedef enum logic [4:0] {
+    STATE_IDLE, STATE_LOAD_CFG, STATE_WAIT_CFG, STATE_INIT_PSUM,
+    STATE_FETCH_PIXELS, STATE_CALC_PSUM, STATE_MAC_FLUSH, STATE_MAC_FLUSH_2,
+    STATE_CH_IN_LOOP, STATE_READ_RESIDUAL,
+    STATE_READ_RESIDUAL_WAIT,   // ← 新增：addr_gen pipeline drain
+    STATE_ADD_RESIDUAL, STATE_WRITE_BACK, STATE_SPATIAL_LOOP,
+    STATE_NEXT_LAYER_WAIT,      // ← 新增：activation pipeline flush
+    STATE_NEXT_LAYER, STATE_DONE
+} state_t;
+```
+
+#### 24.5.2 load_pixel / pixel_idx：d1 → d2
+
+addr_gen 多 1 cycle latency，SRAM 資料到達 sliding window 需多等 1 cycle：
+
+```systemverilog
+// 改為 2-stage delay
+logic [3:0] k_reg_d1, k_reg_d2;
+logic       load_pixel_d1, load_pixel_d2;
+
+always_ff @(posedge clk or negedge rst_n) begin
+    k_reg_d1      <= k_reg;          k_reg_d2      <= k_reg_d1;
+    load_pixel_d1 <= load_pixel_comb; load_pixel_d2 <= load_pixel_d1;
+end
+assign pixel_idx  = k_reg_d2;
+assign load_pixel = load_pixel_d2;
+```
+
+#### 24.5.3 FETCH_PIXELS：增加 1 個 drain cycle
+
+因 addr_gen 多 1 cycle，k=8 的 pixel 需再多等 1 cycle 才進入 sliding window。增加 k=9 作為空 drain cycle：
+
+```systemverilog
+// 舊：k < 9 送地址，k == 9 切到 CALC_PSUM
+// 新：k < 9 送地址，k == 9 drain，k == 10 切到 CALC_PSUM
+if (k_reg < 4'd9) begin
+    load_pixel_comb = 1; k_next = k_reg + 1;
+end else if (k_reg == 4'd9) begin
+    load_pixel_comb = 0; k_next = k_reg + 1; // 設定 wgt_addr
+end else begin
+    load_pixel_comb = 0; k_next = '0;
+    state_next = STATE_CALC_PSUM;
+end
+```
+
+#### 24.5.4 STATE_READ_RESIDUAL_WAIT：修正殘差地址 pipeline
+
+**Bug**：addr_gen Stage 1 在 `STATE_READ_RESIDUAL` cycle 捕捉的是前一個 `STATE_WRITE_BACK` 的 non-residual 輸入（read buffer 未更新），導致殘差地址計算錯誤。
+
+**修正**：`STATE_READ_RESIDUAL` 設定 `read_res=1`，新增 `STATE_READ_RESIDUAL_WAIT` 讓 addr_gen Stage 1 以正確的 residual 輸入計算一次，`STATE_ADD_RESIDUAL` 才讀到正確的殘差地址：
+
+```systemverilog
+// read_res 涵蓋兩個 state
+assign read_res = (state_reg == STATE_READ_RESIDUAL)
+                || (state_reg == STATE_READ_RESIDUAL_WAIT);
+
+// FSM transitions
+STATE_READ_RESIDUAL:      state_next = STATE_READ_RESIDUAL_WAIT;
+STATE_READ_RESIDUAL_WAIT: state_next = STATE_ADD_RESIDUAL;
+```
+
+#### 24.5.5 STATE_NEXT_LAYER_WAIT：修正最後一個 pixel 的 SRAM dump 時序
+
+**Bug**：2-stage activation 使 `valid_out` 比 `inc_write` 晚 2 cycle。Testbench 的 `$writememh` 在 `state_reg == STATE_NEXT_LAYER` 時觸發，但最後一個 pixel 的 NBA write 比 `STATE_NEXT_LAYER` 晚 1 cycle 到達，導致每層最後一個 pixel 被 dump 為 0。
+
+**修正**：在 `STATE_SPATIAL_LOOP` 最後一個位置的 transition 改為先進入 `STATE_NEXT_LAYER_WAIT`，讓 activation Stage 2 flush 完畢後（SRAM write NBA 在此 edge 生效），再進 `STATE_NEXT_LAYER` 觸發 `$writememh`：
+
+```systemverilog
+// STATE_SPATIAL_LOOP 最後位置（原：state_next = STATE_NEXT_LAYER）
+state_next = STATE_NEXT_LAYER_WAIT;
+
+// 新增 state
+STATE_NEXT_LAYER_WAIT: state_next = STATE_NEXT_LAYER;
+```
+
+---
+
+### 24.6 驗證結果
+
+| 項目 | 數值 |
+|------|------|
+| 全 50 層驗證 | **100.00% Exact Match（L0–L49）** |
+| 總執行週期 | **43,158,478 cycles**（+3.4% vs 原 41,732,515） |
+
+週期增加來源：
+- 每次 `STATE_FETCH_PIXELS` 多 1 個 drain cycle
+- 每個 residual layer 多 1 個 `STATE_READ_RESIDUAL_WAIT` cycle
+- 每層結尾多 1 個 `STATE_NEXT_LAYER_WAIT` cycle
+- 2-stage activation 本身增加 1 cycle latency（最後一個 pixel flush）
+
+---
+
+### 24.7 修改檔案總表
+
+| 檔案 | 修改內容 |
+|------|----------|
+| `mfn_frontend_top.sv` | 移除 debug block（synthesis blocker）；`sram_wr_addr` delay 從 1 cycle 擴為 2 cycle |
+| `mfn_addr_gen.sv` | 移除 `automatic` 關鍵字；`is_pad` 雙級暫存；新增 Stage 1 register（pixel_offset, ch, c, rd_base）；Stage 2 combinational multiply |
+| `mfn_activation.sv` | 重構為 2-stage pipeline：Stage 1 = shift+clamp，Stage 2 = PReLU×MUX+residual+clamp |
+| `mfn_controller.sv` | state enum 從 4-bit 擴為 5-bit；新增 `STATE_READ_RESIDUAL_WAIT` 與 `STATE_NEXT_LAYER_WAIT`；load_pixel/pixel_idx 改為 d2；FETCH_PIXELS 新增 drain cycle（k=9）；read_res 與 c_in_out 涵蓋 WAIT state |
+
+---
+
+## 25. 下一步 TODO（2026-04-30 更新）
 
 ### 硬體功能
 
-- [x] **`linear7` 支援**：已實作 5-group global DW 模式，is_pw=1&&is_dw=1 作為 encoding，L48 達 100.00% Exact Match。
-- [x] **`linear1` 支援**：1×1 PW conv（512→128），直接套用現有 PW 路徑，L49 達 100.00% Exact Match。全 50 層完整驗證通過。
+- [x] **`linear7` 支援**：5-group global DW 模式，L48 達 100.00% Exact Match。
+- [x] **`linear1` 支援**：1×1 PW conv（512→128），L49 達 100.00% Exact Match。
+- [x] **全 50 層完整驗證**：L0–L49 全部 100.00% Exact Match。
+- [x] **Synthesis 前 critical path pipeline 優化**：addr_gen 2-stage、activation 2-stage、移除 synthesis blocker，43,158,478 cycles (+3.4%)。
 
 ### 時序優化（Synthesis）
 
-- [ ] **`mfn_addr_gen.sv` 拆分 2-stage**：`pixel_offset = y * W + x`（Stage 1）→ `addr = pixel_offset * C + c`（Stage 2），降低組合邏輯深度。
-- [ ] **`mfn_activation.sv` PReLU pipeline**：PReLU 乘法器後插一級暫存器，縮短 critical path。
-- [ ] **Design Compiler 跑 timing report**：確認 100MHz target 下的 setup/hold violation。
+- [ ] **Design Compiler 跑 timing report**：使用 moore server 上的 DC，設定 100MHz clock，確認 setup/hold violation 是否消除。
+- [ ] **Area / Power 報告**：取得合成後面積（cell count、NAND2 equivalent）與靜態功耗數字。
 
 ### 系統整合
 

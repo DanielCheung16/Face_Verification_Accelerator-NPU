@@ -49,7 +49,7 @@ module mfn_controller #(
     // --------------------------------------------------------------------------
     // FSM States
     // --------------------------------------------------------------------------
-    typedef enum logic [3:0] {
+    typedef enum logic [4:0] {
         STATE_IDLE,
         STATE_LOAD_CFG,
         STATE_WAIT_CFG,
@@ -60,9 +60,11 @@ module mfn_controller #(
         STATE_MAC_FLUSH_2,
         STATE_CH_IN_LOOP,
         STATE_READ_RESIDUAL,
+        STATE_READ_RESIDUAL_WAIT,  // addr_gen pipeline drain: wait 1 cycle for residual addr
         STATE_ADD_RESIDUAL,
         STATE_WRITE_BACK,
         STATE_SPATIAL_LOOP,
+        STATE_NEXT_LAYER_WAIT,  // 1-cycle drain: lets activation pipeline flush last pixel
         STATE_NEXT_LAYER,
         STATE_DONE
     } state_t;
@@ -147,22 +149,26 @@ module mfn_controller #(
     // Bias/PReLU base per layer (accumulates out_ch per layer, needs 14 bits for 48 layers)
     logic [13:0] bias_base_reg, bias_base_next;
 
-    // Timing alignment
-    logic [3:0]  k_reg_d1;
-    logic        load_pixel_comb, load_pixel_d1;
+    // Timing alignment — d2 matches addr_gen 1-cycle pipeline + 1-cycle SRAM read
+    logic [3:0]  k_reg_d1,      k_reg_d2;
+    logic        load_pixel_comb, load_pixel_d1, load_pixel_d2;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             k_reg_d1      <= '0;
+            k_reg_d2      <= '0;
             load_pixel_d1 <= 1'b0;
+            load_pixel_d2 <= 1'b0;
         end else begin
             k_reg_d1      <= k_reg;
+            k_reg_d2      <= k_reg_d1;
             load_pixel_d1 <= load_pixel_comb;
+            load_pixel_d2 <= load_pixel_d1;
         end
     end
 
-    assign pixel_idx  = k_reg_d1;
-    assign load_pixel = load_pixel_d1;
+    assign pixel_idx  = k_reg_d2;
+    assign load_pixel = load_pixel_d2;
     
     // MAC pipeline delay tracking (2 stages now)
     logic [9:0] c_out_d1, c_out_d2;
@@ -203,10 +209,14 @@ module mfn_controller #(
                    (x_reg + {{7{kx_offset[1]}}, kx_offset});
     assign y_out = is_global_dw ? $signed({5'b0, gdw_ky}) :
                    (y_reg + {{7{ky_offset[1]}}, ky_offset});
-    assign c_in_out       = (layer_is_dw || state_reg == STATE_READ_RESIDUAL || state_reg == STATE_WRITE_BACK) ? c_out_reg :
+    assign c_in_out       = (layer_is_dw || state_reg == STATE_READ_RESIDUAL
+                            || state_reg == STATE_READ_RESIDUAL_WAIT
+                            || state_reg == STATE_WRITE_BACK) ? c_out_reg :
                             (layer_is_pw ? (c_in_reg + {6'd0, k_reg}) : c_in_reg);
     assign bias_addr      = bias_base_reg + {4'd0, c_out_reg};
-    assign read_res       = (state_reg == STATE_READ_RESIDUAL);
+    // read_res held high through WAIT so addr_gen Stage 1 keeps correct residual mapping
+    assign read_res       = (state_reg == STATE_READ_RESIDUAL)
+                          || (state_reg == STATE_READ_RESIDUAL_WAIT);
 
     // --------------------------------------------------------------------------
     // Next State & Output Logic
@@ -281,27 +291,33 @@ module mfn_controller #(
 
             STATE_FETCH_PIXELS: begin
                 if (layer_is_pw) begin
-                    // Pointwise / Global-DW: Fetch 9 pixels over 9 cycles
+                    // Pointwise / Global-DW: Fetch 9 pixels, then 1 drain cycle for addr_gen pipeline
                     if (k_reg < 4'd9) begin
                         load_pixel_comb = 1'b1;
                         k_next = k_reg + 1'b1;
+                    end else if (k_reg == 4'd9) begin
+                        // drain: addr_gen Stage 1 → SRAM → pixel still in flight for k=8
+                        load_pixel_comb = 1'b0;
+                        k_next = k_reg + 1'b1;
+                        if (!is_global_dw || group_idx_reg == 3'd0)
+                            wgt_addr_next = wgt_cin_base_reg;
                     end else begin
                         load_pixel_comb = 1'b0;
                         k_next = '0;
-                        // For global DW groups > 0 keep wgt_addr where CALC_PSUM left it
-                        if (!is_global_dw || group_idx_reg == 3'd0)
-                            wgt_addr_next = wgt_cin_base_reg;
                         state_next = STATE_CALC_PSUM;
                     end
                 end else begin
-                    // Standard/Depthwise: Fetch 3x3 window (9 pixels)
+                    // Standard/Depthwise: Fetch 3x3 window, then 1 drain cycle
                     if (k_reg < 4'd9) begin
                         load_pixel_comb = 1'b1;
                         k_next = k_reg + 1'b1;
+                    end else if (k_reg == 4'd9) begin
+                        load_pixel_comb = 1'b0;
+                        k_next = k_reg + 1'b1;
+                        wgt_addr_next = wgt_cin_base_reg;
                     end else begin
                         load_pixel_comb = 1'b0;
                         k_next = '0;
-                        wgt_addr_next = wgt_cin_base_reg;
                         state_next = STATE_CALC_PSUM;
                     end
                 end
@@ -397,9 +413,17 @@ module mfn_controller #(
             end
             
             STATE_READ_RESIDUAL: begin
+                // addr_gen Stage 1 captures residual address here; wait one more cycle
+                // so Stage 2 → SRAM registered read completes before ADD_RESIDUAL
+                state_next = STATE_READ_RESIDUAL_WAIT;
+            end
+
+            STATE_READ_RESIDUAL_WAIT: begin
+                // sram_rd_addr now valid (from Stage 1 captured at READ_RESIDUAL);
+                // SRAM delivers pixel_in at the next rising edge (= ADD_RESIDUAL)
                 state_next = STATE_ADD_RESIDUAL;
             end
-            
+
             STATE_ADD_RESIDUAL: begin
                 inc_write = 1'b1;
                 if (layer_is_dw) begin
@@ -426,13 +450,12 @@ module mfn_controller #(
             STATE_SPATIAL_LOOP: begin
                 wgt_cin_base_next = '0;
                 if (is_global_dw) begin
-                    // 1×1 output: no spatial loop needed
-                    state_next = STATE_NEXT_LAYER;
+                    state_next = STATE_NEXT_LAYER_WAIT;
                 end else if (x_reg >= (layer_w - layer_stride)) begin
                     x_next = '0;
                     if (y_reg >= (layer_h - layer_stride)) begin
                         y_next     = '0;
-                        state_next = STATE_NEXT_LAYER;
+                        state_next = STATE_NEXT_LAYER_WAIT;
                     end else begin
                         y_next     = y_reg + layer_stride;
                         state_next = STATE_INIT_PSUM;
@@ -441,6 +464,12 @@ module mfn_controller #(
                     x_next     = x_reg + layer_stride;
                     state_next = STATE_INIT_PSUM;
                 end
+            end
+
+            STATE_NEXT_LAYER_WAIT: begin
+                // Activation Stage 2 is still flushing the last pixel here.
+                // NEXT_LAYER fires one cycle later so $writememh sees the completed SRAM.
+                state_next = STATE_NEXT_LAYER;
             end
 
             STATE_NEXT_LAYER: begin
