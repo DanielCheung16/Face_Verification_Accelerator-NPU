@@ -1,0 +1,29 @@
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
+
+
+c_model_fixed8/
+golden_weights_fixed8/
+
+068.ckpt
+faces_ms1m_refine_v2_112x112-0-of-16.tfrecord
+
+# Simulation Artifacts
+hardware/frontend/sim/xcelium.d/
+hardware/frontend/sim/INCA_libs/
+hardware/frontend/sim/xrun.log
+hardware/frontend/sim/xrun.history
+hardware/frontend/sim/waves.shm/
+hardware/frontend/sim/*.key
+
+////zpx add: 
+software/c_model_fixed/build/
+qface_env/
+pretrained_models/quantface_mobilefacenet_w8a8_real/*
+//modelsim:
+frontend/sim/gold_models/*.hex
+frontend/sim/work/
+frontend/sim/*.ini
+frontend/sim/*transcript

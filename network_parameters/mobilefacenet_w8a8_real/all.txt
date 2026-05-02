@@ -1,0 +1,383 @@
+
+Model structure:
+
+MobileFaceNet(
+  (conv1): Conv_block(
+    (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+    (bn): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (prelu): (QuantActPreLu(
+      (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -1.45, Act_max: 2.37)
+    ) activation_bit=8, full_precision_flag=False)
+  )
+  (conv2_dw): Conv_block(
+    (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+    (bn): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (prelu): (QuantActPreLu(
+      (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -2.44, Act_max: 6.29)
+    ) activation_bit=8, full_precision_flag=False)
+  )
+  (conv_23): Depth_Wise(
+    (conv): Conv_block(
+      (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+      (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (prelu): (QuantActPreLu(
+        (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.96, Act_max: 5.08)
+      ) activation_bit=8, full_precision_flag=False)
+    )
+    (conv_dw): Conv_block(
+      (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+      (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (prelu): (QuantActPreLu(
+        (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -2.12, Act_max: 4.43)
+      ) activation_bit=8, full_precision_flag=False)
+    )
+    (project): Linear_block(
+      (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+      (bn): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    )
+  )
+  (conv_3): Residual(
+    (model): Sequential(
+      (0): Sequential(
+        (0): Depth_Wise(
+          (conv): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.40, Act_max: 1.11)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (conv_dw): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.55, Act_max: 2.71)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (project): Linear_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -3.12, Act_max: 4.09)
+      )
+      (1): Sequential(
+        (0): Depth_Wise(
+          (conv): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.32, Act_max: 1.29)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (conv_dw): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.93, Act_max: 3.64)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (project): Linear_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -3.39, Act_max: 3.62)
+      )
+      (2): Sequential(
+        (0): Depth_Wise(
+          (conv): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.29, Act_max: 1.47)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (conv_dw): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.31, Act_max: 3.57)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (project): Linear_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -5.42, Act_max: 6.59)
+      )
+      (3): Sequential(
+        (0): Depth_Wise(
+          (conv): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.36, Act_max: 1.99)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (conv_dw): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.64, Act_max: 3.72)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (project): Linear_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(64, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -8.75, Act_max: 7.59)
+      )
+    )
+  )
+  (conv_34): Depth_Wise(
+    (conv): Conv_block(
+      (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+      (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (prelu): (QuantActPreLu(
+        (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.28, Act_max: 1.50)
+      ) activation_bit=8, full_precision_flag=False)
+    )
+    (conv_dw): Conv_block(
+      (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+      (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (prelu): (QuantActPreLu(
+        (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -1.66, Act_max: 2.97)
+      ) activation_bit=8, full_precision_flag=False)
+    )
+    (project): Linear_block(
+      (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+      (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    )
+  )
+  (conv_4): Residual(
+    (model): Sequential(
+      (0): Sequential(
+        (0): Depth_Wise(
+          (conv): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.20, Act_max: 1.35)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (conv_dw): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.32, Act_max: 2.11)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (project): Linear_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -2.30, Act_max: 3.25)
+      )
+      (1): Sequential(
+        (0): Depth_Wise(
+          (conv): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.16, Act_max: 0.88)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (conv_dw): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.15, Act_max: 2.77)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (project): Linear_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -2.26, Act_max: 3.26)
+      )
+      (2): Sequential(
+        (0): Depth_Wise(
+          (conv): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.20, Act_max: 0.92)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (conv_dw): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.16, Act_max: 3.04)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (project): Linear_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -2.55, Act_max: 3.30)
+      )
+      (3): Sequential(
+        (0): Depth_Wise(
+          (conv): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.14, Act_max: 0.96)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (conv_dw): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.48, Act_max: 3.62)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (project): Linear_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -2.63, Act_max: 3.43)
+      )
+      (4): Sequential(
+        (0): Depth_Wise(
+          (conv): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.29, Act_max: 1.11)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (conv_dw): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.55, Act_max: 2.72)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (project): Linear_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -4.70, Act_max: 3.69)
+      )
+      (5): Sequential(
+        (0): Depth_Wise(
+          (conv): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.24, Act_max: 1.03)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (conv_dw): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.67, Act_max: 3.23)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (project): Linear_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -6.10, Act_max: 6.80)
+      )
+    )
+  )
+  (conv_45): Depth_Wise(
+    (conv): Conv_block(
+      (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+      (bn): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (prelu): (QuantActPreLu(
+        (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.26, Act_max: 1.08)
+      ) activation_bit=8, full_precision_flag=False)
+    )
+    (conv_dw): Conv_block(
+      (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+      (bn): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (prelu): (QuantActPreLu(
+        (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -2.01, Act_max: 2.25)
+      ) activation_bit=8, full_precision_flag=False)
+    )
+    (project): Linear_block(
+      (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+      (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    )
+  )
+  (conv_5): Residual(
+    (model): Sequential(
+      (0): Sequential(
+        (0): Depth_Wise(
+          (conv): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.48, Act_max: 0.92)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (conv_dw): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.16, Act_max: 2.35)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (project): Linear_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -2.39, Act_max: 2.62)
+      )
+      (1): Sequential(
+        (0): Depth_Wise(
+          (conv): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.45, Act_max: 1.34)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (conv_dw): Conv_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(256, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+            (prelu): (QuantActPreLu(
+              (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.53, Act_max: 2.96)
+            ) activation_bit=8, full_precision_flag=False)
+          )
+          (project): Linear_block(
+            (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+            (bn): BatchNorm2d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+          )
+        )
+        (1): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -3.93, Act_max: 2.90)
+      )
+    )
+  )
+  (conv_6_sep): Conv_block(
+    (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+    (bn): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    (prelu): (QuantActPreLu(
+      (quantAct): QuantAct(activation_bit=8, full_precision_flag=False, running_stat=False, Act_min: -0.13, Act_max: 2.23)
+    ) activation_bit=8, full_precision_flag=False)
+  )
+  (output_layer): GDC(
+    (conv_6_dw): Linear_block(
+      (conv): (Quant_Conv2d() weight_bit=8, full_precision_flag=False)
+      (bn): BatchNorm2d(512, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+    )
+    (conv_6_flatten): Flatten()
+    (linear): (Quant_Linear() weight_bit=8, full_precision_flag=False)
+    (bn): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+  )
+)
