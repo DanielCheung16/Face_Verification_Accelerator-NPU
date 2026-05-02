@@ -2,6 +2,8 @@ import os
 import sys
 import numpy as np
 
+_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+
 def hex_to_signed_int16(h):
     val = int(h, 16)
     if val >= 0x8000:
@@ -77,10 +79,10 @@ params = LAYER_PARAMS[layer]
 C, H_out, W_out = params["C"], params["H"], params["W"]
 RTL_OUTPUT_OFFSET = params["offset"]
 
-GOLDEN_FILE  = f"software/golden/layer{layer}_out_fixed.txt"
-RTL_HEX_FILE = f"hardware/frontend/sim/hex/rtl_out_layer{layer}.hex"
+GOLDEN_FILE  = os.path.join(_ROOT, f"software/golden/layer{layer}_out_fixed.txt")
+RTL_HEX_FILE = os.path.join(_ROOT, f"hardware/frontend/sim/layer_hex/rtl_out_layer{layer}.hex")
 if not os.path.exists(RTL_HEX_FILE):
-    RTL_HEX_FILE = "hardware/frontend/sim/hex/rtl_out.hex"
+    RTL_HEX_FILE = os.path.join(_ROOT, "hardware/frontend/sim/hex/rtl_out.hex")
 
 if not os.path.exists(RTL_HEX_FILE):
     print(f"Error: RTL hex file not found.")

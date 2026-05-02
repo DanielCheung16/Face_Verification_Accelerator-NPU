@@ -4,13 +4,13 @@ Compare RTL simulation (make top) vs C fixed-point model embeddings.
 
 Usage:
   # Run C model for all images, RTL for first N images only:
-  python3 software/compare_rtl_cmodel.py --images img_a.jpg img_b.jpg img_c.jpg --rtl-count 2
+  python3 software/eval/compare_rtl_cmodel.py --images img_a.jpg img_b.jpg img_c.jpg --rtl-count 2
 
   # Use pre-saved embeddings (skip re-running simulations):
-  python3 software/compare_rtl_cmodel.py --images img_a.jpg img_b.jpg --load-cache
+  python3 software/eval/compare_rtl_cmodel.py --images img_a.jpg img_b.jpg --load-cache
 
   # Only C model (no RTL):
-  python3 software/compare_rtl_cmodel.py --images img_a.jpg img_b.jpg --no-rtl
+  python3 software/eval/compare_rtl_cmodel.py --images img_a.jpg img_b.jpg --no-rtl
 """
 
 import os
@@ -24,7 +24,7 @@ from PIL import Image
 # ============================================================
 # Paths
 # ============================================================
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 SIM_DIR      = os.path.join(PROJECT_ROOT, "hardware/frontend/sim")
 GOLDEN_DIR   = os.path.join(PROJECT_ROOT, "software/golden")
 HEX_DIR      = os.path.join(SIM_DIR, "hex")
@@ -129,7 +129,7 @@ class RTLEngine:
             raise RuntimeError(f"[RTL] make top failed:\n{r.stderr}")
 
         # Step 4: extract L49 embedding from hex
-        hex_path = os.path.join(HEX_DIR, "rtl_out_layer49.hex")
+        hex_path = os.path.join(HEX_DIR, "rtl_out.hex")
         if not os.path.exists(hex_path):
             raise FileNotFoundError(f"[RTL] Output hex not found: {hex_path}")
 

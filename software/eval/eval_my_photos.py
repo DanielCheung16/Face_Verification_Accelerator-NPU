@@ -3,11 +3,11 @@
 Evaluate MobileFaceNet C-fixed model on personal photos.
 Computes a cosine-similarity matrix and per-person intra/inter stats.
 
-Usage:
-  python3 eval_my_photos.py                          # default: c_fixed model
-  python3 eval_my_photos.py --engine pytorch         # PyTorch instead
-  python3 eval_my_photos.py --engine c_fixed pytorch # both side-by-side
-  python3 eval_my_photos.py --dir path/to/imgs       # custom image dir
+Usage (from project root):
+  python3 software/eval/eval_my_photos.py                                    # default: c_fixed model
+  python3 software/eval/eval_my_photos.py --engine pytorch                   # PyTorch instead
+  python3 software/eval/eval_my_photos.py --engine c_fixed pytorch           # both side-by-side
+  python3 software/eval/eval_my_photos.py --dir software/src/test_image_my_new  # custom image dir
 """
 import argparse
 import os
@@ -24,11 +24,14 @@ def preprocess_image(image_path):
     arr = (np.array(img, dtype=np.float32) - 127.5) / 128.0
     return arr.transpose(2, 0, 1)[np.newaxis]  # (1, 3, 112, 96)
 
-IMG_DIR      = "test_image_my_new"
-C_EXE        = "../c_model/c_inference_model"
-C_FIXED_EXE  = "../c_model_fixed/c_inference_model_fixed"
-C_FIXED8_EXE = "../c_model_fixed8/c_inference_model_fixed8"
-CKPT_PATH    = "../src/068.ckpt"
+_EVAL_DIR    = os.path.dirname(os.path.abspath(__file__))
+_SW_DIR      = os.path.join(_EVAL_DIR, "..")
+
+IMG_DIR      = os.path.join(_SW_DIR, "src/test_image_my_new")
+C_EXE        = os.path.join(_SW_DIR, "c_model/c_inference_model")
+C_FIXED_EXE  = os.path.join(_SW_DIR, "c_model_fixed/c_inference_model_fixed")
+C_FIXED8_EXE = os.path.join(_SW_DIR, "c_model_fixed8/c_inference_model_fixed8")
+CKPT_PATH    = os.path.join(_SW_DIR, "src/068.ckpt")
 F_BITS  = 10;  SCALE  = 1 << F_BITS
 F8_BITS = 6;   SCALE8 = 1 << F8_BITS
 
@@ -37,6 +40,7 @@ F8_BITS = 6;   SCALE8 = 1 << F8_BITS
 
 def _run_c(exe, tmp_in, tmp_out):
     r = subprocess.run([exe, tmp_in, tmp_out],
+                       cwd=os.path.dirname(exe),
                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if r.returncode != 0:
         raise RuntimeError(f"{exe} failed:\n{r.stderr.decode().strip()}")
@@ -48,26 +52,27 @@ def _run_c(exe, tmp_in, tmp_out):
 
 def embed_c(image_path):
     inp = preprocess_image(image_path)
-    np.savetxt("_tmp_in.txt", inp.flatten(), fmt="%.6f")
-    return _run_c(C_EXE, "_tmp_in.txt", "_tmp_out.txt")
+    np.savetxt("/tmp/_emc_in.txt", inp.flatten(), fmt="%.6f")
+    return _run_c(C_EXE, "/tmp/_emc_in.txt", "/tmp/_emc_out.txt")
 
 
 def embed_c_fixed(image_path):
     inp = preprocess_image(image_path)
     q16 = np.clip(np.round(inp * SCALE), -32768, 32767).astype(np.int16)
-    np.savetxt("_tmp_in_f16.txt", q16.flatten(), fmt="%d")
-    return _run_c(C_FIXED_EXE, "_tmp_in_f16.txt", "_tmp_out_f16.txt")
+    np.savetxt("/tmp/_emc_f16_in.txt", q16.flatten(), fmt="%d")
+    return _run_c(C_FIXED_EXE, "/tmp/_emc_f16_in.txt", "/tmp/_emc_f16_out.txt")
 
 
 def embed_c_fixed8(image_path):
     inp = preprocess_image(image_path)
     q8 = np.clip(np.round(inp * SCALE8), -128, 127).astype(np.int8)
-    np.savetxt("_tmp_in_f8.txt", q8.flatten(), fmt="%d")
-    return _run_c(C_FIXED8_EXE, "_tmp_in_f8.txt", "_tmp_out_f8.txt")
+    np.savetxt("/tmp/_emc_f8_in.txt", q8.flatten(), fmt="%d")
+    return _run_c(C_FIXED8_EXE, "/tmp/_emc_f8_in.txt", "/tmp/_emc_f8_out.txt")
 
 
 def embed_pytorch(image_path):
     import torch
+    sys.path.insert(0, os.path.join(_EVAL_DIR, "../python"))
     from model import MobileFacenet
     global _pt_net
     if "_pt_net" not in globals():

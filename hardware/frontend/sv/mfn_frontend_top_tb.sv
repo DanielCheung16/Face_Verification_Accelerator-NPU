@@ -46,7 +46,7 @@ module mfn_frontend_top_tb;
             sram_mem[sram_wr_addr] <= pixel_out;
     end
 
-    // Save SRAM snapshot and stop at layer 47
+    // Save SRAM snapshot
     initial begin
         @(posedge rst_n);
         forever begin
@@ -54,56 +54,56 @@ module mfn_frontend_top_tb;
             if (dut.u_ctrl.state_reg == dut.u_ctrl.STATE_NEXT_LAYER) begin
                 $display(">>> Time=%0t | Finished Layer %0d", $time, dut.u_ctrl.layer_idx);
                 case (dut.u_ctrl.layer_idx)
-                     6'd0:  $writememh("hex/rtl_out_layer0.hex",  sram_mem);
-                     6'd1:  $writememh("hex/rtl_out_layer1.hex",  sram_mem);
-                     6'd2:  $writememh("hex/rtl_out_layer2.hex",  sram_mem);
-                     6'd3:  $writememh("hex/rtl_out_layer3.hex",  sram_mem);
-                     6'd4:  $writememh("hex/rtl_out_layer4.hex",  sram_mem);
-                     6'd5:  $writememh("hex/rtl_out_layer5.hex",  sram_mem);
-                     6'd6:  $writememh("hex/rtl_out_layer6.hex",  sram_mem);
-                     6'd7:  $writememh("hex/rtl_out_layer7.hex",  sram_mem);
-                     6'd8:  $writememh("hex/rtl_out_layer8.hex",  sram_mem);
-                     6'd9:  $writememh("hex/rtl_out_layer9.hex",  sram_mem);
-                    6'd10:  $writememh("hex/rtl_out_layer10.hex", sram_mem);
-                    6'd11:  $writememh("hex/rtl_out_layer11.hex", sram_mem);
-                    6'd12:  $writememh("hex/rtl_out_layer12.hex", sram_mem);
-                    6'd13:  $writememh("hex/rtl_out_layer13.hex", sram_mem);
-                    6'd14:  $writememh("hex/rtl_out_layer14.hex", sram_mem);
-                    6'd15:  $writememh("hex/rtl_out_layer15.hex", sram_mem);
-                    6'd16:  $writememh("hex/rtl_out_layer16.hex", sram_mem);
-                    6'd17:  $writememh("hex/rtl_out_layer17.hex", sram_mem);
-                    6'd18:  $writememh("hex/rtl_out_layer18.hex", sram_mem);
-                    6'd19:  $writememh("hex/rtl_out_layer19.hex", sram_mem);
-                    6'd20:  $writememh("hex/rtl_out_layer20.hex", sram_mem);
-                    6'd21:  $writememh("hex/rtl_out_layer21.hex", sram_mem);
-                    6'd22:  $writememh("hex/rtl_out_layer22.hex", sram_mem);
-                    6'd23:  $writememh("hex/rtl_out_layer23.hex", sram_mem);
-                    6'd24:  $writememh("hex/rtl_out_layer24.hex", sram_mem);
-                    6'd25:  $writememh("hex/rtl_out_layer25.hex", sram_mem);
-                    6'd26:  $writememh("hex/rtl_out_layer26.hex", sram_mem);
-                    6'd27:  $writememh("hex/rtl_out_layer27.hex", sram_mem);
-                    6'd28:  $writememh("hex/rtl_out_layer28.hex", sram_mem);
-                    6'd29:  $writememh("hex/rtl_out_layer29.hex", sram_mem);
-                    6'd30:  $writememh("hex/rtl_out_layer30.hex", sram_mem);
-                    6'd31:  $writememh("hex/rtl_out_layer31.hex", sram_mem);
-                    6'd32:  $writememh("hex/rtl_out_layer32.hex", sram_mem);
-                    6'd33:  $writememh("hex/rtl_out_layer33.hex", sram_mem);
-                    6'd34:  $writememh("hex/rtl_out_layer34.hex", sram_mem);
-                    6'd35:  $writememh("hex/rtl_out_layer35.hex", sram_mem);
-                    6'd36:  $writememh("hex/rtl_out_layer36.hex", sram_mem);
-                    6'd37:  $writememh("hex/rtl_out_layer37.hex", sram_mem);
-                    6'd38:  $writememh("hex/rtl_out_layer38.hex", sram_mem);
-                    6'd39:  $writememh("hex/rtl_out_layer39.hex", sram_mem);
-                    6'd40:  $writememh("hex/rtl_out_layer40.hex", sram_mem);
-                    6'd41:  $writememh("hex/rtl_out_layer41.hex", sram_mem);
-                    6'd42:  $writememh("hex/rtl_out_layer42.hex", sram_mem);
-                    6'd43:  $writememh("hex/rtl_out_layer43.hex", sram_mem);
-                    6'd44:  $writememh("hex/rtl_out_layer44.hex", sram_mem);
-                    6'd45:  $writememh("hex/rtl_out_layer45.hex", sram_mem);
-                    6'd46:  $writememh("hex/rtl_out_layer46.hex", sram_mem);
-                    6'd47:  $writememh("hex/rtl_out_layer47.hex", sram_mem);
-                    6'd48:  $writememh("hex/rtl_out_layer48.hex", sram_mem);
-                    6'd49:  $writememh("hex/rtl_out_layer49.hex", sram_mem);
+                     6'd0:  $writememh("layer_hex/rtl_out_layer0.hex",  sram_mem);
+                     6'd1:  $writememh("layer_hex/rtl_out_layer1.hex",  sram_mem);
+                     6'd2:  $writememh("layer_hex/rtl_out_layer2.hex",  sram_mem);
+                     6'd3:  $writememh("layer_hex/rtl_out_layer3.hex",  sram_mem);
+                     6'd4:  $writememh("layer_hex/rtl_out_layer4.hex",  sram_mem);
+                     6'd5:  $writememh("layer_hex/rtl_out_layer5.hex",  sram_mem);
+                     6'd6:  $writememh("layer_hex/rtl_out_layer6.hex",  sram_mem);
+                     6'd7:  $writememh("layer_hex/rtl_out_layer7.hex",  sram_mem);
+                     6'd8:  $writememh("layer_hex/rtl_out_layer8.hex",  sram_mem);
+                     6'd9:  $writememh("layer_hex/rtl_out_layer9.hex",  sram_mem);
+                    6'd10:  $writememh("layer_hex/rtl_out_layer10.hex", sram_mem);
+                    6'd11:  $writememh("layer_hex/rtl_out_layer11.hex", sram_mem);
+                    6'd12:  $writememh("layer_hex/rtl_out_layer12.hex", sram_mem);
+                    6'd13:  $writememh("layer_hex/rtl_out_layer13.hex", sram_mem);
+                    6'd14:  $writememh("layer_hex/rtl_out_layer14.hex", sram_mem);
+                    6'd15:  $writememh("layer_hex/rtl_out_layer15.hex", sram_mem);
+                    6'd16:  $writememh("layer_hex/rtl_out_layer16.hex", sram_mem);
+                    6'd17:  $writememh("layer_hex/rtl_out_layer17.hex", sram_mem);
+                    6'd18:  $writememh("layer_hex/rtl_out_layer18.hex", sram_mem);
+                    6'd19:  $writememh("layer_hex/rtl_out_layer19.hex", sram_mem);
+                    6'd20:  $writememh("layer_hex/rtl_out_layer20.hex", sram_mem);
+                    6'd21:  $writememh("layer_hex/rtl_out_layer21.hex", sram_mem);
+                    6'd22:  $writememh("layer_hex/rtl_out_layer22.hex", sram_mem);
+                    6'd23:  $writememh("layer_hex/rtl_out_layer23.hex", sram_mem);
+                    6'd24:  $writememh("layer_hex/rtl_out_layer24.hex", sram_mem);
+                    6'd25:  $writememh("layer_hex/rtl_out_layer25.hex", sram_mem);
+                    6'd26:  $writememh("layer_hex/rtl_out_layer26.hex", sram_mem);
+                    6'd27:  $writememh("layer_hex/rtl_out_layer27.hex", sram_mem);
+                    6'd28:  $writememh("layer_hex/rtl_out_layer28.hex", sram_mem);
+                    6'd29:  $writememh("layer_hex/rtl_out_layer29.hex", sram_mem);
+                    6'd30:  $writememh("layer_hex/rtl_out_layer30.hex", sram_mem);
+                    6'd31:  $writememh("layer_hex/rtl_out_layer31.hex", sram_mem);
+                    6'd32:  $writememh("layer_hex/rtl_out_layer32.hex", sram_mem);
+                    6'd33:  $writememh("layer_hex/rtl_out_layer33.hex", sram_mem);
+                    6'd34:  $writememh("layer_hex/rtl_out_layer34.hex", sram_mem);
+                    6'd35:  $writememh("layer_hex/rtl_out_layer35.hex", sram_mem);
+                    6'd36:  $writememh("layer_hex/rtl_out_layer36.hex", sram_mem);
+                    6'd37:  $writememh("layer_hex/rtl_out_layer37.hex", sram_mem);
+                    6'd38:  $writememh("layer_hex/rtl_out_layer38.hex", sram_mem);
+                    6'd39:  $writememh("layer_hex/rtl_out_layer39.hex", sram_mem);
+                    6'd40:  $writememh("layer_hex/rtl_out_layer40.hex", sram_mem);
+                    6'd41:  $writememh("layer_hex/rtl_out_layer41.hex", sram_mem);
+                    6'd42:  $writememh("layer_hex/rtl_out_layer42.hex", sram_mem);
+                    6'd43:  $writememh("layer_hex/rtl_out_layer43.hex", sram_mem);
+                    6'd44:  $writememh("layer_hex/rtl_out_layer44.hex", sram_mem);
+                    6'd45:  $writememh("layer_hex/rtl_out_layer45.hex", sram_mem);
+                    6'd46:  $writememh("layer_hex/rtl_out_layer46.hex", sram_mem);
+                    6'd47:  $writememh("layer_hex/rtl_out_layer47.hex", sram_mem);
+                    6'd48:  $writememh("layer_hex/rtl_out_layer48.hex", sram_mem);
+                    6'd49:  $writememh("layer_hex/rtl_out_layer49.hex", sram_mem);
                 endcase
 
                 if (dut.u_ctrl.layer_idx == 6'd49) begin

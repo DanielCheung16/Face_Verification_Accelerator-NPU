@@ -203,3 +203,91 @@ python3.8 sram_compiler.py freepdk45_sram_1rw1r_32x2048_8.py
 ```
 > [!NOTE]
 > 執行通常需要 5~10 分鐘。完成後，所有生成的 SRAM 檔案（含 Verilog wrapper 與 Lib）都會在 `macro` 資料夾中。你可以將產生的 `.v` 當作普通的 module instantiate 到你的 SystemVerilog 頂層設計中。
+
+---
+
+## 8. 端到端相似度驗證工具 (Eval & Similarity Pipeline)
+
+### 8.1 目錄結構重整
+
+所有驗證與比較工具已整合到 `software/eval/`，圖片資料集移到 `software/src/`：
+
+```
+software/
+├── eval/                          # 驗證 / 比較工具
+│   ├── verify_rtl.py              # 單層 RTL vs C Golden 精確比對
+│   ├── run_verify.py              # 全流程：圖片→ golden → RTL → 所有層比對
+│   ├── eval_my_photos.py          # 個人照片 cosine similarity matrix
+│   ├── eval_rtl_similarity.py     # 全圖片資料夾：C model + RTL similarity matrix
+│   ├── compare_rtl_cmodel.py      # 直接指定圖片，比對 RTL vs C embedding
+│   └── compare_similarity.py      # 多引擎比對 (PyTorch/C/C_fixed，Mac only)
+├── src/                           # 圖片資料集
+│   ├── test_image_my_new/         # 個人照片（新版）
+│   ├── test_image_my_ori/         # 個人照片（原版）
+│   ├── test_images/               # TFRecord 擷取的測試圖
+│   └── dataset_samples/           # 標籤資料集樣本
+└── python/                        # model / training / export 工具
+```
+
+> 從 project root 跑，不需要進 `software/python/`。
+
+### 8.2 常用指令
+
+```bash
+# 1. 只跑 C model，看個人照片 similarity matrix（最快）
+python3 software/eval/eval_my_photos.py --dir software/src/test_image_my_new
+
+# 2. C model + RTL，同時跑完整 similarity matrix（~5 min/image）
+python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new
+
+# 3. C model only（跳過 RTL）
+python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new --no-rtl
+
+# 4. 用 cache 不重跑（cache 存在 software/embedding_cache.json）
+python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new --load-cache
+
+# 5. 完整驗證：同一張圖跑 golden + RTL，比對所有 50 層
+python3 software/eval/run_verify.py --image software/src/test_image_my_new/elon_1.jpg
+
+# 6. 只比對現有檔案（不重跑任何東西）
+python3 software/eval/run_verify.py --verify-only
+
+# 7. 比對單層（L0）
+python3 software/eval/verify_rtl.py 0
+```
+
+### 8.3 verify 工具的重要前提
+
+`verify_rtl.py` 和 `run_verify.py` 比對的兩份資料必須來自**同一張圖**：
+
+| 來源 | 路徑 | 產生方式 |
+|---|---|---|
+| C model golden | `software/golden/layer*_out_fixed.txt` | `python3 software/gen_all_golden.py` |
+| RTL 輸出快照 | `hardware/frontend/sim/layer_hex/rtl_out_layer*.hex` | `make top` (in sim/) |
+
+兩者都從 `software/golden/layer0_in.txt`（float pixel 值）出發。  
+用 `run_verify.py --image` 會自動把兩邊都跑，保證輸入一致。
+
+### 8.4 Testbench 輸出路徑
+
+`mfn_frontend_top_tb.sv` 的 `$writememh` 分兩類：
+
+| 輸出 | 路徑 | 用途 |
+|---|---|---|
+| 每層 SRAM 快照 | `layer_hex/rtl_out_layer{N}.hex` | `verify_rtl.py` 逐層比對 |
+| 最終完整 SRAM | `hex/rtl_out.hex` | `eval_rtl_similarity.py` 取 L49 embedding |
+
+`hex/input.hex` 和 `hex/rtl_out.hex` 都是 generated，已加入 `.gitignore`。
+
+### 8.5 Git 追蹤策略（Generated Files）
+
+以下為 generated 檔案，已從 git tracking 移除（`git rm --cached`）並加入 `.gitignore`：
+
+- `software/golden/layer*_out_fixed.txt`（換圖就變）
+- `software/golden/layer0_in.txt`（test input）
+- `hardware/frontend/sim/hex/input.hex`
+- `hardware/frontend/sim/hex/rtl_out.hex`
+- `hardware/frontend/sim/layer_hex/`（已在 gitignore）
+- `software/embedding_cache.json`
+
+仍需 commit 的 golden 檔：`layer*_weight.txt`、`layer*_bias.txt`、`layer*_prelu.txt`（model weights，固定不變）。

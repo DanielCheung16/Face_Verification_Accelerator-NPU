@@ -9,16 +9,16 @@ Naming convention: {person}_{idx}.jpg  (e.g. dan_1.jpg, wil_3.jpg)
 
 Usage:
   # C model only (fastest):
-  python3 software/eval_rtl_similarity.py --dir software/python/test_image_my_new --no-rtl
+  python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new --no-rtl
 
   # C model all + RTL for 1 image per person (default):
-  python3 software/eval_rtl_similarity.py --dir software/python/test_image_my_new
+  python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new
 
   # C model all + RTL for 2 images per person:
-  python3 software/eval_rtl_similarity.py --dir software/python/test_image_my_new --rtl-per-person 2
+  python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new --rtl-per-person 2
 
   # Skip re-running, load from cache:
-  python3 software/eval_rtl_similarity.py --dir software/python/test_image_my_new --load-cache
+  python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new --load-cache
 """
 
 import argparse
@@ -31,7 +31,7 @@ from pathlib import Path
 from PIL import Image
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__) + "/..")
+PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__) + "/../..")
 SIM_DIR      = os.path.join(PROJECT_ROOT, "hardware/frontend/sim")
 GOLDEN_DIR   = os.path.join(PROJECT_ROOT, "software/golden")
 HEX_DIR      = os.path.join(SIM_DIR, "hex")
@@ -89,7 +89,7 @@ def run_rtl(image_path):
     if r.returncode != 0:
         raise RuntimeError(f"[RTL] make top failed:\n{r.stderr.decode()}")
 
-    hex_path = os.path.join(HEX_DIR, "rtl_out_layer49.hex")
+    hex_path = os.path.join(HEX_DIR, "rtl_out.hex")
     with open(hex_path) as f:
         lines = [l.strip() for l in f if l.strip() and not l.startswith("@")]
 
@@ -211,7 +211,7 @@ def build_sim_matrix(images, cache, key):
 
 def main():
     ap = argparse.ArgumentParser(description="RTL + C model similarity matrix on a photo folder")
-    ap.add_argument("--dir", default="software/python/test_image_my_new",
+    ap.add_argument("--dir", default="software/src/test_image_my_new",
                     help="folder of face images (default: test_image_my_new)")
     ap.add_argument("--no-rtl", action="store_true",
                     help="skip RTL simulation, C model only")

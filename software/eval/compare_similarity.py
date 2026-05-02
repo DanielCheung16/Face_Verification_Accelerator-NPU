@@ -1,27 +1,33 @@
 import argparse
 import os
-import torch
-import tensorflow as tf
-from PIL import Image
+import sys
 import io
 import numpy as np
 import subprocess
+from PIL import Image
+
+_EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
+_SW_DIR   = os.path.join(_EVAL_DIR, "..")
+sys.path.insert(0, os.path.join(_SW_DIR, "python"))
+
+import torch
+import tensorflow as tf
 from model import MobileFacenet
 from inference import preprocess_image
 from tfrecord_same_person import generate_test_pairs
 
 # === CONFIGURATION PATHS ===
-TFRECORD_FILE = "../src/faces_ms1m_refine_v2_112x112-0-of-16.tfrecord"
-CKPT_PATH = "../src/068.ckpt"
-C_INFERENCE_EXE = "../c_model/c_inference_model"
-C_FIXED_EXE = "../c_model_fixed/c_inference_model_fixed"
-C_FIXED8_EXE = "../c_model_fixed8/c_inference_model_fixed8"
+TFRECORD_FILE   = os.path.join(_SW_DIR, "src/faces_ms1m_refine_v2_112x112-0-of-16.tfrecord")
+CKPT_PATH       = os.path.join(_SW_DIR, "src/068.ckpt")
+C_INFERENCE_EXE = os.path.join(_SW_DIR, "c_model/c_inference_model")
+C_FIXED_EXE     = os.path.join(_SW_DIR, "c_model_fixed/c_inference_model_fixed")
+C_FIXED8_EXE    = os.path.join(_SW_DIR, "c_model_fixed8/c_inference_model_fixed8")
 F_BITS = 10
 SCALE = (1 << F_BITS)
 F8_BITS = 6
 SCALE8 = (1 << F8_BITS)
 NUM_TEST_PAIRS = 10
-TEST_IMG_DIR = "test_images"
+TEST_IMG_DIR = os.path.join(_SW_DIR, "src/test_images")
 ENGINE_CHOICES = ["pytorch", "c", "c_fixed", "c_fixed8"]
 # ===========================
 
@@ -31,7 +37,7 @@ def _check_executable(exe_path):
     if not os.path.exists(exe_path):
         return False, f"file not found: {exe_path}"
     try:
-        r = subprocess.run([exe_path], capture_output=True, timeout=5)
+        r = subprocess.run([exe_path], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=5)
         return True, ""
     except OSError as e:
         return False, str(e)
@@ -126,7 +132,7 @@ class CModelEngine:
         tmp_in, tmp_out = "tmp_in.txt", "tmp_out.txt"
         with open(tmp_in, "w") as f:
             np.savetxt(f, input_np.flatten(), fmt="%.6f")
-        result = subprocess.run([self.exe_path, tmp_in, tmp_out], capture_output=True, text=True)
+        result = subprocess.run([self.exe_path, tmp_in, tmp_out], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         if result.returncode != 0:
             print(f"[CModelEngine] CRASH: {result.stdout}\n{result.stderr}")
             raise subprocess.CalledProcessError(result.returncode, result.args)
@@ -155,7 +161,7 @@ class CFixedModelEngine:
         tmp_in, tmp_out = "tmp_in_fixed.txt", "tmp_out_fixed.txt"
         with open(tmp_in, "w") as f:
             np.savetxt(f, input_q16.flatten(), fmt="%d")
-        result = subprocess.run([self.exe_path, tmp_in, tmp_out], capture_output=True, text=True)
+        result = subprocess.run([self.exe_path, tmp_in, tmp_out], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         if result.returncode != 0:
             print(f"[CFixedModelEngine] CRASH: {result.stdout}\n{result.stderr}")
             raise subprocess.CalledProcessError(result.returncode, result.args)
@@ -184,7 +190,7 @@ class CFixed8ModelEngine:
         tmp_in, tmp_out = "tmp_in_fixed8.txt", "tmp_out_fixed8.txt"
         with open(tmp_in, "w") as f:
             np.savetxt(f, input_q8.flatten(), fmt="%d")
-        result = subprocess.run([self.exe_path, tmp_in, tmp_out], capture_output=True, text=True)
+        result = subprocess.run([self.exe_path, tmp_in, tmp_out], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         if result.returncode != 0:
             print(f"[CFixed8ModelEngine] CRASH: {result.stdout}\n{result.stderr}")
             raise subprocess.CalledProcessError(result.returncode, result.args)
