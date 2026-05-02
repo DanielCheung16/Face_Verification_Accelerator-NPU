@@ -12,7 +12,7 @@ vlog -sv -work work "../rtl/src/pe_os.sv"
 vlog -sv -work work "../rtl/src/systolic_array.sv"
 vlog -sv -work work "../rtl/tb/tb_systolic_NxN.sv"
 
-vsim -c -t 1ns -classdebug -voptargs=+acc +notimingchecks -L work work.tb_systolic_2x2 -wlf tb_systolic_2x2.wlf
+vsim -c -t 1ns -classdebug -voptargs=+acc +notimingchecks -L work work.tb_systolic_NxN -wlf tb_systolic_NxN.wlf
 
 # do hash_wrap_wave.do
 
