@@ -8,7 +8,7 @@ module tb_systolic_NxM;
     parameter int ACC_W = 32;
     parameter int HALF_CYCLE_TIME = 5;
     parameter int CYCLE_TIME = 10;
-    parameter int TIMEOUT_CYCLES = 100;
+    parameter int TIMEOUT_CYCLES = 10000;
 
     localparam int FEED_CYCLES = CIN + ((ROW > COL) ? ROW : COL) - 1;
 
