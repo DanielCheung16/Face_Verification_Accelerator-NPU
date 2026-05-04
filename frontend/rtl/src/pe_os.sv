@@ -1,3 +1,6 @@
+//----------------------------------------------------------------------
+//The first signal acts like clear when change to the computation of a new tile
+//----------------------------------------------------------------------
 module pe_os #(
     parameter int ACT_W = 8,
     parameter int WGT_W = 8,

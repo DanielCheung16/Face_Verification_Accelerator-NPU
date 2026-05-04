@@ -1,5 +1,6 @@
 import numpy as np
 from pathlib import Path
+import sys
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -7,13 +8,14 @@ def int_to_hex(value,width):
     mask= (1<<width)-1
     return f"{value&mask:0{width//4}x}"
 
-def matmul (H, W):
-    A = np.random.randint(-100, 100, size=(H, W), dtype=np.int8)
-    B = np.random.randint(-100, 100, size=(H, W), dtype=np.int8)
+def matmul (H, W, Cin): #Cin is the number of Channel
+    np.random.seed(0)
+    A = np.random.randint(-100, 100, size=(H, Cin), dtype=np.int8)
+    B = np.random.randint(-100, 100, size=(Cin, W), dtype=np.int8)
 
     with open (BASE_DIR / "activation.hex", "w") as f:
         for i in range(H):
-            for j in range(W):
+            for j in range(Cin):
                 f.write(int_to_hex(A[i,j],8)+"\n")
         for x in A.flat:
             print(int_to_hex(x,8))
@@ -29,4 +31,9 @@ def matmul (H, W):
             f.write(int_to_hex(x,32)+"\n")
 
 if __name__ == "__main__":
-    matmul(4,4)
+    if len(sys.argv) == 1:
+        matmul(3,4,5)
+    elif len(sys.argv) == 4:
+        matmul(int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3]))
+    else:
+        raise SystemExit("usage: golden_ref.py [ROW COL CIN]")
