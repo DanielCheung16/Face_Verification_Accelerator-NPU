@@ -26,6 +26,7 @@ module array_controller #(
     input  logic               rst_n,
     //when psum saved and new data loaded, then assert start_i
     input  logic               start_i, 
+    input  logic               run_en_i,
     // Runtime Channel dimension.
     // Valid range: 1 ... K_MAX.
     input  logic [K_ADDR_W:0]  k_size_i,
@@ -80,32 +81,38 @@ module array_controller #(
         case (ctrl_state)
             IDLE: begin
                 cycle_cnt_nxt = '0;
-                if(start_i) begin
+                if(start_i && run_en_i) begin
                     ctrl_state_nxt = RUN;
                 end
             end
             RUN: begin
-                feed_valid_o = 1'b1;
-                array_en_o   = 1'b1;
+                feed_valid_o = run_en_i;
+                array_en_o   = run_en_i;
                 busy_o       = 1'b1;
-                cycle_cnt_nxt = cycle_cnt + 1'b1;
-                if(cycle_cnt == (k_size_i + MAX_ROW_COL - 2))begin
-                    ctrl_state_nxt = DRAIN;
+                if (run_en_i) begin
+                    cycle_cnt_nxt = cycle_cnt + 1'b1;
+                    if(cycle_cnt == (k_size_i + MAX_ROW_COL - 2))begin
+                        ctrl_state_nxt = DRAIN;
+                    end
                 end
             end
             DRAIN: begin
-                array_en_o   = 1'b1;
+                array_en_o   = run_en_i;
                 busy_o       = 1'b1;
-                cycle_cnt_nxt = cycle_cnt + 1'b1;
-                if(cycle_cnt == (k_size_i + ROW + COL - 2))begin
-                    ctrl_state_nxt = DONE;
-                    cycle_cnt_nxt = '0;
+                if (run_en_i) begin
+                    cycle_cnt_nxt = cycle_cnt + 1'b1;
+                    if(cycle_cnt == (k_size_i + ROW + COL - 2))begin
+                        ctrl_state_nxt = DONE;
+                        cycle_cnt_nxt = '0;
+                    end
                 end
             end
             DONE: begin
-                done_o = 1'b1;
+                done_o = run_en_i;
                 cycle_cnt_nxt = '0;
-                ctrl_state_nxt = IDLE;
+                if (run_en_i) begin
+                    ctrl_state_nxt = IDLE;
+                end
             end
         endcase
     end

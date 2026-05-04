@@ -18,11 +18,11 @@ def write_flat_hex(path, values, width):
             f.write(int_to_hex(value, width) + "\n")
 
 
-def matmul_sequence(row, col, cin, num_tiles):
+def matmul_full(m_size, k_size, n_size):
     rng = np.random.RandomState(392)
 
-    acts = rng.randint(-8, 8, size=(num_tiles, row, cin)).astype(np.int8)
-    wgts = rng.randint(-8, 8, size=(num_tiles, cin, col)).astype(np.int8)
+    acts = rng.randint(-8, 8, size=(m_size, k_size)).astype(np.int8)
+    wgts = rng.randint(-8, 8, size=(k_size, n_size)).astype(np.int8)
     gold = acts.astype(np.int32) @ wgts.astype(np.int32)
 
     write_flat_hex(BASE_DIR / "array_level2_activation.hex", acts.reshape(-1), 8)
@@ -32,13 +32,12 @@ def matmul_sequence(row, col, cin, num_tiles):
 
 if __name__ == "__main__":
     if len(sys.argv) == 1:
-        matmul_sequence(3, 4, 5, 3)
-    elif len(sys.argv) == 5:
-        matmul_sequence(
+        matmul_full(7, 512, 128)
+    elif len(sys.argv) == 4:
+        matmul_full(
             int(sys.argv[1]),
             int(sys.argv[2]),
             int(sys.argv[3]),
-            int(sys.argv[4]),
         )
     else:
-        raise SystemExit("usage: array_level2_golden_ref.py [ROW COL CIN NUM_TILES]")
+        raise SystemExit("usage: array_level2_golden_ref.py [M K N]")

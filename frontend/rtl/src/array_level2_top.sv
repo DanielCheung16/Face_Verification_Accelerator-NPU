@@ -18,6 +18,9 @@ module array_level2_top #(
 ) (
     input logic             clk,
     input logic             rst_n,
+    input logic             run_en_i,
+    input logic             use_loader_i,
+    input logic             loader_start_i,
     // write buf: Simple preload/write interface
     input  logic                        wr_en_i     [BUF_NUM],
     input  logic [BANK_ADDR_W-1:0]      wr_bank_i   [BUF_NUM],
@@ -25,9 +28,23 @@ module array_level2_top #(
     input  logic signed [DATA_W-1:0]    wr_data_i   [BUF_NUM],
     // To config this layer's Channel Length:
     input  logic [K_ADDR_W : 0]         k_size_i,
+    input  logic [15:0]                 m_size_i,
+    input  logic [15:0]                 n_size_i,
+    input  logic [15:0]                 row_base_i,
+    input  logic [15:0]                 col_base_i,
+
+    output logic                        gb_act_rd_valid_o,
+    output logic [31:0]                 gb_act_rd_addr_o,
+    input  logic signed [DATA_W-1:0]    gb_act_rd_data_i,
+
+    output logic                        gb_wgt_rd_valid_o,
+    output logic [31:0]                 gb_wgt_rd_addr_o,
+    input  logic signed [DATA_W-1:0]    gb_wgt_rd_data_i,
 
     input  logic                        start_i,
     output logic                        done_o,
+    output logic                        loader_busy_o,
+    output logic                        loader_done_o,
     // Temperately no output manipulation (directly stream out)
     output      logic                    valid_o [ROW][COL],
     output      logic signed [ACC_W-1:0] mac_o [ROW][COL]
@@ -58,7 +75,33 @@ module array_level2_top #(
     logic                done_r;
     logic                sa_valid [ROW][COL];
 
+    logic                        loader_wr_en   [BUF_NUM];
+    logic [BANK_ADDR_W-1:0]      loader_wr_bank [BUF_NUM];
+    logic [K_ADDR_W-1:0]         loader_wr_idx  [BUF_NUM];
+    logic signed [DATA_W-1:0]    loader_wr_data [BUF_NUM];
+
+    logic                        buf_wr_en   [BUF_NUM];
+    logic [BANK_ADDR_W-1:0]      buf_wr_bank [BUF_NUM];
+    logic [K_ADDR_W-1:0]         buf_wr_idx  [BUF_NUM];
+    logic signed [DATA_W-1:0]    buf_wr_data [BUF_NUM];
+
     assign done_o = done_r;
+
+    always_comb begin
+        for (int b = 0; b < BUF_NUM; b++) begin
+            if (use_loader_i) begin
+                buf_wr_en[b]   = loader_wr_en[b];
+                buf_wr_bank[b] = loader_wr_bank[b];
+                buf_wr_idx[b]  = loader_wr_idx[b];
+                buf_wr_data[b] = loader_wr_data[b];
+            end else begin
+                buf_wr_en[b]   = wr_en_i[b];
+                buf_wr_bank[b] = wr_bank_i[b];
+                buf_wr_idx[b]  = wr_idx_i[b];
+                buf_wr_data[b] = wr_data_i[b];
+            end
+        end
+    end
 //----------------------two input buffers----------------------------
     banked_input_buffer #(
         .BANK_NUM 	(ROW   ),
@@ -70,10 +113,10 @@ module array_level2_top #(
         .rd_idx_i   	(act_rd_idx     ),
         .rd_valid_i 	(act_rd_valid   ),
         .rd_data_o  	(act_data),
-        .wr_en_i    	(wr_en_i[0]),
-        .wr_bank_i  	(wr_bank_i[0]),
-        .wr_idx_i   	(wr_idx_i[0]),
-        .wr_data_i  	(wr_data_i[0])
+        .wr_en_i    	(buf_wr_en[0]),
+        .wr_bank_i  	(buf_wr_bank[0]),
+        .wr_idx_i   	(buf_wr_idx[0]),
+        .wr_data_i  	(buf_wr_data[0])
     );
 
     banked_input_buffer #(
@@ -86,10 +129,43 @@ module array_level2_top #(
         .rd_idx_i   	(wgt_rd_idx ),
         .rd_valid_i 	(wgt_rd_valid),
         .rd_data_o  	(wgt_data),
-        .wr_en_i    	(wr_en_i[1]),
-        .wr_bank_i  	(wr_bank_i[1]),
-        .wr_idx_i   	(wr_idx_i[1]),
-        .wr_data_i  	(wr_data_i[1])
+        .wr_en_i    	(buf_wr_en[1]),
+        .wr_bank_i  	(buf_wr_bank[1]),
+        .wr_idx_i   	(buf_wr_idx[1]),
+        .wr_data_i  	(buf_wr_data[1])
+    );
+//----------------------GEMM tile loader-----------------------------
+    gemm_tile_loader #(
+        .ROW      	(ROW),
+        .COL      	(COL),
+        .K_MAX    	(K_MAX),
+        .DATA_W   	(DATA_W),
+        .DIM_W    	(16),
+        .GB_ADDR_W	(32),
+        .BUF_NUM  	(BUF_NUM),
+        .K_ADDR_W 	(K_ADDR_W))
+    u_gemm_tile_loader(
+        .clk                (clk),
+        .rst_n              (rst_n),
+        .start_i            (loader_start_i && use_loader_i),
+        .run_en_i           (run_en_i),
+        .busy_o             (loader_busy_o),
+        .done_o             (loader_done_o),
+        .m_size_i           (m_size_i),
+        .k_size_i           (k_size_i),
+        .n_size_i           (n_size_i),
+        .row_base_i         (row_base_i),
+        .col_base_i         (col_base_i),
+        .gb_act_rd_valid_o  (gb_act_rd_valid_o),
+        .gb_act_rd_addr_o   (gb_act_rd_addr_o),
+        .gb_act_rd_data_i   (gb_act_rd_data_i),
+        .gb_wgt_rd_valid_o  (gb_wgt_rd_valid_o),
+        .gb_wgt_rd_addr_o   (gb_wgt_rd_addr_o),
+        .gb_wgt_rd_data_i   (gb_wgt_rd_data_i),
+        .wr_en_o            (loader_wr_en),
+        .wr_bank_o          (loader_wr_bank),
+        .wr_idx_o           (loader_wr_idx),
+        .wr_data_o          (loader_wr_data)
     );
 //----------------------Read Address generator-----------------------
     skew_addr_gen #(
@@ -120,6 +196,7 @@ module array_level2_top #(
         .clk          	(clk           ),
         .rst_n        	(rst_n         ),
         .start_i      	(start_i),
+        .run_en_i     	(run_en_i),
         .k_size_i     	(k_size_i),
         .feed_cycle_o 	(feed_cycle),
         .feed_valid_o 	(feed_valid),
@@ -138,7 +215,7 @@ module array_level2_top #(
     u_SA(
         .clk         	(clk          ),
         .rst_n       	(rst_n        ),
-        .en_i        	(array_en_r),
+        .en_i        	(array_en_r && run_en_i),
         .row_first_i 	(act_first_r),
         .row_i       	(act_data),
         .row_valid_i 	(act_rd_valid_r),
@@ -172,12 +249,14 @@ always_ff @(posedge clk) begin
         array_en_r      <= '0;
         done_r          <= '0;
     end else begin
+        done_r          <= done_w;
+        if (run_en_i) begin
         act_rd_valid_r  <= act_rd_valid;
         wgt_rd_valid_r  <= wgt_rd_valid;
         act_first_r     <= act_first_w;
         wgt_first_r     <= wgt_first_w;
         array_en_r      <= array_en_w;
-        done_r          <= done_w;
+        end
     end
 end
 

@@ -11,6 +11,7 @@ module tb_array_controller_skew_addr_gen;
     logic clk;
     logic rst_n;
     logic start_i;
+    logic run_en_i;
     logic [K_ADDR_W:0] k_size_i;
 
     logic [COUNT_W-1:0] feed_cycle_o;
@@ -36,6 +37,7 @@ module tb_array_controller_skew_addr_gen;
         .clk(clk),
         .rst_n(rst_n),
         .start_i(start_i),
+        .run_en_i(run_en_i),
         .k_size_i(k_size_i),
         .feed_cycle_o(feed_cycle_o),
         .feed_valid_o(feed_valid_o),
@@ -102,6 +104,7 @@ module tb_array_controller_skew_addr_gen;
 
         rst_n    = 1'b0;
         start_i  = 1'b0;
+        run_en_i = 1'b1;
         k_size_i = '0;
 
         repeat (2) @(posedge clk);
