@@ -1,4 +1,14 @@
-module gemm_tile_loader #(
+/*
+ * GEMM tile preload bridge.
+ *
+ * This module owns the global-buffer read address generation for one output
+ * tile and writes the returned data into the local activation/weight banked
+ * buffers used by array_level2_top.
+ *
+ * A address: A[row][k] -> row * K + k
+ * B address: B[k][col] -> k * N + col
+ */
+module gemm_preload #(
     parameter int ROW       = 14,
     parameter int COL       = 16,
     parameter int K_MAX     = 512,
@@ -18,25 +28,26 @@ module gemm_tile_loader #(
     output logic busy_o,
     output logic done_o,
 
-    input  logic [DIM_W-1:0]    m_size_i,
-    input  logic [K_ADDR_W:0]   k_size_i,
-    input  logic [DIM_W-1:0]    n_size_i,
-    input  logic [DIM_W-1:0]    row_base_i,
-    input  logic [DIM_W-1:0]    col_base_i,
+    input  logic [DIM_W-1:0]  m_size_i,
+    input  logic [K_ADDR_W:0] k_size_i,
+    input  logic [DIM_W-1:0]  n_size_i,
+    input  logic [DIM_W-1:0]  row_base_i,
+    input  logic [DIM_W-1:0]  col_base_i,
 
-    output logic                gb_act_rd_valid_o,
+    output logic                 gb_act_rd_valid_o,
     output logic [GB_ADDR_W-1:0] gb_act_rd_addr_o,
     input  logic signed [DATA_W-1:0] gb_act_rd_data_i,
 
-    output logic                gb_wgt_rd_valid_o,
+    output logic                 gb_wgt_rd_valid_o,
     output logic [GB_ADDR_W-1:0] gb_wgt_rd_addr_o,
     input  logic signed [DATA_W-1:0] gb_wgt_rd_data_i,
 
-    output logic                        wr_en_o   [BUF_NUM],
-    output logic [BANK_ADDR_W-1:0]      wr_bank_o [BUF_NUM],
-    output logic [K_ADDR_W-1:0]         wr_idx_o  [BUF_NUM],
-    output logic signed [DATA_W-1:0]    wr_data_o [BUF_NUM]
+    output logic                     wr_en_o   [BUF_NUM],
+    output logic [BANK_ADDR_W-1:0]   wr_bank_o [BUF_NUM],
+    output logic [K_ADDR_W-1:0]      wr_idx_o  [BUF_NUM],
+    output logic signed [DATA_W-1:0] wr_data_o [BUF_NUM]
 );
+
     typedef enum logic [1:0] {IDLE, RUN, DONE} state_t;
 
     state_t state;
@@ -132,9 +143,11 @@ module gemm_tile_loader #(
                     wgt_write_pending <= 1'b0;
 
                     if (start_i && run_en_i) begin
+`ifndef SYNTHESIS
                         if (k_size_i > K_MAX) begin
-                            $error("gemm_tile_loader k_size_i=%0d exceeds K_MAX=%0d", k_size_i, K_MAX);
+                            $error("gemm_preload k_size_i=%0d exceeds K_MAX=%0d", k_size_i, K_MAX);
                         end
+`endif
                         state <= RUN;
                     end
                 end
@@ -216,4 +229,5 @@ module gemm_tile_loader #(
             endcase
         end
     end
+
 endmodule

@@ -42,3 +42,26 @@ This means:
 ps:
 - The `.do` file runs `STALL_MODE=0` first, then `STALL_MODE=1`.
 - Temporary local-buffer preload from TB is no longer used in this Level2 test; TB provides a fake 1-cycle global-buffer memory model.
+
+## Level3 array top
+`array_level2_top.sv` now only contains the local banked buffers, skew read path, controller, and systolic array. `gemm_preload.sv` is the global-buffer-to-local-buffer preload block. `array_level2_gb_top.sv` connects both blocks and is the top used by the global-buffer-facing test.
+
+Default regression:
+- `ROW = 14`
+- `COL = 16`
+- `K_MAX = 512`
+- Runs several built-in matrix sizes, including partial tiles and a `K=512` case.
+- Runs twice: `STALL_MODE=0`, then `STALL_MODE=1`.
+
+Run the default regression:
+- `vsim -c -do array_level2_gb_top.do`
+
+Run one matrix size:
+- `vsim -c -do "set SINGLE_CASE 1; set ROW 14; set COL 16; set K_MAX 512; set M 3; set K 5; set N 4; do array_level2_gb_top.do"`
+
+Matrix meaning:
+- `C[M][N] = A[M][K] * B[K][N]`
+- `ROW` tiles the `M` dimension.
+- `COL` tiles the `N` dimension.
+
+`array_level2_top.do` is kept as an alias to the same Level2 global-buffer-facing regression.
