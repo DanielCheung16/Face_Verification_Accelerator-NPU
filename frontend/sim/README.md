@@ -65,3 +65,33 @@ Matrix meaning:
 - `COL` tiles the `N` dimension.
 
 `array_level2_top.do` is kept as an alias to the same Level2 global-buffer-facing regression.
+
+## Conv1x1 output postprocess
+`conv1x1_output_postprocess.sv` converts the `INT32` accumulator tile from the systolic array to signed int8. The supported postprocess modes are:
+
+- `POST_MODE=0`: requant only
+- `POST_MODE=1`: PReLU, then requant
+- `POST_MODE=2`: residual add, then requant
+
+`out = saturate_int8((((acc + bias) * multiplier) + rounding) >>> shift + zero_point)`
+
+In `POST_MODE=1`, negative `acc + bias` values are first multiplied by `prelu_multiplier` and shifted by `prelu_shift`.
+
+In `POST_MODE=2`, `residual_i` is added in the accumulator domain before requantization.
+
+Run the standalone 32-bit to 8-bit postprocess test:
+- `vsim -c -do conv1x1_output_postprocess.do`
+
+Run the full conv1x1 flow, including preload, systolic GEMM, and output postprocess:
+- `vsim -c -do conv1x1_gb_top.do`
+
+Run the full conv1x1 flow with PReLU postprocess:
+- `vsim -c -do "set POST_MODE 1; do conv1x1_gb_top.do"`
+
+Run the full conv1x1 flow with residual-add postprocess:
+- `vsim -c -do "set POST_MODE 2; do conv1x1_gb_top.do"`
+
+Run one conv1x1 matrix size:
+- `vsim -c -do "set SINGLE_CASE 1; set ROW 14; set COL 16; set K_MAX 512; set M 3; set K 5; set N 4; do conv1x1_gb_top.do"`
+
+The current conv1x1 tests use deterministic synthetic int8 activations, weights, bias, and requant parameters. They verify the hardware dataflow and fixed-point requantization, not a bit-exact MobileFaceNet checkpoint layer yet.
