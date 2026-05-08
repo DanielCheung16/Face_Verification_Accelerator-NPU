@@ -16,9 +16,17 @@ module wb_buffer #(
         output logic signed [DATA_OUT_W-1:0] data_o
 
     );
-    //If we always set the COL to 16, then the BUFF_D = ROW
-    // localparam BUFF_D = COL*ROW*DATA_IN_W/DATA_OUT_W;
-    localparam BUFF_D = ROW; //here we assume the COL must be 16
+    // Current Level3 writeback packs one output tile row into one memory word.
+    localparam BUFF_D = ROW;
+
+`ifndef SYNTHESIS
+    initial begin
+        if (COL * DATA_IN_W != DATA_OUT_W) begin
+            $fatal(1, "wb_buffer requires COL*DATA_IN_W == DATA_OUT_W, got COL=%0d DATA_IN_W=%0d DATA_OUT_W=%0d",
+                   COL, DATA_IN_W, DATA_OUT_W);
+        end
+    end
+`endif
 
     logic   [DATA_OUT_W-1:0]    out_buff       [BUFF_D];
     logic   [ADDR_W-1:0]        rd_addr_r;

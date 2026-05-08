@@ -13,6 +13,7 @@ module gemm_preload #(
     parameter int COL       = 16,
     parameter int K_MAX     = 512,
     parameter int DATA_W    = 8,
+    parameter int GB_DATA_W = DATA_W,
     parameter int DIM_W     = 16,
     parameter int GB_ADDR_W = 32,
     parameter int BUF_NUM   = 2,
@@ -33,20 +34,24 @@ module gemm_preload #(
     input  logic [DIM_W-1:0]  n_size_i,
     input  logic [DIM_W-1:0]  row_base_i,
     input  logic [DIM_W-1:0]  col_base_i,
+    input  logic [GB_ADDR_W-1:0] act_base_addr_i,
+    input  logic [GB_ADDR_W-1:0] wgt_base_addr_i,
 
     output logic                 gb_act_rd_valid_o,
     output logic [GB_ADDR_W-1:0] gb_act_rd_addr_o,
-    input  logic signed [DATA_W-1:0] gb_act_rd_data_i,
+    input  logic [GB_DATA_W-1:0] gb_act_rd_data_i,
 
     output logic                 gb_wgt_rd_valid_o,
     output logic [GB_ADDR_W-1:0] gb_wgt_rd_addr_o,
-    input  logic signed [DATA_W-1:0] gb_wgt_rd_data_i,
+    input  logic [GB_DATA_W-1:0] gb_wgt_rd_data_i,
 
     output logic                     wr_en_o   [BUF_NUM],
     output logic [BANK_ADDR_W-1:0]   wr_bank_o [BUF_NUM],
     output logic [K_ADDR_W-1:0]      wr_idx_o  [BUF_NUM],
     output logic signed [DATA_W-1:0] wr_data_o [BUF_NUM]
 );
+    localparam int GB_LANES = (GB_DATA_W + DATA_W - 1) / DATA_W;
+    localparam int LANE_W = (GB_LANES <= 1) ? 1 : $clog2(GB_LANES);
 
     typedef enum logic [1:0] {IDLE, RUN, DONE} state_t;
 
@@ -61,19 +66,23 @@ module gemm_preload #(
 
     logic act_pending;
     logic act_pending_pad;
+    logic [LANE_W-1:0] act_pending_lane;
     logic [BANK_ADDR_W-1:0] act_pending_bank;
     logic [K_ADDR_W-1:0] act_pending_idx;
     logic act_write_pending;
     logic act_write_pending_pad;
+    logic [LANE_W-1:0] act_write_pending_lane;
     logic [BANK_ADDR_W-1:0] act_write_pending_bank;
     logic [K_ADDR_W-1:0] act_write_pending_idx;
 
     logic wgt_pending;
     logic wgt_pending_pad;
+    logic [LANE_W-1:0] wgt_pending_lane;
     logic [BANK_ADDR_W-1:0] wgt_pending_bank;
     logic [K_ADDR_W-1:0] wgt_pending_idx;
     logic wgt_write_pending;
     logic wgt_write_pending_pad;
+    logic [LANE_W-1:0] wgt_write_pending_lane;
     logic [BANK_ADDR_W-1:0] wgt_write_pending_bank;
     logic [K_ADDR_W-1:0] wgt_write_pending_idx;
 
@@ -81,11 +90,19 @@ module gemm_preload #(
     int act_k;
     int wgt_k;
     int wgt_col;
+    int act_word_idx;
+    int act_lane_idx;
+    int wgt_word_idx;
+    int wgt_lane_idx;
     logic [DIM_W-1:0] global_row;
     logic [DIM_W-1:0] global_col;
+    logic [GB_ADDR_W-1:0] k_word_tiles;
+    logic [GB_ADDR_W-1:0] n_word_tiles;
 
     assign busy_o = (state == RUN);
     assign max_entries = (ROW*k_size_i > COL*k_size_i) ? ROW*k_size_i : COL*k_size_i;
+    assign k_word_tiles = (GB_ADDR_W'(k_size_i) + GB_ADDR_W'(GB_LANES - 1)) / GB_ADDR_W'(GB_LANES);
+    assign n_word_tiles = (GB_ADDR_W'(n_size_i) + GB_ADDR_W'(GB_LANES - 1)) / GB_ADDR_W'(GB_LANES);
     assign gb_act_rd_valid_o = run_en_i && gb_act_rd_valid_q;
     assign gb_act_rd_addr_o = gb_act_rd_addr_q;
     assign gb_wgt_rd_valid_o = run_en_i && gb_wgt_rd_valid_q;
@@ -113,18 +130,22 @@ module gemm_preload #(
             gb_wgt_rd_addr_q <= '0;
             act_pending <= 1'b0;
             act_pending_pad <= 1'b0;
+            act_pending_lane <= '0;
             act_pending_bank <= '0;
             act_pending_idx <= '0;
             act_write_pending <= 1'b0;
             act_write_pending_pad <= 1'b0;
+            act_write_pending_lane <= '0;
             act_write_pending_bank <= '0;
             act_write_pending_idx <= '0;
             wgt_pending <= 1'b0;
             wgt_pending_pad <= 1'b0;
+            wgt_pending_lane <= '0;
             wgt_pending_bank <= '0;
             wgt_pending_idx <= '0;
             wgt_write_pending <= 1'b0;
             wgt_write_pending_pad <= 1'b0;
+            wgt_write_pending_lane <= '0;
             wgt_write_pending_bank <= '0;
             wgt_write_pending_idx <= '0;
             clear_write_outputs();
@@ -161,23 +182,27 @@ module gemm_preload #(
                             wr_en_o[0]   <= 1'b1;
                             wr_bank_o[0] <= act_write_pending_bank;
                             wr_idx_o[0]  <= act_write_pending_idx;
-                            wr_data_o[0] <= act_write_pending_pad ? '0 : gb_act_rd_data_i;
+                            wr_data_o[0] <= act_write_pending_pad ? '0 :
+                                            gb_act_rd_data_i[act_write_pending_lane*DATA_W +: DATA_W];
                         end
 
                         if (wgt_write_pending) begin
                             wr_en_o[1]   <= 1'b1;
                             wr_bank_o[1] <= wgt_write_pending_bank;
                             wr_idx_o[1]  <= wgt_write_pending_idx;
-                            wr_data_o[1] <= wgt_write_pending_pad ? '0 : gb_wgt_rd_data_i;
+                            wr_data_o[1] <= wgt_write_pending_pad ? '0 :
+                                            gb_wgt_rd_data_i[wgt_write_pending_lane*DATA_W +: DATA_W];
                         end
 
                         act_write_pending <= act_pending;
                         act_write_pending_pad <= act_pending_pad;
+                        act_write_pending_lane <= act_pending_lane;
                         act_write_pending_bank <= act_pending_bank;
                         act_write_pending_idx <= act_pending_idx;
 
                         wgt_write_pending <= wgt_pending;
                         wgt_write_pending_pad <= wgt_pending_pad;
+                        wgt_write_pending_lane <= wgt_pending_lane;
                         wgt_write_pending_bank <= wgt_pending_bank;
                         wgt_write_pending_idx <= wgt_pending_idx;
 
@@ -188,27 +213,33 @@ module gemm_preload #(
                             if (load_count < ROW*k_size_i) begin
                                 act_row = load_count / k_size_i;
                                 act_k = load_count % k_size_i;
+                                act_word_idx = act_k / GB_LANES;
+                                act_lane_idx = act_k % GB_LANES;
                                 global_row = row_base_i + act_row[DIM_W-1:0];
 
                                 act_pending <= 1'b1;
                                 act_pending_pad <= (global_row >= m_size_i);
+                                act_pending_lane <= act_lane_idx[$bits(act_pending_lane)-1:0];
                                 act_pending_bank <= act_row[BANK_ADDR_W-1:0];
                                 act_pending_idx <= act_k[K_ADDR_W-1:0];
                                 gb_act_rd_valid_q <= (global_row < m_size_i);
-                                gb_act_rd_addr_q <= global_row * k_size_i + act_k;
+                                gb_act_rd_addr_q <= act_base_addr_i + (global_row * k_word_tiles) + act_word_idx;
                             end
 
                             if (load_count < COL*k_size_i) begin
                                 wgt_k = load_count / COL;
                                 wgt_col = load_count % COL;
                                 global_col = col_base_i + wgt_col[DIM_W-1:0];
+                                wgt_word_idx = global_col / GB_LANES;
+                                wgt_lane_idx = global_col % GB_LANES;
 
                                 wgt_pending <= 1'b1;
                                 wgt_pending_pad <= (global_col >= n_size_i);
+                                wgt_pending_lane <= wgt_lane_idx[$bits(wgt_pending_lane)-1:0];
                                 wgt_pending_bank <= wgt_col[BANK_ADDR_W-1:0];
                                 wgt_pending_idx <= wgt_k[K_ADDR_W-1:0];
                                 gb_wgt_rd_valid_q <= (global_col < n_size_i);
-                                gb_wgt_rd_addr_q <= wgt_k * n_size_i + global_col;
+                                gb_wgt_rd_addr_q <= wgt_base_addr_i + (wgt_k * n_word_tiles) + wgt_word_idx;
                             end
 
                             load_count <= load_count + 1'b1;

@@ -95,3 +95,15 @@ Run one conv1x1 matrix size:
 - `vsim -c -do "set SINGLE_CASE 1; set ROW 14; set COL 16; set K_MAX 512; set M 3; set K 5; set N 4; do conv1x1_gb_top.do"`
 
 The current conv1x1 tests use deterministic synthetic int8 activations, weights, bias, and requant parameters. They verify the hardware dataflow and fixed-point requantization, not a bit-exact MobileFaceNet checkpoint layer yet.
+
+## Conv1x1 Level3 closed flow
+`conv1x1_level3_top.sv` is the conv1x1 layer engine used below the future global-buffer switch/controller. It does not instantiate the global SRAMs directly; the testbench owns `activation_output_global_buffer.sv` and `weight_global_buffer.sv` and connects them to the layer ports.
+
+In the current Level3 design, one output tile row must fit exactly into one global memory word:
+- `COL * 8 bits = one memory word`
+- More generally, `COL * DATA_IN_W == DATA_OUT_W` for `wb_buffer.sv`
+
+The default Level3 regression uses `COL=4` and `GB_DATA_W=32` for a small fast test. The target accelerator setting is `COL=16` and `GB_DATA_W=128`.
+
+Run the closed two-layer conv1x1 regression:
+- `vsim -c -do conv1x1_level3_top.do`
