@@ -6,6 +6,8 @@ vlib work
 vmap work work
 
 vlog -sv -work work "../rtl/src/sram_simple_dual_port_model.sv"
+vlog -sv -work work "../rtl/src/layer_defs_pkg.sv"
+vlog -sv -work work "../rtl/src/quantface_conv1x1_params_pkg.sv"
 vlog -sv -work work "../rtl/src/activation_output_global_buffer.sv"
 vlog -sv -work work "../rtl/src/weight_global_buffer.sv"
 vlog -sv -work work "../rtl/src/pe_os.sv"
@@ -15,7 +17,7 @@ vlog -sv -work work "../rtl/src/skew_addr_gen.sv"
 vlog -sv -work work "../rtl/src/array_controller.sv"
 vlog -sv -work work "../rtl/src/gemm_preload.sv"
 vlog -sv -work work "../rtl/src/array_level2_top.sv"
-vlog -sv -work work "../rtl/src/conv1x1_output_postprocess.sv"
+vlog -sv +incdir+../rtl/src -work work "../rtl/src/conv1x1_output_postprocess.sv"
 vlog -sv -work work "../rtl/src/wb_buffer.sv"
 vlog -sv -work work "../rtl/src/wr_controller.sv"
 vlog -sv -work work "../rtl/src/conv1x1_level3_top.sv"

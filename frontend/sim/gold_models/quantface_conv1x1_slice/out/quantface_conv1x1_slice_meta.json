@@ -1,0 +1,202 @@
+{
+  "source": {
+    "model_path": "/home/jzh2008/nu_classes/ce392/Face_Verification_Accelerator-NPU/pretrained_models/quantface_mobilefacenet_w8a8_real/backbone.pt",
+    "quantface_path": "/home/jzh2008/nu_classes/ce392/Face_Verification_Accelerator-NPU/QuantFace",
+    "note": "Generated from QuantFace backbone.pt, not from software/ golden txt files."
+  },
+  "input": {
+    "shape": [
+      1,
+      3,
+      112,
+      112
+    ],
+    "seed": 392
+  },
+  "packing": {
+    "data_w": 8,
+    "lanes": 4,
+    "ao_depth": 128,
+    "wgt_depth": 128,
+    "out_base": 64
+  },
+  "slice": {
+    "m_limit": 5,
+    "k_limit": 6,
+    "n_limit": 4,
+    "channel_slice_note": "Small channel slices are for RTL bring-up. They are QuantFace-derived tensors, but they are not numerically identical to the full MobileFaceNet layer output unless the full K/N dimensions are used."
+  },
+  "model_output": {
+    "shape": [
+      1,
+      128
+    ],
+    "min": -0.3705565333366394,
+    "max": 0.21189437806606293
+  },
+  "layers": [
+    {
+      "name": "conv_3_project_residual_quant",
+      "conv": "conv_3.model.0.0.project.conv",
+      "bn": "conv_3.model.0.0.project.bn",
+      "input_quant": "conv_3.model.0.0.conv_dw.prelu.quantAct",
+      "output_quant": "conv_3.model.0.1",
+      "type": "LY_CONV1X1",
+      "mode": "MODE_RESIDUAL",
+      "wgt_base": 0,
+      "conv_input": {
+        "shape": [
+          1,
+          128,
+          28,
+          28
+        ],
+        "min": -0.44771742820739746,
+        "max": 1.3175684213638306
+      },
+      "conv_output_float_dequant": {
+        "shape": [
+          1,
+          64,
+          28,
+          28
+        ],
+        "min": -0.5527305603027344,
+        "max": 0.6261612176895142
+      },
+      "post_output_float_dequant": {
+        "shape": [
+          1,
+          64,
+          28,
+          28
+        ],
+        "min": -1.9773633480072021,
+        "max": 2.4010839462280273
+      },
+      "activation_quant": {
+        "x_min": -0.5474601984024048,
+        "x_max": 2.7144813537597656,
+        "scale": 78.17430877685547,
+        "zero_point": 85.0
+      },
+      "post_quant": {
+        "x_min": -3.117239475250244,
+        "x_max": 4.086012840270996,
+        "scale": 35.40067672729492,
+        "zero_point": 18.0
+      },
+      "weight_quant": {
+        "per_out_channel": true,
+        "min_first_n": [
+          -0.10220794379711151,
+          -0.116572804749012,
+          -0.14820268750190735,
+          -0.11722442507743835
+        ],
+        "max_first_n": [
+          0.20182138681411743,
+          0.11737240850925446,
+          0.10235150158405304,
+          0.08629753440618515
+        ],
+        "scale_first_n": [
+          838.7348022460938,
+          1089.998779296875,
+          1017.7438354492188,
+          1252.93603515625
+        ],
+        "zero_point_first_n": [
+          42.0,
+          1.0,
+          -23.0,
+          -19.0
+        ]
+      }
+    },
+    {
+      "name": "conv_3_next_pw_prelu_quant",
+      "conv": "conv_3.model.1.0.conv.conv",
+      "bn": "conv_3.model.1.0.conv.bn",
+      "input_quant": "conv_3.model.0.1",
+      "output_quant": "conv_3.model.1.0.conv.prelu.quantAct",
+      "type": "LY_CONV1X1",
+      "mode": "MODE_PRELU",
+      "wgt_base": 6,
+      "conv_input": {
+        "shape": [
+          1,
+          64,
+          28,
+          28
+        ],
+        "min": -1.9773633480072021,
+        "max": 2.4010839462280273
+      },
+      "conv_output_float_dequant": {
+        "shape": [
+          1,
+          128,
+          28,
+          28
+        ],
+        "min": -0.7614140510559082,
+        "max": 0.7125966548919678
+      },
+      "post_output_float_dequant": {
+        "shape": [
+          1,
+          128,
+          28,
+          28
+        ],
+        "min": -0.22212424874305725,
+        "max": 0.780608057975769
+      },
+      "activation_quant": {
+        "x_min": -3.117239475250244,
+        "x_max": 4.086012840270996,
+        "scale": 35.40067672729492,
+        "zero_point": 18.0
+      },
+      "post_quant": {
+        "x_min": -0.32354769110679626,
+        "x_max": 1.2947860956192017,
+        "scale": 157.56947326660156,
+        "zero_point": 77.0
+      },
+      "weight_quant": {
+        "per_out_channel": true,
+        "min_first_n": [
+          -0.11314448714256287,
+          -0.18112190067768097,
+          -0.20254623889923096,
+          -0.1327122300863266
+        ],
+        "max_first_n": [
+          0.10386928170919418,
+          0.1145867258310318,
+          0.11733170598745346,
+          0.13622163236141205
+        ],
+        "scale_first_n": [
+          1175.04052734375,
+          862.3353271484375,
+          797.1790161132812,
+          948.1885375976562
+        ],
+        "zero_point_first_n": [
+          -5.0,
+          -28.0,
+          -33.0,
+          2.0
+        ]
+      }
+    }
+  ],
+  "files": {
+    "ao_init": "quantface_conv1x1_slice_ao_init.hex",
+    "wgt_init": "quantface_conv1x1_slice_wgt_init.hex",
+    "golden": "quantface_conv1x1_slice_golden.hex"
+  }
+}

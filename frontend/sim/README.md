@@ -107,3 +107,13 @@ The default Level3 regression uses `COL=4` and `GB_DATA_W=32` for a small fast t
 
 Run the closed two-layer conv1x1 regression:
 - `vsim -c -do conv1x1_level3_top.do`
+
+## Whole system version 1:
+### For verification of the model C you should download  lfw and agedb_30 benchmarks
+mkdir -p datasets/faces_eval
+
+curl -L -o datasets/faces_eval/lfw.bin \
+  'https://huggingface.co/datasets/gaunernst/face-recognition-eval/resolve/main/lfw.bin?download=true'
+
+curl -L -o datasets/faces_eval/agedb_30.bin \
+  'https://huggingface.co/datasets/gaunernst/face-recognition-eval/resolve/main/agedb_30.bin?download=true'

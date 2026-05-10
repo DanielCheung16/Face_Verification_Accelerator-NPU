@@ -1,3 +1,5 @@
+`include "layer_defs.svh"
+
 module conv1x1_output_postprocess #(
     parameter int ROW = 14,
     parameter int COL = 16,
@@ -23,6 +25,9 @@ module conv1x1_output_postprocess #(
     input  logic signed [MULT_W-1:0]   prelu_multiplier_i [COL],
     input  logic [SHIFT_W-1:0]         prelu_shift_i      [COL],
     input  logic signed [ACC_W-1:0]    residual_i [ROW][COL],
+    input  logic signed [MULT_W-1:0]   residual_multiplier_i [COL],
+    input  logic [SHIFT_W-1:0]         residual_shift_i [COL],
+    input  logic signed [ACC_W-1:0]    residual_zero_point_i [COL],
 
     output logic                       valid_o [ROW][COL],
     output logic signed [OUT_W-1:0]    data_o  [ROW][COL]
@@ -32,9 +37,6 @@ module conv1x1_output_postprocess #(
     localparam int EXT_DIM_W = DIM_W + 1;
     localparam int WORK_W = ACC_W + MULT_W + 2;
     localparam int PRODUCT_W = WORK_W + MULT_W;
-    localparam logic [1:0] MODE_REQUANT  = 2'd0;
-    localparam logic [1:0] MODE_PRELU    = 2'd1;
-    localparam logic [1:0] MODE_RESIDUAL = 2'd2;
 
     function automatic logic signed [OUT_W-1:0] clamp_int8(input logic signed [PRODUCT_W-1:0] value);
         begin
@@ -89,19 +91,37 @@ module conv1x1_output_postprocess #(
 
     function automatic logic signed [WORK_W-1:0] apply_prelu(
         input logic signed [WORK_W-1:0] value,
+        input logic signed [MULT_W-1:0] multiplier,
         input logic signed [MULT_W-1:0] prelu_multiplier,
         input logic [SHIFT_W-1:0] prelu_shift
     );
         logic signed [PRODUCT_W-1:0] product;
         logic signed [PRODUCT_W-1:0] shifted;
         begin
-            if (value[WORK_W-1]) begin
+            if (value[WORK_W-1] != multiplier[MULT_W-1]) begin
                 product = $signed(extend_work(value)) * $signed(extend_mult(prelu_multiplier));
                 shifted = round_shift_product(product, prelu_shift);
                 apply_prelu = shifted[WORK_W-1:0];
             end else begin
                 apply_prelu = value;
             end
+        end
+    endfunction
+
+    function automatic logic signed [WORK_W-1:0] scale_residual_to_work(
+        input logic signed [ACC_W-1:0] residual,
+        input logic signed [MULT_W-1:0] residual_multiplier,
+        input logic [SHIFT_W-1:0] residual_shift,
+        input logic signed [ACC_W-1:0] residual_zero_point
+    );
+        logic signed [WORK_W-1:0] residual_centered;
+        logic signed [PRODUCT_W-1:0] product;
+        logic signed [PRODUCT_W-1:0] shifted;
+        begin
+            residual_centered = extend_acc(residual) + extend_acc(residual_zero_point);
+            product = $signed(extend_work(residual_centered)) * $signed(extend_mult(residual_multiplier));
+            shifted = round_shift_product(product, residual_shift);
+            scale_residual_to_work = shifted[WORK_W-1:0];
         end
     endfunction
 
@@ -131,7 +151,10 @@ module conv1x1_output_postprocess #(
         input logic [SHIFT_W-1:0] shift,
         input logic signed [OUT_W-1:0] zero_point,
         input logic signed [MULT_W-1:0] prelu_multiplier,
-        input logic [SHIFT_W-1:0] prelu_shift
+        input logic [SHIFT_W-1:0] prelu_shift,
+        input logic signed [MULT_W-1:0] residual_multiplier,
+        input logic [SHIFT_W-1:0] residual_shift,
+        input logic signed [ACC_W-1:0] residual_zero_point
     );
         logic signed [ACC_W:0] biased;
         logic signed [WORK_W-1:0] working_value;
@@ -140,9 +163,12 @@ module conv1x1_output_postprocess #(
             working_value = extend_biased(biased);
 
             if (mode == MODE_RESIDUAL) begin
-                working_value = working_value + extend_acc(residual);
+                working_value = working_value +
+                                scale_residual_to_work(residual, residual_multiplier,
+                                                       residual_shift, residual_zero_point);
             end else if (mode == MODE_PRELU) begin
-                working_value = apply_prelu(working_value, prelu_multiplier, prelu_shift);
+                working_value = apply_prelu(working_value, multiplier,
+                                            prelu_multiplier, prelu_shift);
             end
 
             postprocess_value = requantize_from_value(working_value, multiplier, shift, zero_point);
@@ -158,7 +184,8 @@ module conv1x1_output_postprocess #(
                 data_o[r][c] = postprocess_value(acc_i[r][c], bias_i[c], residual_i[r][c],
                                                  mode_i, multiplier_i[c], shift_i[c],
                                                  zero_point_i[c], prelu_multiplier_i[c],
-                                                 prelu_shift_i[c]);
+                                                 prelu_shift_i[c], residual_multiplier_i[c],
+                                                 residual_shift_i[c], residual_zero_point_i[c]);
             end
         end
     end

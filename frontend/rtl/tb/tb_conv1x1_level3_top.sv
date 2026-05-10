@@ -40,6 +40,7 @@ module tb_conv1x1_level3_top;
     logic [DIM_W-1:0] n_size_i;
     logic [GB_ADDR_W-1:0] act_base_addr_i;
     logic [GB_ADDR_W-1:0] wgt_base_addr_i;
+    logic [GB_ADDR_W-1:0] out_base_addr_i;
 
     logic [1:0] mode_i;
     logic signed [ACC_W-1:0] bias_i [COL];
@@ -48,6 +49,9 @@ module tb_conv1x1_level3_top;
     logic signed [OUT_W-1:0] zero_point_i [COL];
     logic signed [MULT_W-1:0] prelu_multiplier_i [COL];
     logic [SHIFT_W-1:0] prelu_shift_i [COL];
+    logic signed [MULT_W-1:0] residual_multiplier_i [COL];
+    logic [SHIFT_W-1:0] residual_shift_i [COL];
+    logic signed [ACC_W-1:0] residual_zero_point_i [COL];
 
     logic host_ao_wr_en_i;
     logic [AO_ADDR_W-1:0] host_ao_addr_i;
@@ -160,6 +164,7 @@ module tb_conv1x1_level3_top;
         .rst_n(rst_n),
         .run_en_i(run_en_i),
         .start_i(start_i),
+        .layer_idx_i('0),
         .busy_o(busy_o),
         .done_o(done_o),
         .k_size_i(k_size_i),
@@ -167,6 +172,9 @@ module tb_conv1x1_level3_top;
         .n_size_i(n_size_i),
         .act_base_addr_i(act_base_addr_i),
         .wgt_base_addr_i(wgt_base_addr_i),
+        .out_base_addr_i(out_base_addr_i),
+        .residual_en_i(1'b0),
+        .residual_base_addr_i('0),
         .mode_i(mode_i),
         .bias_i(bias_i),
         .multiplier_i(multiplier_i),
@@ -174,6 +182,9 @@ module tb_conv1x1_level3_top;
         .zero_point_i(zero_point_i),
         .prelu_multiplier_i(prelu_multiplier_i),
         .prelu_shift_i(prelu_shift_i),
+        .residual_multiplier_i(residual_multiplier_i),
+        .residual_shift_i(residual_shift_i),
+        .residual_zero_point_i(residual_zero_point_i),
         .gb_act_rd_valid_o(dut_act_rd_valid),
         .gb_act_rd_addr_o(dut_act_rd_addr),
         .gb_act_rd_data_i(dut_act_rd_data),
@@ -242,13 +253,14 @@ module tb_conv1x1_level3_top;
         end
     endtask
 
-    task automatic run_layer(input int k_size, input int n_size, input int act_base, input int wgt_base);
+    task automatic run_layer(input int k_size, input int n_size, input int act_base, input int wgt_base, input int out_base);
         begin
             k_size_i = k_size[K_ADDR_W:0];
             m_size_i = M[DIM_W-1:0];
             n_size_i = n_size[DIM_W-1:0];
             act_base_addr_i = act_base[AO_ADDR_W-1:0];
             wgt_base_addr_i = wgt_base[WGT_ADDR_W-1:0];
+            out_base_addr_i = out_base[AO_ADDR_W-1:0];
             pulse_start_and_wait();
             repeat (4) @(posedge clk);
         end
@@ -314,6 +326,7 @@ module tb_conv1x1_level3_top;
         n_size_i = '0;
         act_base_addr_i = '0;
         wgt_base_addr_i = '0;
+        out_base_addr_i = '0;
         host_ao_wr_en_i = 1'b0;
         host_ao_addr_i = '0;
         host_ao_wr_data_i = '0;
@@ -331,6 +344,9 @@ module tb_conv1x1_level3_top;
             zero_point_i[c] = '0;
             prelu_multiplier_i[c] = 1;
             prelu_shift_i[c] = '0;
+            residual_multiplier_i[c] = '0;
+            residual_shift_i[c] = '0;
+            residual_zero_point_i[c] = '0;
         end
 
         repeat (5) @(posedge clk);
@@ -338,8 +354,8 @@ module tb_conv1x1_level3_top;
         repeat (2) @(posedge clk);
 
         load_memories();
-        run_layer(K1, N1, 0, 0);
-        run_layer(K2, N2, OUT_BASE, WGT2_BASE);
+        run_layer(K1, N1, 0, 0, OUT_BASE);
+        run_layer(K2, N2, OUT_BASE, WGT2_BASE, OUT_BASE);
         dump_ao_sram("gold_models/conv1x1_level3_dut_ao_final.hex");
         compare_final();
 

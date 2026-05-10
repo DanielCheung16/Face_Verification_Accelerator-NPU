@@ -23,7 +23,8 @@ software/c_model_fixed/build/
 qface_env/
 pretrained_models/quantface_mobilefacenet_w8a8_real/*
 //modelsim:
-frontend/sim/gold_models/*.hex
+frontend/sim/gold_models/**/*.hex
 frontend/sim/work/
 frontend/sim/*.ini
 frontend/sim/*transcript
+datasets/faces_eval/*.bin

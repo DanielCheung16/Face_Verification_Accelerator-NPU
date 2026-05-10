@@ -16,6 +16,7 @@ module wr_controller #(
     // Output matrix dimensions. n_size_i is packed in groups of COL int8s.
     input  logic [DIM_W-1:0]             n_size_i,
     input  logic [DIM_W-1:0]             m_size_i,
+    input  logic [GB_ADDR_W-1:0]         out_base_addr_i,
 
     // Face to wb_buffer.
     input  logic                         tile_process_done,
@@ -74,7 +75,7 @@ module wr_controller #(
     assign global_row_w = (GB_ADDR_W'(tile_r_r) * GB_ADDR_W'(ROW)) + GB_ADDR_W'(row_idx_r);
 
     // Row-major packed output address:
-    //   ao_addr = output_half_base + global_row * nt + tile_c
+    //   ao_addr = out_base_addr_i + global_row * nt + tile_c
     //
     // This is the pseudo-code form:
     //   ao_addr_o = tile_c + r*nt + tile_r*(ROW*nt)
@@ -121,7 +122,7 @@ module wr_controller #(
             end
 
             WRITE: begin
-                ao_addr_w  = {1'b1, lower_addr_w[GB_ADDR_W-2:0]};
+                ao_addr_w  = out_base_addr_i + lower_addr_w;
                 ao_wr_en_w = row_in_range_w;
                 ao_data_w  = data_i;
 

@@ -20,7 +20,7 @@ module top #(
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
     parameter int NUM_DEV = 1,
     parameter int MAX_LAYER = 8,
-    parameter int LAYER_TYPE_W = 3,
+    parameter bit USE_INTERNAL_QUANT_PARAMS = 1'b0,
 
     localparam int AO_MASK_W = GB_DATA_W / DATA_W,
     localparam int WGT_MASK_W = GB_DATA_W / DATA_W,
@@ -67,6 +67,10 @@ module top #(
     logic [DIM_W-1:0]      n_size;
     logic [GB_ADDR_W-1:0]  act_base_addr;
     logic [GB_ADDR_W-1:0]  wgt_base_addr;
+    logic [GB_ADDR_W-1:0]  out_base_addr;
+    logic                  residual_en;
+    logic [GB_ADDR_W-1:0]  residual_base_addr;
+    logic [MAX_LAYER-1:0]  layer_idx;
 
     logic [1:0]                    mode;
     logic signed [ACC_W-1:0]       bias [COL];
@@ -75,6 +79,9 @@ module top #(
     logic signed [OUT_W-1:0]       zero_point [COL];
     logic signed [MULT_W-1:0]      prelu_multiplier [COL];
     logic [SHIFT_W-1:0]            prelu_shift [COL];
+    logic signed [MULT_W-1:0]      residual_multiplier [COL];
+    logic [SHIFT_W-1:0]            residual_shift [COL];
+    logic signed [ACC_W-1:0]       residual_zero_point [COL];
 
     logic                     dev_act_rd_valid [NUM_DEV];
     logic [GB_ADDR_W-1:0]     dev_act_rd_addr  [NUM_DEV];
@@ -181,8 +188,7 @@ module top #(
         .AO_ADDR_W(AO_ADDR_W),
         .WGT_ADDR_W(WGT_ADDR_W),
         .NUM_DEV(NUM_DEV),
-        .MAX_LAYER(MAX_LAYER),
-        .LAYER_TYPE_W(LAYER_TYPE_W)
+        .MAX_LAYER(MAX_LAYER)
     ) u_layer_switcher (
         .clk(aclk),
         .rst_n(aresetn),
@@ -196,6 +202,10 @@ module top #(
         .n_size_o(n_size),
         .act_base_addr_o(act_base_addr),
         .wgt_base_addr_o(wgt_base_addr),
+        .out_base_addr_o(out_base_addr),
+        .residual_en_o(residual_en),
+        .residual_base_addr_o(residual_base_addr),
+        .layer_idx_o(layer_idx),
         .mode_o(mode),
         .bias_o(bias),
         .multiplier_o(multiplier),
@@ -203,6 +213,9 @@ module top #(
         .zero_point_o(zero_point),
         .prelu_multiplier_o(prelu_multiplier),
         .prelu_shift_o(prelu_shift),
+        .residual_multiplier_o(residual_multiplier),
+        .residual_shift_o(residual_shift),
+        .residual_zero_point_o(residual_zero_point),
         .dev_act_rd_valid_i(dev_act_rd_valid),
         .dev_act_rd_addr_i(dev_act_rd_addr),
         .dev_act_rd_data_o(dev_act_rd_data),
@@ -244,12 +257,15 @@ module top #(
         .AO_DEPTH(AO_DEPTH),
         .WGT_DEPTH(WGT_DEPTH),
         .AO_ADDR_W(AO_ADDR_W),
-        .WGT_ADDR_W(WGT_ADDR_W)
+        .WGT_ADDR_W(WGT_ADDR_W),
+        .USE_INTERNAL_QUANT_PARAMS(USE_INTERNAL_QUANT_PARAMS),
+        .LAYER_IDX_W(MAX_LAYER)
     ) u_conv1x1_dev (
         .clk(aclk),
         .rst_n(aresetn),
         .run_en_i(1'b1),
         .start_i(dev_start[CONV1X1_DEV]),
+        .layer_idx_i(layer_idx),
         .busy_o(dev_busy[CONV1X1_DEV]),
         .done_o(dev_done[CONV1X1_DEV]),
         .k_size_i(k_size),
@@ -257,6 +273,9 @@ module top #(
         .n_size_i(n_size),
         .act_base_addr_i(act_base_addr),
         .wgt_base_addr_i(wgt_base_addr),
+        .out_base_addr_i(out_base_addr),
+        .residual_en_i(residual_en),
+        .residual_base_addr_i(residual_base_addr),
         .mode_i(mode),
         .bias_i(bias),
         .multiplier_i(multiplier),
@@ -264,6 +283,9 @@ module top #(
         .zero_point_i(zero_point),
         .prelu_multiplier_i(prelu_multiplier),
         .prelu_shift_i(prelu_shift),
+        .residual_multiplier_i(residual_multiplier),
+        .residual_shift_i(residual_shift),
+        .residual_zero_point_i(residual_zero_point),
         .gb_act_rd_valid_o(dev_act_rd_valid[CONV1X1_DEV]),
         .gb_act_rd_addr_o(dev_act_rd_addr[CONV1X1_DEV]),
         .gb_act_rd_data_i(dev_act_rd_data[CONV1X1_DEV]),

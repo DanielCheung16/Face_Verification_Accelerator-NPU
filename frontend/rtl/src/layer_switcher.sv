@@ -1,3 +1,5 @@
+`include "layer_defs.svh"
+
 module layer_switcher #(
     parameter int ROW       = 14,
     parameter int COL       = 16,
@@ -18,7 +20,6 @@ module layer_switcher #(
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
     parameter int NUM_DEV = 1,
     parameter int MAX_LAYER = 8,
-    parameter int LAYER_TYPE_W = 3,
 
     localparam int GB_LANES = GB_DATA_W / DATA_W,
     localparam int AO_MASK_W = GB_DATA_W / DATA_W,
@@ -45,6 +46,10 @@ module layer_switcher #(
     output logic [DIM_W-1:0]      n_size_o,
     output logic [GB_ADDR_W-1:0]  act_base_addr_o,
     output logic [GB_ADDR_W-1:0]  wgt_base_addr_o,
+    output logic [GB_ADDR_W-1:0]  out_base_addr_o,
+    output logic                  residual_en_o,
+    output logic [GB_ADDR_W-1:0]  residual_base_addr_o,
+    output logic [MAX_LAYER-1:0]  layer_idx_o,
 
     output logic [1:0]                    mode_o,
     output logic signed [ACC_W-1:0]       bias_o       [COL],
@@ -53,6 +58,9 @@ module layer_switcher #(
     output logic signed [OUT_W-1:0]       zero_point_o [COL],
     output logic signed [MULT_W-1:0]      prelu_multiplier_o [COL],
     output logic [SHIFT_W-1:0]            prelu_shift_o      [COL],
+    output logic signed [MULT_W-1:0]      residual_multiplier_o [COL],
+    output logic [SHIFT_W-1:0]            residual_shift_o      [COL],
+    output logic signed [ACC_W-1:0]       residual_zero_point_o [COL],
 
     input  wire logic                     dev_act_rd_valid_i [NUM_DEV],
     input  wire logic [GB_ADDR_W-1:0]     dev_act_rd_addr_i  [NUM_DEV],
@@ -81,35 +89,8 @@ module layer_switcher #(
     output logic                     final_valid_o,
     output logic [FINAL_VEC-1:0]     final_vec_o
 );
-    localparam int NUM_SCHEDULED_LAYERS = 2;    //here to set how many layers we have 
     localparam int DEV_IDX_W = (NUM_DEV <= 1) ? 1 : $clog2(NUM_DEV);
-    localparam int K_SIZE_W = K_ADDR_W + 1;
-
-    localparam logic [1:0] MODE_REQUANT  = 2'd0;
-    localparam logic [1:0] MODE_PRELU    = 2'd1;
-    localparam logic [1:0] MODE_RESIDUAL = 2'd2;
-
-    //set the activation input and output size
-    localparam int IMG_28_M = 28 * 28;
-    localparam int L0_K = 128;
-    localparam int L0_N = 64;
-    localparam int L1_K = 64;
-    localparam int L1_N = 128;
-    localparam int L0_WGT_WORDS = L0_K * ((L0_N + GB_LANES - 1) / GB_LANES);
-
-    //set the base address for sram
-    localparam logic [GB_ADDR_W-1:0] AO_IN_BASE  = '0;
-    localparam logic [GB_ADDR_W-1:0] AO_OUT_BASE = {1'b1, {(GB_ADDR_W-1){1'b0}}};
-    localparam logic [GB_ADDR_W-1:0] WGT0_BASE   = '0;
-    localparam logic [GB_ADDR_W-1:0] WGT1_BASE   = GB_ADDR_W'(L0_WGT_WORDS);
     localparam logic [DEV_IDX_W-1:0] CONV1X1_DEV = '0;
-
-    typedef enum logic [LAYER_TYPE_W-1:0] {
-        LY_NOP,
-        LY_CONV1X1_R,
-        LY_CONV1X1_PRELU
-        
-    } layer_type_t;
 
     typedef enum logic [1:0] {
         IDLE,
@@ -125,11 +106,12 @@ module layer_switcher #(
 
     logic active_dev_valid_w;
     logic [DEV_IDX_W-1:0] active_dev_idx_w;
-    logic last_layer_w;
+    logic layer_valid_w;
+    logic layer_last_w;
     logic active_done_w;
 
-    assign last_layer_w = (layer_cnt_r == MAX_LAYER'(NUM_SCHEDULED_LAYERS - 1));
     assign active_done_w = active_dev_valid_w && seen_busy_r && done_i[active_dev_idx_w];
+    assign layer_idx_o = layer_cnt_r;
 
 `ifndef SYNTHESIS
     initial begin
@@ -189,7 +171,11 @@ module layer_switcher #(
 
             DISPATCH: begin
                 seen_busy_w = 1'b0;
-                state_nxt = WAIT_DEV;
+                if (layer_valid_w && active_dev_valid_w) begin
+                    state_nxt = WAIT_DEV;
+                end else begin
+                    state_nxt = DONE;
+                end
             end
 
             WAIT_DEV: begin
@@ -200,7 +186,7 @@ module layer_switcher #(
                 //active_done_w represents receive this layer is done from the devices.
                 if (active_done_w) begin
                     seen_busy_w = 1'b0;
-                    if (last_layer_w) begin
+                    if (layer_last_w) begin
                         layer_cnt_w = '0;
                         state_nxt = DONE;
                     end else begin
@@ -226,105 +212,71 @@ module layer_switcher #(
     end
 
     // -------------------------------------------------------------------------
-    // Layer table / layer type decode
-    //
-    // This is the first decode stage from the pseudo-code idea:
-    // layer_cnt_r is the program counter of the scheduled network slice, and
-    // layer_type_w is the opcode. Today both scheduled entries are conv1x1
-    // blocks, but later rows can decode to LY_DWCONV3X3, LY_POOL, LY_FC, etc.
+    // Config generation
+    // Works like a program, and the layer_cnt_r is the program pointer.
+    // PS:  This block drives the configuration signals consumed by the active layer
+    //      device. The conv1x1 and its following postprocess are treated as one
+    //      logical scheduled layer
     // -------------------------------------------------------------------------
-    always_comb begin
-        layer_type_w = LY_NOP;
-
-        case (layer_cnt_r)
-            MAX_LAYER'(0): layer_type_w = LY_CONV1X1_R;
-            MAX_LAYER'(1): layer_type_w = LY_CONV1X1_PRELU;
-            default:      layer_type_w = LY_NOP;
-        endcase
-    end
+    layer_config_rom #(
+        .ROW(ROW),
+        .COL(COL),
+        .K_MAX(K_MAX),
+        .K_ADDR_W(K_ADDR_W),
+        .DATA_W(DATA_W),
+        .ACC_W(ACC_W),
+        .OUT_W(OUT_W),
+        .MULT_W(MULT_W),
+        .SHIFT_W(SHIFT_W),
+        .DIM_W(DIM_W),
+        .GB_DATA_W(GB_DATA_W),
+        .AO_DEPTH(AO_DEPTH),
+        .WGT_DEPTH(WGT_DEPTH),
+        .AO_ADDR_W(AO_ADDR_W),
+        .WGT_ADDR_W(WGT_ADDR_W),
+        .MAX_LAYER(MAX_LAYER)
+    ) u_layer_config_rom (
+        .layer_cnt_i(layer_cnt_r),
+        .layer_valid_o(layer_valid_w),
+        .layer_last_o(layer_last_w),
+        .layer_type_o(layer_type_w),
+        .k_size_o(k_size_o),
+        .m_size_o(m_size_o),
+        .n_size_o(n_size_o),
+        .act_base_addr_o(act_base_addr_o),
+        .wgt_base_addr_o(wgt_base_addr_o),
+        .out_base_addr_o(out_base_addr_o),
+        .residual_en_o(residual_en_o),
+        .residual_base_addr_o(residual_base_addr_o),
+        .mode_o(mode_o),
+        .bias_o(bias_o),
+        .multiplier_o(multiplier_o),
+        .shift_o(shift_o),
+        .zero_point_o(zero_point_o),
+        .prelu_multiplier_o(prelu_multiplier_o),
+        .prelu_shift_o(prelu_shift_o),
+        .residual_multiplier_o(residual_multiplier_o),
+        .residual_shift_o(residual_shift_o),
+        .residual_zero_point_o(residual_zero_point_o)
+    );
 
     // -------------------------------------------------------------------------
     // Device decode
     //
-    // Convert layer_type_w into the hardware device index that should receive
-    // start_o and own the shared global-buffer connection. At this stage only
-    // conv1x1 exists, so every active layer maps to CONV1X1_DEV.
+    // layer_config_rom decodes layer_cnt_r into layer_type_w and the per-layer
+    // configuration. This block only converts the opcode into the hardware
+    // device index that should receive start_o and own the shared GB connection.
+    // At this stage only conv1x1 exists, so every active layer maps to
+    // CONV1X1_DEV.
     // -------------------------------------------------------------------------
     always_comb begin
         active_dev_valid_w = 1'b0;
         active_dev_idx_w   = '0;
 
         case (layer_type_w)
-            LY_CONV1X1_R, LY_CONV1X1_PRELU: begin
+            LY_CONV1X1: begin
                 active_dev_valid_w = 1'b1;
                 active_dev_idx_w   = CONV1X1_DEV;
-            end
-
-            default: ;
-        endcase
-    end
-
-    // -------------------------------------------------------------------------
-    // Config generation
-    //
-    // This block drives the configuration signals consumed by the active layer
-    // device. The conv1x1 and its following postprocess are treated as one
-    // logical scheduled layer, so mode_o and quant/PReLU parameters are emitted
-    // together with k/m/n/base addresses.
-    //
-    // Current programmed slice from mobilefacenet_hw_simplified.csv:
-    //   layer_cnt 0: rows 20 + 22, conv1x1 28x28 128->64, residual add quant
-    //   layer_cnt 1: rows 23 + 25, conv1x1 28x28 64->128, PReLU quant
-    //
-    // Address convention for the temporary two-layer test path:
-    //   AO low half  : input activation
-    //   AO high half : previous conv output / next conv input
-    //   WGT0_BASE    : first conv weights
-    //   WGT1_BASE    : second conv weights, packed after layer 0 weights
-    // -------------------------------------------------------------------------
-    always_comb begin
-        //set default value
-        k_size_o        = '0;
-        m_size_o        = '0;
-        n_size_o        = '0;
-        act_base_addr_o = '0;
-        wgt_base_addr_o = '0;
-        mode_o          = MODE_REQUANT;
-
-        for (int c = 0; c < COL; c++) begin
-            bias_o[c]              = '0;
-            multiplier_o[c]        = MULT_W'(1);
-            shift_o[c]             = '0;
-            zero_point_o[c]        = '0;
-            prelu_multiplier_o[c]  = MULT_W'(1);
-            prelu_shift_o[c]       = '0;
-        end
-        //default set is done
-
-        // mobilefacenet_hw_simplified.csv rows 20 + 22:
-        //   conv_3.model.0.0.project.conv, 28x28, 128 -> 64
-        //   conv_3.model.0.1, residual_add_output_quant
-        //
-        // rows 23 + 25:
-        //   conv_3.model.1.0.conv.conv, 28x28, 64 -> 128
-        //   conv_3.model.1.0.conv.prelu, prelu_then_activation_quant
-        case (layer_type_w)
-            LY_CONV1X1_R: begin
-                k_size_o        = K_SIZE_W'(L0_K);
-                m_size_o        = DIM_W'(IMG_28_M);
-                n_size_o        = DIM_W'(L0_N);
-                act_base_addr_o = AO_IN_BASE;
-                wgt_base_addr_o = WGT0_BASE;
-                mode_o          = MODE_RESIDUAL;
-            end
-
-            LY_CONV1X1_PRELU: begin
-                k_size_o        = K_SIZE_W'(L1_K);
-                m_size_o        = DIM_W'(IMG_28_M);
-                n_size_o        = DIM_W'(L1_N);
-                act_base_addr_o = AO_OUT_BASE;
-                wgt_base_addr_o = WGT1_BASE;
-                mode_o          = MODE_PRELU;
             end
 
             default: ;

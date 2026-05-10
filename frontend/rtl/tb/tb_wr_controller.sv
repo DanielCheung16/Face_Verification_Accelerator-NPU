@@ -66,6 +66,7 @@ module tb_wr_controller;
         .aresetn(rst_n),
         .n_size_i(n_size_i),
         .m_size_i(m_size_i),
+        .out_base_addr_i(GB_ADDR_W'(OUT_BASE)),
         .tile_process_done(tile_process_done),
         .data_i(wb_data),
         .rd_addr_o(rd_addr),

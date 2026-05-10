@@ -47,6 +47,9 @@ module tb_conv1x1_gb_top;
     logic signed [MULT_W-1:0] prelu_multiplier_i [COL];
     logic [SHIFT_W-1:0] prelu_shift_i [COL];
     logic signed [ACC_W-1:0] residual_i [ROW][COL];
+    logic signed [MULT_W-1:0] residual_multiplier_i [COL];
+    logic [SHIFT_W-1:0] residual_shift_i [COL];
+    logic signed [ACC_W-1:0] residual_zero_point_i [COL];
 
     logic gb_act_rd_valid_o;
     logic [31:0] gb_act_rd_addr_o;
@@ -66,6 +69,9 @@ module tb_conv1x1_gb_top;
     logic signed [OUT_W-1:0] global_zero_point [N_MAX];
     logic signed [MULT_W-1:0] global_prelu_multiplier [N_MAX];
     logic [SHIFT_W-1:0] global_prelu_shift [N_MAX];
+    logic signed [MULT_W-1:0] global_residual_multiplier [N_MAX];
+    logic [SHIFT_W-1:0] global_residual_shift [N_MAX];
+    logic signed [ACC_W-1:0] global_residual_zero_point [N_MAX];
 
     int pass_cnt;
     int fail_cnt;
@@ -116,6 +122,9 @@ module tb_conv1x1_gb_top;
         .prelu_multiplier_i(prelu_multiplier_i),
         .prelu_shift_i(prelu_shift_i),
         .residual_i(residual_i),
+        .residual_multiplier_i(residual_multiplier_i),
+        .residual_shift_i(residual_shift_i),
+        .residual_zero_point_i(residual_zero_point_i),
         .gb_act_rd_valid_o(gb_act_rd_valid_o),
         .gb_act_rd_addr_o(gb_act_rd_addr_o),
         .gb_act_rd_data_i(gb_act_rd_data_i),
@@ -212,15 +221,21 @@ module tb_conv1x1_gb_top;
         input int shift,
         input int signed zero_point,
         input int signed prelu_multiplier,
-        input int prelu_shift
+        input int prelu_shift,
+        input int signed residual_multiplier,
+        input int residual_shift,
+        input int signed residual_zero_point
     );
         longint signed value;
         longint signed prelu_product;
+        longint signed residual_product;
         begin
             value = longint'(acc) + longint'(bias);
             if (mode == MODE_RESIDUAL) begin
-                value = value + longint'(residual);
-            end else if ((mode == MODE_PRELU) && (value < 0)) begin
+                residual_product = (longint'(residual) + longint'(residual_zero_point)) *
+                                   longint'(residual_multiplier);
+                value = value + round_shift_ref(residual_product, residual_shift);
+            end else if ((mode == MODE_PRELU) && ((value < 0) != (multiplier < 0))) begin
                 prelu_product = value * longint'(prelu_multiplier);
                 value = round_shift_ref(prelu_product, prelu_shift);
             end
@@ -237,7 +252,7 @@ module tb_conv1x1_gb_top;
     );
         begin
             requant_ref = postprocess_ref(acc, bias, 0, MODE_REQUANT, multiplier,
-                                          shift, zero_point, 1, 0);
+                                          shift, zero_point, 1, 0, 0, 0, 0);
         end
     endfunction
     function automatic logic signed [OUT_W-1:0] golden_value(input int row, input int col);
@@ -253,7 +268,10 @@ module tb_conv1x1_gb_top;
                                            global_multiplier[col], global_shift[col],
                                            global_zero_point[col],
                                            global_prelu_multiplier[col],
-                                           global_prelu_shift[col]);
+                                           global_prelu_shift[col],
+                                           global_residual_multiplier[col],
+                                           global_residual_shift[col],
+                                           global_residual_zero_point[col]);
         end
     endfunction
 
@@ -315,6 +333,9 @@ module tb_conv1x1_gb_top;
                     zero_point_i[c] = global_zero_point[global_col];
                     prelu_multiplier_i[c] = global_prelu_multiplier[global_col];
                     prelu_shift_i[c] = global_prelu_shift[global_col];
+                    residual_multiplier_i[c] = global_residual_multiplier[global_col];
+                    residual_shift_i[c] = global_residual_shift[global_col];
+                    residual_zero_point_i[c] = global_residual_zero_point[global_col];
                 end else begin
                     bias_i[c] = '0;
                     multiplier_i[c] = 1;
@@ -322,6 +343,9 @@ module tb_conv1x1_gb_top;
                     zero_point_i[c] = '0;
                     prelu_multiplier_i[c] = 1;
                     prelu_shift_i[c] = '0;
+                    residual_multiplier_i[c] = '0;
+                    residual_shift_i[c] = '0;
+                    residual_zero_point_i[c] = '0;
                 end
             end
 
@@ -368,6 +392,9 @@ module tb_conv1x1_gb_top;
                 global_zero_point[c] = (c % 7) - 3;
                 global_prelu_multiplier[c] = (c % 3) + 1;
                 global_prelu_shift[c] = 2;
+                global_residual_multiplier[c] = 1;
+                global_residual_shift[c] = 0;
+                global_residual_zero_point[c] = 0;
             end
 
             k_size_i = k_size[K_ADDR_W:0];

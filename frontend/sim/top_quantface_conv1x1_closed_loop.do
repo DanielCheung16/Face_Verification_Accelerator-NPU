@@ -23,9 +23,9 @@ vlog -sv -work work "../rtl/src/conv1x1_level3_top.sv"
 vlog -sv +incdir+../rtl/src -work work "../rtl/src/layer_config_rom.sv"
 vlog -sv +incdir+../rtl/src -work work "../rtl/src/layer_switcher.sv"
 vlog -sv -work work "../rtl/src/top.sv"
-vlog -sv -work work "../rtl/tb/tb_top_smoke.sv"
+vlog -sv -work work "../rtl/tb/tb_top_quantface_conv1x1_closed_loop.sv"
 
-vsim -c -t 1ns -classdebug -voptargs=+acc +notimingchecks -L work work.tb_top_smoke -wlf tb_top_smoke.wlf
+vsim -c -t 1ns -classdebug -voptargs=+acc +notimingchecks -L work work.tb_top_quantface_conv1x1_closed_loop -wlf tb_top_quantface_conv1x1_closed_loop.wlf
 
 onfinish stop
 run -all

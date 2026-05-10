@@ -24,6 +24,9 @@ module tb_conv1x1_output_postprocess;
     logic signed [MULT_W-1:0] prelu_multiplier_i [COL];
     logic [SHIFT_W-1:0] prelu_shift_i [COL];
     logic signed [ACC_W-1:0] residual_i [ROW][COL];
+    logic signed [MULT_W-1:0] residual_multiplier_i [COL];
+    logic [SHIFT_W-1:0] residual_shift_i [COL];
+    logic signed [ACC_W-1:0] residual_zero_point_i [COL];
 
     logic valid_o [ROW][COL];
     logic signed [OUT_W-1:0] data_o [ROW][COL];
@@ -54,6 +57,9 @@ module tb_conv1x1_output_postprocess;
         .prelu_multiplier_i(prelu_multiplier_i),
         .prelu_shift_i(prelu_shift_i),
         .residual_i(residual_i),
+        .residual_multiplier_i(residual_multiplier_i),
+        .residual_shift_i(residual_shift_i),
+        .residual_zero_point_i(residual_zero_point_i),
         .valid_o(valid_o),
         .data_o(data_o)
     );
@@ -110,15 +116,21 @@ module tb_conv1x1_output_postprocess;
         input int shift,
         input int signed zero_point,
         input int signed prelu_multiplier,
-        input int prelu_shift
+        input int prelu_shift,
+        input int signed residual_multiplier,
+        input int residual_shift,
+        input int signed residual_zero_point
     );
         longint signed value;
         longint signed prelu_product;
+        longint signed residual_product;
         begin
             value = longint'(acc) + longint'(bias);
             if (mode == MODE_RESIDUAL) begin
-                value = value + longint'(residual);
-            end else if ((mode == MODE_PRELU) && (value < 0)) begin
+                residual_product = (longint'(residual) + longint'(residual_zero_point)) *
+                                   longint'(residual_multiplier);
+                value = value + round_shift_ref(residual_product, residual_shift);
+            end else if ((mode == MODE_PRELU) && ((value < 0) != (multiplier < 0))) begin
                 prelu_product = value * longint'(prelu_multiplier);
                 value = round_shift_ref(prelu_product, prelu_shift);
             end
@@ -135,7 +147,7 @@ module tb_conv1x1_output_postprocess;
     );
         begin
             requant_ref = postprocess_ref(acc, bias, 0, MODE_REQUANT, multiplier,
-                                          shift, zero_point, 1, 0);
+                                          shift, zero_point, 1, 0, 0, 0, 0);
         end
     endfunction
     task automatic check(input bit cond, input string msg);
@@ -165,6 +177,9 @@ module tb_conv1x1_output_postprocess;
             zero_point_i[c] = c - 2;
             prelu_multiplier_i[c] = c + 1;
             prelu_shift_i[c] = 2;
+            residual_multiplier_i[c] = 1;
+            residual_shift_i[c] = 0;
+            residual_zero_point_i[c] = 0;
         end
 
         for (int r = 0; r < ROW; r++) begin
@@ -184,7 +199,8 @@ module tb_conv1x1_output_postprocess;
                 exp_data = postprocess_ref(acc_i[r][c], bias_i[c], residual_i[r][c],
                                            mode_i, multiplier_i[c], shift_i[c],
                                            zero_point_i[c], prelu_multiplier_i[c],
-                                           prelu_shift_i[c]);
+                                           prelu_shift_i[c], residual_multiplier_i[c],
+                                           residual_shift_i[c], residual_zero_point_i[c]);
                 check(valid_o[r][c] === exp_valid,
                       $sformatf("valid mismatch r=%0d c=%0d exp=%0d got=%0d", r, c, exp_valid, valid_o[r][c]));
                 check(data_o[r][c] === exp_data,

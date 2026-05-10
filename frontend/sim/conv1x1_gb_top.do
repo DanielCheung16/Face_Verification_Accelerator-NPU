@@ -18,6 +18,7 @@ if {![info exists N_MAX]} {
 vlib work
 vmap work work
 
+vlog -sv -work work "../rtl/src/layer_defs_pkg.sv"
 vlog -sv -work work "../rtl/src/pe_os.sv"
 vlog -sv -work work "../rtl/src/systolic_array.sv"
 vlog -sv -work work "../rtl/src/banked_input_buffer.sv"
@@ -26,7 +27,7 @@ vlog -sv -work work "../rtl/src/array_controller.sv"
 vlog -sv -work work "../rtl/src/gemm_preload.sv"
 vlog -sv -work work "../rtl/src/array_level2_top.sv"
 vlog -sv -work work "../rtl/src/array_level2_gb_top.sv"
-vlog -sv -work work "../rtl/src/conv1x1_output_postprocess.sv"
+vlog -sv +incdir+../rtl/src -work work "../rtl/src/conv1x1_output_postprocess.sv"
 vlog -sv -work work "../rtl/src/conv1x1_gb_top.sv"
 vlog -sv -work work "../rtl/tb/tb_conv1x1_gb_top.sv"
 

@@ -38,6 +38,9 @@ module conv1x1_gb_top #(
     input logic signed [MULT_W-1:0] prelu_multiplier_i [COL],
     input logic [SHIFT_W-1:0]       prelu_shift_i      [COL],
     input logic signed [ACC_W-1:0]  residual_i [ROW][COL],
+    input logic signed [MULT_W-1:0] residual_multiplier_i [COL],
+    input logic [SHIFT_W-1:0]       residual_shift_i      [COL],
+    input logic signed [ACC_W-1:0]  residual_zero_point_i [COL],
 
     output logic                 gb_act_rd_valid_o,
     output logic [GB_ADDR_W-1:0] gb_act_rd_addr_o,
@@ -111,6 +114,9 @@ module conv1x1_gb_top #(
         .prelu_multiplier_i (prelu_multiplier_i),
         .prelu_shift_i      (prelu_shift_i),
         .residual_i         (residual_i),
+        .residual_multiplier_i (residual_multiplier_i),
+        .residual_shift_i      (residual_shift_i),
+        .residual_zero_point_i (residual_zero_point_i),
         .valid_o      (valid_o),
         .data_o       (data_o)
     );

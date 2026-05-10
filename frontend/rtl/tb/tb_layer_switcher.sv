@@ -49,6 +49,10 @@ module tb_layer_switcher;
     logic [DIM_W-1:0]     n_size_o;
     logic [GB_ADDR_W-1:0] act_base_addr_o;
     logic [GB_ADDR_W-1:0] wgt_base_addr_o;
+    logic [GB_ADDR_W-1:0] out_base_addr_o;
+    logic residual_en_o;
+    logic [GB_ADDR_W-1:0] residual_base_addr_o;
+    logic [7:0] layer_idx_o;
 
     logic [1:0]                    mode_o;
     logic signed [ACC_W-1:0]       bias_o [COL];
@@ -57,6 +61,9 @@ module tb_layer_switcher;
     logic signed [OUT_W-1:0]       zero_point_o [COL];
     logic signed [MULT_W-1:0]      prelu_multiplier_o [COL];
     logic [SHIFT_W-1:0]            prelu_shift_o [COL];
+    logic signed [MULT_W-1:0]      residual_multiplier_o [COL];
+    logic [SHIFT_W-1:0]            residual_shift_o [COL];
+    logic signed [ACC_W-1:0]       residual_zero_point_o [COL];
 
     logic                     dev_act_rd_valid_i [NUM_DEV];
     logic [GB_ADDR_W-1:0]     dev_act_rd_addr_i [NUM_DEV];
@@ -115,6 +122,10 @@ module tb_layer_switcher;
         .n_size_o(n_size_o),
         .act_base_addr_o(act_base_addr_o),
         .wgt_base_addr_o(wgt_base_addr_o),
+        .out_base_addr_o(out_base_addr_o),
+        .residual_en_o(residual_en_o),
+        .residual_base_addr_o(residual_base_addr_o),
+        .layer_idx_o(layer_idx_o),
         .mode_o(mode_o),
         .bias_o(bias_o),
         .multiplier_o(multiplier_o),
@@ -122,6 +133,9 @@ module tb_layer_switcher;
         .zero_point_o(zero_point_o),
         .prelu_multiplier_o(prelu_multiplier_o),
         .prelu_shift_o(prelu_shift_o),
+        .residual_multiplier_o(residual_multiplier_o),
+        .residual_shift_o(residual_shift_o),
+        .residual_zero_point_o(residual_zero_point_o),
         .dev_act_rd_valid_i(dev_act_rd_valid_i),
         .dev_act_rd_addr_i(dev_act_rd_addr_i),
         .dev_act_rd_data_o(dev_act_rd_data_o),
@@ -178,6 +192,7 @@ module tb_layer_switcher;
         input int exp_n,
         input int exp_act_base,
         input int exp_wgt_base,
+        input int exp_out_base,
         input int exp_mode,
         input string tag
     );
@@ -187,6 +202,7 @@ module tb_layer_switcher;
             check(n_size_o === DIM_W'(exp_n), $sformatf("%s n_size", tag));
             check(act_base_addr_o === GB_ADDR_W'(exp_act_base), $sformatf("%s act_base", tag));
             check(wgt_base_addr_o === GB_ADDR_W'(exp_wgt_base), $sformatf("%s wgt_base", tag));
+            check(out_base_addr_o === GB_ADDR_W'(exp_out_base), $sformatf("%s out_base", tag));
             check(mode_o === 2'(exp_mode), $sformatf("%s mode", tag));
             for (int c = 0; c < COL; c++) begin
                 check(bias_o[c] === '0, $sformatf("%s bias[%0d]", tag, c));
@@ -195,6 +211,9 @@ module tb_layer_switcher;
                 check(zero_point_o[c] === '0, $sformatf("%s zero_point[%0d]", tag, c));
                 check(prelu_multiplier_o[c] === MULT_W'(1), $sformatf("%s prelu_multiplier[%0d]", tag, c));
                 check(prelu_shift_o[c] === '0, $sformatf("%s prelu_shift[%0d]", tag, c));
+                check(residual_multiplier_o[c] === '0, $sformatf("%s residual_multiplier[%0d]", tag, c));
+                check(residual_shift_o[c] === '0, $sformatf("%s residual_shift[%0d]", tag, c));
+                check(residual_zero_point_o[c] === '0, $sformatf("%s residual_zero_point[%0d]", tag, c));
             end
         end
     endtask
@@ -284,7 +303,7 @@ module tb_layer_switcher;
         #1;
         check(start_o[0] === 1'b1, "layer0 start pulse");
         check(start_o[1] === 1'b0, "layer0 inactive device start");
-        expect_config(L0_K, M28, L0_N, 0, 0, MODE_RESIDUAL, "layer0");
+        expect_config(L0_K, M28, L0_N, 0, 0, AO_OUT_BASE, MODE_RESIDUAL, "layer0");
 
         @(posedge clk);
         #1;
@@ -293,7 +312,7 @@ module tb_layer_switcher;
 
         complete_active_layer();
         check(start_o[0] === 1'b1, "layer1 start pulse");
-        expect_config(L1_K, M28, L1_N, AO_OUT_BASE, WGT1_BASE, MODE_PRELU, "layer1");
+        expect_config(L1_K, M28, L1_N, AO_OUT_BASE, WGT1_BASE, 0, MODE_PRELU, "layer1");
 
         @(posedge clk);
         #1;
