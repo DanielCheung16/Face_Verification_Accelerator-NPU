@@ -33,7 +33,7 @@ static const int8_t *layer_residual(int layer)
     return layer == 0 ? qf_residual_l0 : NULL;
 }
 
-static const int32_t *layer_bias(int layer)
+static const int64_t *layer_bias(int layer)
 {
     return layer == 0 ? qf_bias_l0 : qf_bias_l1;
 }
@@ -83,7 +83,7 @@ static void run_layer(int layer, const int8_t *input, int8_t *output)
     const qf_layer_cfg_t cfg = qf_layers[layer];
     const int8_t *weight = layer_weight(layer);
     const int8_t *residual = layer_residual(layer);
-    const int32_t *bias = layer_bias(layer);
+    const int64_t *bias = layer_bias(layer);
     const int32_t *mult = layer_mult(layer);
     const int *shift = layer_shift(layer);
     const int32_t *zero_point = layer_zero_point(layer);
@@ -100,17 +100,18 @@ static void run_layer(int layer, const int8_t *input, int8_t *output)
                 acc += (int64_t)input[m * cfg.k + k] * (int64_t)weight[k * cfg.n + n];
             }
 
-            int64_t work = acc + bias[n];
+            int64_t work = (acc << QF_BIAS_SHIFT) + bias[n];
 
             if (cfg.mode == QF_MODE_RESIDUAL && residual != NULL) {
                 int64_t centered = (int64_t)residual[m * cfg.n + n] + (int64_t)res_zp[n];
                 int64_t scaled = round_shift_i64(centered * (int64_t)res_mult[n], res_shift[n]);
-                work += scaled;
-            } else if (cfg.mode == QF_MODE_PRELU && ((work < 0) != (mult[n] < 0))) {
+                work += scaled << QF_BIAS_SHIFT;
+            } else if (cfg.mode == QF_MODE_PRELU && (work < 0)) {
                 work = round_shift_i64(work * (int64_t)prelu_mult[n], prelu_shift[n]);
             }
 
-            output[m * cfg.n + n] = clamp_i8(round_shift_i64(work * (int64_t)mult[n], shift[n]) +
+            output[m * cfg.n + n] = clamp_i8(round_shift_i64(work * (int64_t)mult[n],
+                                                             shift[n] + QF_BIAS_SHIFT) +
                                              (int64_t)zero_point[n]);
         }
     }

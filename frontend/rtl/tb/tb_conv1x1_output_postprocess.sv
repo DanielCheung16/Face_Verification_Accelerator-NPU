@@ -4,6 +4,8 @@ module tb_conv1x1_output_postprocess;
     parameter int ROW = 4;
     parameter int COL = 5;
     parameter int ACC_W = 32;
+    parameter int BIAS_W = 64;
+    parameter int BIAS_SHIFT = 16;
     parameter int OUT_W = 8;
     parameter int MULT_W = 32;
     parameter int SHIFT_W = 6;
@@ -17,7 +19,7 @@ module tb_conv1x1_output_postprocess;
     logic                    valid_i [ROW][COL];
     logic signed [ACC_W-1:0] acc_i   [ROW][COL];
     logic [1:0] mode_i;
-    logic signed [ACC_W-1:0] bias_i       [COL];
+    logic signed [BIAS_W-1:0] bias_i       [COL];
     logic signed [MULT_W-1:0] multiplier_i [COL];
     logic [SHIFT_W-1:0] shift_i [COL];
     logic signed [OUT_W-1:0] zero_point_i [COL];
@@ -38,6 +40,8 @@ module tb_conv1x1_output_postprocess;
         .ROW(ROW),
         .COL(COL),
         .ACC_W(ACC_W),
+        .BIAS_W(BIAS_W),
+        .BIAS_SHIFT(BIAS_SHIFT),
         .OUT_W(OUT_W),
         .MULT_W(MULT_W),
         .SHIFT_W(SHIFT_W),
@@ -109,7 +113,7 @@ module tb_conv1x1_output_postprocess;
 
     function automatic logic signed [OUT_W-1:0] postprocess_ref(
         input int signed acc,
-        input int signed bias,
+        input longint signed bias,
         input int signed residual,
         input logic [1:0] mode,
         input int signed multiplier,
@@ -125,22 +129,22 @@ module tb_conv1x1_output_postprocess;
         longint signed prelu_product;
         longint signed residual_product;
         begin
-            value = longint'(acc) + longint'(bias);
+            value = (longint'(acc) <<< BIAS_SHIFT) + bias;
             if (mode == MODE_RESIDUAL) begin
                 residual_product = (longint'(residual) + longint'(residual_zero_point)) *
                                    longint'(residual_multiplier);
-                value = value + round_shift_ref(residual_product, residual_shift);
-            end else if ((mode == MODE_PRELU) && ((value < 0) != (multiplier < 0))) begin
+                value = value + (round_shift_ref(residual_product, residual_shift) <<< BIAS_SHIFT);
+            end else if ((mode == MODE_PRELU) && (value < 0)) begin
                 prelu_product = value * longint'(prelu_multiplier);
                 value = round_shift_ref(prelu_product, prelu_shift);
             end
-            postprocess_ref = requant_value_ref(value, multiplier, shift, zero_point);
+            postprocess_ref = requant_value_ref(value, multiplier, shift + BIAS_SHIFT, zero_point);
         end
     endfunction
 
     function automatic logic signed [OUT_W-1:0] requant_ref(
         input int signed acc,
-        input int signed bias,
+        input longint signed bias,
         input int signed multiplier,
         input int shift,
         input int signed zero_point
@@ -171,7 +175,7 @@ module tb_conv1x1_output_postprocess;
         n_size_i = 6;
 
         for (int c = 0; c < COL; c++) begin
-            bias_i[c] = (c - 2) * 17;
+            bias_i[c] = ((c - 2) * 17) <<< BIAS_SHIFT;
             multiplier_i[c] = c + 1;
             shift_i[c] = c + 1;
             zero_point_i[c] = c - 2;
@@ -234,7 +238,7 @@ module tb_conv1x1_output_postprocess;
 
         mode_i = MODE_RESIDUAL;
         acc_i[0][0] = 32'sd10;
-        bias_i[0] = 32'sd1;
+        bias_i[0] = 64'sd1 <<< BIAS_SHIFT;
         residual_i[0][0] = 32'sd20;
         multiplier_i[0] = 32'sd1;
         shift_i[0] = 0;

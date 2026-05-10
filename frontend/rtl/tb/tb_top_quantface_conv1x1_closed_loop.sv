@@ -19,11 +19,11 @@ module tb_top_quantface_conv1x1_closed_loop;
     localparam int FINAL_N_TILES = (FINAL_N + COL - 1) / COL;
     localparam int FINAL_BASE = 0;
 
-    localparam string GOLD_DIR = "gold_models/quantface_conv1x1_slice/out";
-    localparam string AO_INIT_HEX = {GOLD_DIR, "/quantface_conv1x1_full_ao_init.hex"};
-    localparam string WGT_INIT_HEX = {GOLD_DIR, "/quantface_conv1x1_full_wgt_init.hex"};
-    localparam string GOLDEN_HEX = {GOLD_DIR, "/quantface_conv1x1_full_golden.hex"};
-    localparam string DUT_AO_FINAL_HEX = {GOLD_DIR, "/quantface_conv1x1_full_dut_ao_final.hex"};
+    localparam string GOLD_DIR = "gold_models/quantface_conv1x1_c_ref/out";
+    localparam string AO_INIT_HEX = {GOLD_DIR, "/quantface_conv1x1_c_ao_init.hex"};
+    localparam string WGT_INIT_HEX = {GOLD_DIR, "/quantface_conv1x1_c_wgt_init.hex"};
+    localparam string GOLDEN_HEX = {GOLD_DIR, "/quantface_conv1x1_c_golden.hex"};
+    localparam string DUT_AO_FINAL_HEX = {GOLD_DIR, "/quantface_conv1x1_c_dut_ao_final.hex"};
 
     logic clk;
     logic rst_n;

@@ -6,6 +6,7 @@ module tb_conv1x1_level3_top;
     parameter int K_MAX = 16;
     parameter int DATA_W = 8;
     parameter int ACC_W = 32;
+    parameter int BIAS_W = 64;
     parameter int OUT_W = 8;
     parameter int MULT_W = 32;
     parameter int SHIFT_W = 6;
@@ -43,7 +44,7 @@ module tb_conv1x1_level3_top;
     logic [GB_ADDR_W-1:0] out_base_addr_i;
 
     logic [1:0] mode_i;
-    logic signed [ACC_W-1:0] bias_i [COL];
+    logic signed [BIAS_W-1:0] bias_i [COL];
     logic signed [MULT_W-1:0] multiplier_i [COL];
     logic [SHIFT_W-1:0] shift_i [COL];
     logic signed [OUT_W-1:0] zero_point_i [COL];

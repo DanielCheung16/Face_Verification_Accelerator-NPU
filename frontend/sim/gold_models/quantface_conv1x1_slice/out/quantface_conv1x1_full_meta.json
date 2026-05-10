@@ -38,9 +38,9 @@
     }
   ],
   "error_vs_quantface_true_output": {
-    "mae": 0.2390485554933548,
+    "mae": 0.23885922133922577,
     "max_abs": 4.0,
-    "mismatch_count": 22188,
+    "mismatch_count": 22161,
     "num_values": 100352
   },
   "files": {

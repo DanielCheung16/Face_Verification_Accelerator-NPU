@@ -29,6 +29,7 @@ from export_quantface_conv1x1_hw import (  # noqa: E402
 MODE_REQUANT = 0
 MODE_PRELU = 1
 MODE_RESIDUAL = 2
+BIAS_SHIFT = 16
 
 
 def c_array(name, c_type, values, cols=16):
@@ -150,8 +151,8 @@ def main():
         shift = choose_common_shift(real_mult)
         mult = torch.round(real_mult * (2 ** shift)).clamp(-(2**31), 2**31 - 1).to(torch.int64)
         sum_w = w_mat.sum(dim=0).to(torch.float32)
-        bias = torch.round(act_zp * sum_w + b_fold * act_scale * w_scale)
-        bias = bias.clamp(-(2**31), 2**31 - 1).to(torch.int64)
+        bias = torch.round((act_zp * sum_w + b_fold * act_scale * w_scale) * (2 ** BIAS_SHIFT))
+        bias = bias.clamp(-(2**63), 2**63 - 1).to(torch.int64)
 
         prelu_shift = 16
         prelu_mult = torch.ones(n_size, dtype=torch.int64) << prelu_shift
@@ -172,7 +173,7 @@ def main():
             residual_mult = residual_mult.clamp(-(2**31), 2**31 - 1).to(torch.int64)
             residual_zp_int = int(round(float(residual_zp)))
 
-        arrays.append(c_array(f"qf_bias_l{idx}", "int32_t", bias))
+        arrays.append(c_array(f"qf_bias_l{idx}", "int64_t", bias))
         arrays.append(c_array(f"qf_multiplier_l{idx}", "int32_t", mult))
         arrays.append(c_array(f"qf_shift_l{idx}", "int", [shift] * n_size))
         arrays.append(c_array(f"qf_zero_point_l{idx}", "int32_t", [-int(round(float(out_zp)))] * n_size))
@@ -183,21 +184,20 @@ def main():
         arrays.append(c_array(f"qf_residual_zero_point_l{idx}", "int32_t", [residual_zp_int] * n_size))
 
         acc = current_act.matmul(w_mat)
+        work = (acc.to(torch.int64) << BIAS_SHIFT) + bias.view(1, -1).to(torch.int64)
         if layer.get("mode") == "MODE_RESIDUAL" and layer.get("residual_source"):
             residual_centered = residual_mk.to(torch.int64) + residual_zp_int
             residual_work = rtl_round_shift(
                 residual_centered * residual_mult.view(1, -1).to(torch.int64),
                 residual_shift,
             )
-            acc = acc.to(torch.int64) + residual_work
+            work = work + (residual_work << BIAS_SHIFT)
 
-        work = acc.to(torch.int64) + bias.view(1, -1).to(torch.int64)
         if layer.get("mode") == "MODE_PRELU":
             pre = rtl_round_shift(work * prelu_mult.view(1, -1).to(torch.int64), prelu_shift)
-            neg_real = (work < 0) != (mult.view(1, -1).to(torch.int64) < 0)
-            work = torch.where(neg_real, pre, work)
+            work = torch.where(work < 0, pre, work)
 
-        current_act = rtl_round_shift(work * mult.view(1, -1).to(torch.int64), shift)
+        current_act = rtl_round_shift(work * mult.view(1, -1).to(torch.int64), shift + BIAS_SHIFT)
         current_act = (current_act - int(round(float(out_zp)))).clamp(-128, 127).to(torch.int32)
 
         if idx == len(cfg["layers"]) - 1:
@@ -239,6 +239,7 @@ def main():
         f"#define QF_L1_M {layers[1]['m']}",
         f"#define QF_L1_K {layers[1]['k']}",
         f"#define QF_L1_N {layers[1]['n']}",
+        f"#define QF_BIAS_SHIFT {BIAS_SHIFT}",
         "",
         "typedef struct {",
         "    int m;",

@@ -6,6 +6,7 @@ module tb_layer_switcher;
     parameter int K_MAX = 512;
     parameter int DATA_W = 8;
     parameter int ACC_W = 32;
+    parameter int BIAS_W = 64;
     parameter int OUT_W = 8;
     parameter int MULT_W = 32;
     parameter int SHIFT_W = 6;
@@ -55,7 +56,7 @@ module tb_layer_switcher;
     logic [7:0] layer_idx_o;
 
     logic [1:0]                    mode_o;
-    logic signed [ACC_W-1:0]       bias_o [COL];
+    logic signed [BIAS_W-1:0]      bias_o [COL];
     logic signed [MULT_W-1:0]      multiplier_o [COL];
     logic [SHIFT_W-1:0]            shift_o [COL];
     logic signed [OUT_W-1:0]       zero_point_o [COL];

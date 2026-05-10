@@ -6,6 +6,7 @@ module top #(
     parameter int K_ADDR_W  = (K_MAX <= 1) ? 1 : $clog2(K_MAX),
     parameter int DATA_W    = 8,
     parameter int ACC_W     = 32,
+    parameter int BIAS_W    = 64,
     parameter int OUT_W     = 8,
     parameter int MULT_W    = 32,
     parameter int SHIFT_W   = 6,
@@ -73,7 +74,7 @@ module top #(
     logic [MAX_LAYER-1:0]  layer_idx;
 
     logic [1:0]                    mode;
-    logic signed [ACC_W-1:0]       bias [COL];
+    logic signed [BIAS_W-1:0]      bias [COL];
     logic signed [MULT_W-1:0]      multiplier [COL];
     logic [SHIFT_W-1:0]            shift [COL];
     logic signed [OUT_W-1:0]       zero_point [COL];
@@ -177,6 +178,7 @@ module top #(
         .K_ADDR_W(K_ADDR_W),
         .DATA_W(DATA_W),
         .ACC_W(ACC_W),
+        .BIAS_W(BIAS_W),
         .OUT_W(OUT_W),
         .MULT_W(MULT_W),
         .SHIFT_W(SHIFT_W),
@@ -248,6 +250,7 @@ module top #(
         .K_ADDR_W(K_ADDR_W),
         .DATA_W(DATA_W),
         .ACC_W(ACC_W),
+        .BIAS_W(BIAS_W),
         .OUT_W(OUT_W),
         .MULT_W(MULT_W),
         .SHIFT_W(SHIFT_W),

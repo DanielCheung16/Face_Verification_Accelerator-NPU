@@ -24,6 +24,7 @@ import torch
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
+BIAS_SHIFT = 16
 REPO_ROOT = SCRIPT_DIR.parents[3]
 RTL_SRC = REPO_ROOT / "frontend" / "rtl" / "src"
 
@@ -155,6 +156,13 @@ def sv_case_function(name, width_decl, default, layers, values):
     return "\n".join(lines)
 
 
+def sv_signed_literal(width, value):
+    value = int(value)
+    if value < 0:
+        return f"-{width}'sd{-value}"
+    return f"{width}'sd{value}"
+
+
 def emit_sv_pkg(path, layer_meta, params):
     layers = [m["n"] for m in layer_meta]
     text = [
@@ -164,7 +172,7 @@ def emit_sv_pkg(path, layer_meta, params):
         "    endfunction",
         "",
     ]
-    text.append(sv_case_function("qf_bias", "logic signed [31:0]", "32'sd0", layers, params["bias"]))
+    text.append(sv_case_function("qf_bias", "logic signed [63:0]", "64'sd0", layers, params["bias"]))
     text.append(sv_case_function("qf_multiplier", "logic signed [31:0]", "32'sd1", layers, params["multiplier"]))
     text.append(sv_case_function("qf_shift", "logic [5:0]", "6'd0", layers, params["shift"]))
     text.append(sv_case_function("qf_zero_point", "logic signed [7:0]", "8'sd0", layers, params["zero_point"]))
@@ -292,8 +300,8 @@ def main():
         shift = choose_common_shift(real_mult)
         mult = torch.round(real_mult * (2 ** shift)).clamp(-(2**31), 2**31 - 1).to(torch.int64)
         sum_w = w_mat.sum(dim=0).to(torch.float32)
-        bias = torch.round(act_zp * sum_w + b_fold * act_scale * w_scale)
-        bias = bias.clamp(-(2**31), 2**31 - 1).to(torch.int64)
+        bias = torch.round((act_zp * sum_w + b_fold * act_scale * w_scale) * (2 ** BIAS_SHIFT))
+        bias = bias.clamp(-(2**63), 2**63 - 1).to(torch.int64)
 
         prelu_shift = 16
         prelu_mult = torch.ones(n_size, dtype=torch.int64) << prelu_shift
@@ -316,19 +324,18 @@ def main():
             residual_zp_int = int(round(float(residual_zp)))
 
         acc = current_act.matmul(w_mat)
+        work = (acc.to(torch.int64) << BIAS_SHIFT) + bias.view(1, -1).to(torch.int64)
         if layer.get("mode") == "MODE_RESIDUAL" and layer.get("residual_source"):
             residual_centered = residual_mk.to(torch.int64) + residual_zp_int
             residual_work = rtl_round_shift(
                 residual_centered * residual_mult.view(1, -1).to(torch.int64),
                 residual_shift,
             )
-            acc = acc.to(torch.int64) + residual_work
-        work = acc.to(torch.int64) + bias.view(1, -1).to(torch.int64)
+            work = work + (residual_work << BIAS_SHIFT)
         if layer.get("mode") == "MODE_PRELU":
-            neg = (work < 0) != (mult.view(1, -1).to(torch.int64) < 0)
             work_pre = rtl_round_shift(work * prelu_mult.view(1, -1).to(torch.int64), prelu_shift)
-            work = torch.where(neg, work_pre, work)
-        q_hw = rtl_round_shift(work * mult.view(1, -1).to(torch.int64), shift)
+            work = torch.where(work < 0, work_pre, work)
+        q_hw = rtl_round_shift(work * mult.view(1, -1).to(torch.int64), shift + BIAS_SHIFT)
         q_hw = (q_hw - int(round(float(out_zp)))).clamp(-128, 127).to(torch.int32)
         current_act = q_hw
 
@@ -356,7 +363,7 @@ def main():
             "act_scale": float(act_scale), "act_zero_point": float(act_zp),
             "out_scale": float(out_scale), "out_zero_point": float(out_zp),
         })
-        params["bias"].append([str(int(v)) for v in bias])
+        params["bias"].append([sv_signed_literal(64, int(v)) for v in bias])
         params["multiplier"].append([str(int(v)) for v in mult])
         params["shift"].append(["6'd{}".format(shift) for _ in range(n_size)])
         out_zp_int = int(round(float(out_zp)))

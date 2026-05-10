@@ -9,6 +9,7 @@ module conv1x1_level3_top #(
     parameter int K_ADDR_W  = (K_MAX <= 1) ? 1 : $clog2(K_MAX),
     parameter int DATA_W    = 8,
     parameter int ACC_W     = 32,
+    parameter int BIAS_W    = 64,
     parameter int OUT_W     = 8,
     parameter int MULT_W    = 32,
     parameter int SHIFT_W   = 6,
@@ -49,7 +50,7 @@ module conv1x1_level3_top #(
     input  logic [GB_ADDR_W-1:0] residual_base_addr_i,
 
     input  logic [1:0] mode_i,
-    input  logic signed [ACC_W-1:0]  bias_i       [COL],
+    input  logic signed [BIAS_W-1:0] bias_i       [COL],
     input  logic signed [MULT_W-1:0] multiplier_i [COL],
     input  logic [SHIFT_W-1:0]       shift_i      [COL],
     input  logic signed [OUT_W-1:0]  zero_point_i [COL],
@@ -130,7 +131,7 @@ module conv1x1_level3_top #(
     logic signed [OUT_W-1:0] post_data [ROW][COL];
     logic signed [ACC_W-1:0] residual_data [ROW][COL];
     logic signed [ACC_W-1:0] residual_data_w [ROW][COL];
-    logic signed [ACC_W-1:0] post_bias [COL];
+    logic signed [BIAS_W-1:0] post_bias [COL];
     logic signed [MULT_W-1:0] post_multiplier [COL];
     logic [SHIFT_W-1:0] post_shift [COL];
     logic signed [OUT_W-1:0] post_zero_point [COL];
@@ -173,7 +174,7 @@ module conv1x1_level3_top #(
     always_comb begin
         for (int c = 0; c < COL; c++) begin
             if (USE_INTERNAL_QUANT_PARAMS) begin
-                post_bias[c]             = qf_bias(int'(layer_idx_i), int'(col_base) + c);
+                post_bias[c]             = BIAS_W'(qf_bias(int'(layer_idx_i), int'(col_base) + c));
                 post_multiplier[c]       = qf_multiplier(int'(layer_idx_i), int'(col_base) + c);
                 post_shift[c]            = qf_shift(int'(layer_idx_i), int'(col_base) + c);
                 post_zero_point[c]       = qf_zero_point(int'(layer_idx_i), int'(col_base) + c);
@@ -273,6 +274,7 @@ module conv1x1_level3_top #(
         .ROW(ROW),
         .COL(COL),
         .ACC_W(ACC_W),
+        .BIAS_W(BIAS_W),
         .OUT_W(OUT_W),
         .MULT_W(MULT_W),
         .SHIFT_W(SHIFT_W),

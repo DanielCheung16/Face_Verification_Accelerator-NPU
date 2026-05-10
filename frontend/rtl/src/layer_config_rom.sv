@@ -7,6 +7,7 @@ module layer_config_rom #(
     parameter int K_ADDR_W  = (K_MAX <= 1) ? 1 : $clog2(K_MAX),
     parameter int DATA_W    = 8,
     parameter int ACC_W     = 32,
+    parameter int BIAS_W    = 64,
     parameter int OUT_W     = 8,
     parameter int MULT_W    = 32,
     parameter int SHIFT_W   = 6,
@@ -36,7 +37,7 @@ module layer_config_rom #(
     output logic [GB_ADDR_W-1:0]    residual_base_addr_o,
 
     output postprocess_mode_t             mode_o,
-    output logic signed [ACC_W-1:0]       bias_o       [COL],
+    output logic signed [BIAS_W-1:0]      bias_o       [COL],
     output logic signed [MULT_W-1:0]      multiplier_o [COL],
     output logic [SHIFT_W-1:0]            shift_o      [COL],
     output logic signed [OUT_W-1:0]       zero_point_o [COL],
