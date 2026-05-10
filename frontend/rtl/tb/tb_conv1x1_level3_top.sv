@@ -21,6 +21,7 @@ module tb_conv1x1_level3_top;
     localparam int AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH);
     localparam int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH);
     localparam int GB_ADDR_W = (AO_ADDR_W > WGT_ADDR_W) ? AO_ADDR_W : WGT_ADDR_W;
+    localparam int WB_ADDR_W = (ROW <= 1) ? 1 : $clog2(ROW);
     localparam int MASK_W = GB_DATA_W / DATA_W;
     localparam int OUT_BASE = AO_DEPTH / 2;
     localparam int WGT2_BASE = 32;
@@ -76,6 +77,35 @@ module tb_conv1x1_level3_top;
     logic dut_wgt_rd_valid;
     logic [GB_ADDR_W-1:0] dut_wgt_rd_addr;
     logic [GB_DATA_W-1:0] dut_wgt_rd_data;
+
+    logic                       conv_post_valid_tile;
+    logic                       post_valid_tile;
+    logic [DIM_W-1:0]           conv_post_row_base;
+    logic [DIM_W-1:0]           conv_post_col_base;
+    logic [DIM_W-1:0]           conv_post_m_size;
+    logic [DIM_W-1:0]           conv_post_n_size;
+    logic [1:0]                 conv_post_mode;
+    logic                       conv_post_valid [ROW][COL];
+    logic signed [ACC_W-1:0]    conv_post_acc [ROW][COL];
+    logic signed [ACC_W-1:0]    conv_post_residual [ROW][COL];
+    logic signed [BIAS_W-1:0]   conv_post_bias [COL];
+    logic signed [MULT_W-1:0]   conv_post_multiplier [COL];
+    logic [SHIFT_W-1:0]         conv_post_shift [COL];
+    logic signed [OUT_W-1:0]    conv_post_zero_point [COL];
+    logic signed [MULT_W-1:0]   conv_post_prelu_multiplier [COL];
+    logic [SHIFT_W-1:0]         conv_post_prelu_shift [COL];
+    logic signed [MULT_W-1:0]   conv_post_residual_multiplier [COL];
+    logic [SHIFT_W-1:0]         conv_post_residual_shift [COL];
+    logic signed [ACC_W-1:0]    conv_post_residual_zero_point [COL];
+    logic                       conv_wb_capture_en;
+    logic                       conv_wb_done;
+    logic [DIM_W-1:0]           conv_wb_m_size;
+    logic [DIM_W-1:0]           conv_wb_n_size;
+    logic [GB_ADDR_W-1:0]       conv_wb_out_base_addr;
+    logic                       post_valid [ROW][COL];
+    logic signed [OUT_W-1:0]    post_data [ROW][COL];
+    logic [WB_ADDR_W-1:0]       conv_wb_rd_addr;
+    logic [GB_DATA_W-1:0]       conv_wb_data;
 
     logic ao_rd_en;
     logic [AO_ADDR_W-1:0] ao_rd_addr;
@@ -186,17 +216,111 @@ module tb_conv1x1_level3_top;
         .residual_multiplier_i(residual_multiplier_i),
         .residual_shift_i(residual_shift_i),
         .residual_zero_point_i(residual_zero_point_i),
+        .post_valid_tile_o(conv_post_valid_tile),
+        .post_valid_tile_i(post_valid_tile),
+        .post_row_base_o(conv_post_row_base),
+        .post_col_base_o(conv_post_col_base),
+        .post_m_size_o(conv_post_m_size),
+        .post_n_size_o(conv_post_n_size),
+        .post_mode_o(conv_post_mode),
+        .post_valid_o(conv_post_valid),
+        .post_acc_o(conv_post_acc),
+        .post_residual_o(conv_post_residual),
+        .post_bias_o(conv_post_bias),
+        .post_multiplier_o(conv_post_multiplier),
+        .post_shift_o(conv_post_shift),
+        .post_zero_point_o(conv_post_zero_point),
+        .post_prelu_multiplier_o(conv_post_prelu_multiplier),
+        .post_prelu_shift_o(conv_post_prelu_shift),
+        .post_residual_multiplier_o(conv_post_residual_multiplier),
+        .post_residual_shift_o(conv_post_residual_shift),
+        .post_residual_zero_point_o(conv_post_residual_zero_point),
+        .wb_capture_en_o(conv_wb_capture_en),
+        .wb_done_i(conv_wb_done),
+        .wb_m_size_o(conv_wb_m_size),
+        .wb_n_size_o(conv_wb_n_size),
+        .wb_out_base_addr_o(conv_wb_out_base_addr),
         .gb_act_rd_valid_o(dut_act_rd_valid),
         .gb_act_rd_addr_o(dut_act_rd_addr),
         .gb_act_rd_data_i(dut_act_rd_data),
-        .gb_ao_wr_valid_o(dut_ao_wr_valid),
-        .gb_ao_wr_addr_o(dut_ao_wr_addr),
-        .gb_ao_wr_data_o(dut_ao_wr_data),
-        .gb_ao_wr_mask_o(dut_ao_wr_mask),
         .gb_wgt_rd_valid_o(dut_wgt_rd_valid),
         .gb_wgt_rd_addr_o(dut_wgt_rd_addr),
         .gb_wgt_rd_data_i(dut_wgt_rd_data)
     );
+
+    conv1x1_output_postprocess #(
+        .ROW(ROW),
+        .COL(COL),
+        .ACC_W(ACC_W),
+        .BIAS_W(BIAS_W),
+        .OUT_W(OUT_W),
+        .MULT_W(MULT_W),
+        .SHIFT_W(SHIFT_W),
+        .DIM_W(DIM_W)
+    ) u_postprocess (
+        .clk(clk),
+        .rst_n(rst_n),
+        .run_en_i(run_en_i),
+        .valid_tile_i(conv_post_valid_tile),
+        .row_base_i(conv_post_row_base),
+        .col_base_i(conv_post_col_base),
+        .m_size_i(conv_post_m_size),
+        .n_size_i(conv_post_n_size),
+        .valid_i(conv_post_valid),
+        .acc_i(conv_post_acc),
+        .mode_i(conv_post_mode),
+        .bias_i(conv_post_bias),
+        .multiplier_i(conv_post_multiplier),
+        .shift_i(conv_post_shift),
+        .zero_point_i(conv_post_zero_point),
+        .prelu_multiplier_i(conv_post_prelu_multiplier),
+        .prelu_shift_i(conv_post_prelu_shift),
+        .residual_i(conv_post_residual),
+        .residual_multiplier_i(conv_post_residual_multiplier),
+        .residual_shift_i(conv_post_residual_shift),
+        .residual_zero_point_i(conv_post_residual_zero_point),
+        .valid_o(post_valid),
+        .valid_tile_o(post_valid_tile),
+        .data_o(post_data)
+    );
+
+    wb_buffer #(
+        .ROW(ROW),
+        .COL(COL),
+        .DATA_IN_W(OUT_W),
+        .DATA_OUT_W(GB_DATA_W)
+    ) u_wb_buffer (
+        .aclk(clk),
+        .aresetn(rst_n),
+        .wr_en_i(conv_wb_capture_en),
+        .data_i(post_data),
+        .rd_addr_i(conv_wb_rd_addr),
+        .data_o(conv_wb_data)
+    );
+
+    wr_controller #(
+        .ROW(ROW),
+        .COL(COL),
+        .DATA_OUT_W(GB_DATA_W),
+        .DIM_W(DIM_W),
+        .GB_ADDR_W(GB_ADDR_W)
+    ) u_wr_controller (
+        .aclk(clk),
+        .aresetn(rst_n),
+        .n_size_i(conv_wb_n_size),
+        .m_size_i(conv_wb_m_size),
+        .out_base_addr_i(conv_wb_out_base_addr),
+        .tile_process_done(conv_wb_capture_en),
+        .data_i(conv_wb_data),
+        .rd_addr_o(conv_wb_rd_addr),
+        .ao_addr_o(dut_ao_wr_addr),
+        .ao_wr_en_o(dut_ao_wr_valid),
+        .ao_data_o(dut_ao_wr_data),
+        .busy_o(),
+        .done_o(conv_wb_done)
+    );
+
+    assign dut_ao_wr_mask = {MASK_W{1'b1}};
 
     task automatic check(input bit cond, input string msg);
         if (!cond) begin

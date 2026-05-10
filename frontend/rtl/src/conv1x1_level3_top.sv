@@ -60,37 +60,47 @@ module conv1x1_level3_top #(
     input  logic [SHIFT_W-1:0]       residual_shift_i      [COL],
     input  logic signed [ACC_W-1:0]  residual_zero_point_i [COL],
 
+    // Shared postprocess/writeback interface. This conv1x1 block owns GEMM
+    // tile scheduling; the postprocess datapath can be shared with other layer
+    // engines outside this module.
+    output logic                       post_valid_tile_o,
+    input  logic                       post_valid_tile_i,
+    output logic [DIM_W-1:0]           post_row_base_o,
+    output logic [DIM_W-1:0]           post_col_base_o,
+    output logic [DIM_W-1:0]           post_m_size_o,
+    output logic [DIM_W-1:0]           post_n_size_o,
+    output logic [1:0]                 post_mode_o,
+    output logic                       post_valid_o [ROW][COL],
+    output logic signed [ACC_W-1:0]    post_acc_o [ROW][COL],
+    output logic signed [ACC_W-1:0]    post_residual_o [ROW][COL],
+    output logic signed [BIAS_W-1:0]   post_bias_o [COL],
+    output logic signed [MULT_W-1:0]   post_multiplier_o [COL],
+    output logic [SHIFT_W-1:0]         post_shift_o [COL],
+    output logic signed [OUT_W-1:0]    post_zero_point_o [COL],
+    output logic signed [MULT_W-1:0]   post_prelu_multiplier_o [COL],
+    output logic [SHIFT_W-1:0]         post_prelu_shift_o [COL],
+    output logic signed [MULT_W-1:0]   post_residual_multiplier_o [COL],
+    output logic [SHIFT_W-1:0]         post_residual_shift_o [COL],
+    output logic signed [ACC_W-1:0]    post_residual_zero_point_o [COL],
+    output logic                       wb_capture_en_o,
+    input  logic                       wb_done_i,
+    output logic [DIM_W-1:0]           wb_m_size_o,
+    output logic [DIM_W-1:0]           wb_n_size_o,
+    output logic [GB_ADDR_W-1:0]       wb_out_base_addr_o,
+
     // Shared activation/output global buffer interface. A higher-level
     // scheduler/switch owns the SRAM and muxes these ports with other layers.
     output logic                     gb_act_rd_valid_o,
     output logic [GB_ADDR_W-1:0]     gb_act_rd_addr_o,
     input  logic [GB_DATA_W-1:0]     gb_act_rd_data_i,
-    output logic                     gb_ao_wr_valid_o,
-    output logic [GB_ADDR_W-1:0]     gb_ao_wr_addr_o,
-    output logic [GB_DATA_W-1:0]     gb_ao_wr_data_o,
-    output logic [AO_MASK_W-1:0]     gb_ao_wr_mask_o,
 
     // Shared weight global buffer read interface.
     output logic                     gb_wgt_rd_valid_o,
     output logic [GB_ADDR_W-1:0]     gb_wgt_rd_addr_o,
     input  logic [GB_DATA_W-1:0]     gb_wgt_rd_data_i
 );
-    typedef enum logic [3:0] {
-        IDLE,
-        CONFIG_TILE,
-        PRELOAD_START,
-        PRELOAD_WAIT,
-        COMPUTE_START,
-        COMPUTE_WAIT,
-        RESIDUAL_READ,
-        RESIDUAL_CAPTURE,
-        WRITEBACK_WAIT,
-        DONE
-    } state_t;
-
-    state_t state_r, state_w;
-    logic [DIM_W-1:0] tile_r_r, tile_r_w;
-    logic [DIM_W-1:0] tile_c_r, tile_c_w;
+    logic [DIM_W-1:0] tile_r_r;
+    logic [DIM_W-1:0] tile_c_r;
     logic [LAYER_IDX_W-1:0] layer_idx_r;
     logic [K_ADDR_W:0] k_size_r;
     logic [DIM_W-1:0] m_size_r;
@@ -105,8 +115,6 @@ module conv1x1_level3_top #(
     logic [GB_ADDR_W-1:0] m_tiles_r;
     logic [DIM_W-1:0] row_base_r;
     logic [DIM_W-1:0] col_base_r;
-    logic last_tile_r;
-    logic [GB_ADDR_W-1:0] residual_addr_r, residual_addr_w;
 
     logic [GB_DATA_W-1:0] ao_rd_data;
 
@@ -118,24 +126,21 @@ module conv1x1_level3_top #(
     logic preload_done;
     logic compute_start;
     logic compute_done;
+    logic post_start;
     logic wb_capture_en;
-    logic wb_done;
+    logic load_layer_cfg;
+    logic config_tile;
+    logic residual_clear;
+    logic residual_capture_en;
+    logic [WB_ADDR_W-1:0] residual_capture_row;
 
     logic [DIM_W-1:0] row_base_w;
     logic [DIM_W-1:0] col_base_w;
     logic ao_preload_rd_en;
     logic [GB_ADDR_W-1:0] ao_preload_addr;
     logic [GB_ADDR_W-1:0] wgt_preload_addr;
-    logic [GB_ADDR_W-1:0] wb_addr;
-    logic [GB_DATA_W-1:0] wb_data;
-    logic [GB_DATA_W-1:0] wb_wr_data;
-    logic wb_wr_en_internal;
-    logic [WB_ADDR_W-1:0] wb_rd_addr;
     logic residual_rd_en;
     logic [GB_ADDR_W-1:0] residual_rd_addr;
-    logic [WB_ADDR_W:0] residual_row_r, residual_row_w;
-    logic residual_pending_r, residual_pending_w;
-    logic [WB_ADDR_W-1:0] residual_pending_row_r, residual_pending_row_w;
 
     logic                     preload_wr_en   [BUF_NUM];
     logic [BANK_ADDR_W-1:0]   preload_wr_bank [BUF_NUM];
@@ -144,8 +149,7 @@ module conv1x1_level3_top #(
 
     logic                    mac_valid [ROW][COL];
     logic signed [ACC_W-1:0] mac_data  [ROW][COL];
-    logic                    post_valid [ROW][COL];
-    logic signed [OUT_W-1:0] post_data [ROW][COL];
+    logic                    post_input_valid [ROW][COL];
     logic signed [ACC_W-1:0] residual_data [ROW][COL];
     logic signed [ACC_W-1:0] residual_data_w [ROW][COL];
     logic signed [BIAS_W-1:0] post_bias [COL];
@@ -161,7 +165,6 @@ module conv1x1_level3_top #(
     logic [GB_ADDR_W-1:0] n_tiles_w;
     logic [GB_ADDR_W-1:0] m_tiles_w;
 
-    assign busy_o = (state_r != IDLE);
     assign n_tiles_w = (GB_ADDR_W'(n_size_i) + GB_ADDR_W'(COL - 1)) / GB_ADDR_W'(COL);
     assign m_tiles_w = (GB_ADDR_W'(m_size_i) + GB_ADDR_W'(ROW - 1)) / GB_ADDR_W'(ROW);
     assign row_base_w = tile_r_r * DIM_W'(ROW);
@@ -171,14 +174,14 @@ module conv1x1_level3_top #(
         residual_data_w = residual_data;
         for (int r = 0; r < ROW; r++) begin
             for (int c = 0; c < COL; c++) begin
-                if (state_r == COMPUTE_WAIT) begin
+                if (residual_clear) begin
                     residual_data_w[r][c] = '0;
                 end
             end
         end
-        if (residual_pending_r) begin
+        if (residual_capture_en) begin
             for (int c = 0; c < COL; c++) begin
-                residual_data_w[residual_pending_row_r][c] =
+                residual_data_w[residual_capture_row][c] =
                     {{(ACC_W-DATA_W){gb_act_rd_data_i[c*DATA_W + DATA_W - 1]}},
                      gb_act_rd_data_i[c*DATA_W +: DATA_W]};
             end
@@ -193,10 +196,78 @@ module conv1x1_level3_top #(
     assign gb_wgt_rd_addr_o  = wgt_preload_addr;
     assign wgt_rd_data       = gb_wgt_rd_data_i;
 
-    assign gb_ao_wr_valid_o = wb_wr_en_internal;
-    assign gb_ao_wr_addr_o  = GB_ADDR_W'(wb_addr);
-    assign gb_ao_wr_data_o  = wb_wr_data;
-    assign gb_ao_wr_mask_o  = {AO_MASK_W{1'b1}};
+    assign post_valid_tile_o = post_start;
+    assign post_row_base_o = row_base_r;
+    assign post_col_base_o = col_base_r;
+    assign post_m_size_o = m_size_r;
+    assign post_n_size_o = n_size_r;
+    assign post_mode_o = mode_r;
+    assign wb_capture_en_o = wb_capture_en;
+    assign wb_m_size_o = m_size_r;
+    assign wb_n_size_o = n_size_r;
+    assign wb_out_base_addr_o = out_base_addr_r;
+
+    always_comb begin
+        for (int r = 0; r < ROW; r++) begin
+            for (int c = 0; c < COL; c++) begin
+                post_input_valid[r][c] = post_start;
+                post_valid_o[r][c] = post_input_valid[r][c];
+                post_acc_o[r][c] = mac_data[r][c];
+                post_residual_o[r][c] = residual_data[r][c];
+            end
+        end
+
+        for (int c = 0; c < COL; c++) begin
+            post_bias_o[c] = post_bias[c];
+            post_multiplier_o[c] = post_multiplier[c];
+            post_shift_o[c] = post_shift[c];
+            post_zero_point_o[c] = post_zero_point[c];
+            post_prelu_multiplier_o[c] = post_prelu_multiplier[c];
+            post_prelu_shift_o[c] = post_prelu_shift[c];
+            post_residual_multiplier_o[c] = post_residual_multiplier[c];
+            post_residual_shift_o[c] = post_residual_shift[c];
+            post_residual_zero_point_o[c] = post_residual_zero_point[c];
+        end
+    end
+
+    conv1x1_inside_controller #(
+        .ROW(ROW),
+        .COL(COL),
+        .DIM_W(DIM_W),
+        .GB_ADDR_W(GB_ADDR_W),
+        .WB_ADDR_W(WB_ADDR_W)
+    ) u_inside_controller (
+        .clk(clk),
+        .rst_n(rst_n),
+        .run_en_i(run_en_i),
+        .start_i(start_i),
+        .busy_o(busy_o),
+        .done_o(done_o),
+        .load_layer_cfg_o(load_layer_cfg),
+        .config_tile_o(config_tile),
+        .preload_done_i(preload_done),
+        .compute_done_i(compute_done),
+        .post_tile_valid_i(post_valid_tile_i),
+        .wb_done_i(wb_done_i),
+        .residual_en_i(residual_en_r),
+        .mode_i(mode_r),
+        .row_base_i(row_base_w),
+        .m_size_i(m_size_r),
+        .n_tiles_i(n_tiles_r),
+        .m_tiles_i(m_tiles_r),
+        .residual_base_addr_i(residual_base_addr_r),
+        .tile_r_o(tile_r_r),
+        .tile_c_o(tile_c_r),
+        .preload_start_o(preload_start),
+        .compute_start_o(compute_start),
+        .post_start_o(post_start),
+        .wb_capture_en_o(wb_capture_en),
+        .residual_clear_o(residual_clear),
+        .residual_rd_en_o(residual_rd_en),
+        .residual_rd_addr_o(residual_rd_addr),
+        .residual_capture_en_o(residual_capture_en),
+        .residual_capture_row_o(residual_capture_row)
+    );
 
     gemm_preload #(
         .ROW(ROW),
@@ -258,202 +329,8 @@ module conv1x1_level3_top #(
         .mac_o(mac_data)
     );
 
-    conv1x1_output_postprocess #(
-        .ROW(ROW),
-        .COL(COL),
-        .ACC_W(ACC_W),
-        .BIAS_W(BIAS_W),
-        .OUT_W(OUT_W),
-        .MULT_W(MULT_W),
-        .SHIFT_W(SHIFT_W),
-        .DIM_W(DIM_W)
-    ) u_postprocess (
-        .row_base_i(row_base_r),
-        .col_base_i(col_base_r),
-        .m_size_i(m_size_r),
-        .n_size_i(n_size_r),
-        .valid_i(mac_valid),
-        .acc_i(mac_data),
-        .mode_i(mode_r),
-        .bias_i(post_bias),
-        .multiplier_i(post_multiplier),
-        .shift_i(post_shift),
-        .zero_point_i(post_zero_point),
-        .prelu_multiplier_i(post_prelu_multiplier),
-        .prelu_shift_i(post_prelu_shift),
-        .residual_i(residual_data),
-        .residual_multiplier_i(post_residual_multiplier),
-        .residual_shift_i(post_residual_shift),
-        .residual_zero_point_i(post_residual_zero_point),
-        .valid_o(post_valid),
-        .data_o(post_data)
-    );
-
-    wb_buffer #(
-        .ROW(ROW),
-        .COL(COL),
-        .DATA_IN_W(OUT_W),
-        .DATA_OUT_W(GB_DATA_W)
-    ) u_wb_buffer (
-        .aclk(clk),
-        .aresetn(rst_n),
-        .wr_en_i(wb_capture_en),
-        .data_i(post_data),
-        .rd_addr_i(wb_rd_addr),
-        .data_o(wb_data)
-    );
-
-    wr_controller #(
-        .ROW(ROW),
-        .COL(COL),
-        .DATA_OUT_W(GB_DATA_W),
-        .DIM_W(DIM_W),
-        .GB_ADDR_W(GB_ADDR_W)
-    ) u_wr_controller (
-        .aclk(clk),
-        .aresetn(rst_n),
-        .n_size_i(n_size_r),
-        .m_size_i(m_size_r),
-        .out_base_addr_i(out_base_addr_r),
-        .tile_process_done(wb_capture_en),
-        .data_i(wb_data),
-        .rd_addr_o(wb_rd_addr),
-        .ao_addr_o(wb_addr),
-        .ao_wr_en_o(wb_wr_en_internal),
-        .ao_data_o(wb_wr_data),
-        .busy_o(),
-        .done_o(wb_done)
-    );
-
-    always_comb begin
-        state_w = state_r;
-        tile_r_w = tile_r_r;
-        tile_c_w = tile_c_r;
-        residual_row_w = residual_row_r;
-        residual_addr_w = residual_addr_r;
-        residual_pending_w = residual_pending_r;
-        residual_pending_row_w = residual_pending_row_r;
-        preload_start = 1'b0;
-        compute_start = 1'b0;
-        wb_capture_en = 1'b0;
-        residual_rd_en = 1'b0;
-        residual_rd_addr = '0;
-        done_o = 1'b0;
-
-        case (state_r)
-            IDLE: begin
-                tile_r_w = '0;
-                tile_c_w = '0;
-                if (start_i && run_en_i) begin
-                    state_w = CONFIG_TILE;
-                end
-            end
-
-            // Register all values that are constant for the current tile. This
-            // keeps preload/writeback/postprocess from seeing the layer ROM and
-            // tile-base arithmetic in their active-cycle timing paths.
-            CONFIG_TILE: begin
-                state_w = PRELOAD_START;
-                residual_addr_w = residual_base_addr_r +
-                                  (GB_ADDR_W'(row_base_w) * n_tiles_r) +
-                                  GB_ADDR_W'(tile_c_r);
-                residual_pending_w = 1'b0;
-                residual_pending_row_w = '0;
-                residual_row_w = '0;
-                if (!run_en_i) begin
-                    state_w = CONFIG_TILE;
-                end
-            end
-
-            PRELOAD_START: begin
-                preload_start = run_en_i;
-                if (run_en_i) begin
-                    state_w = PRELOAD_WAIT;
-                end
-            end
-
-            PRELOAD_WAIT: begin
-                if (preload_done) begin
-                    state_w = COMPUTE_START;
-                end
-            end
-
-            COMPUTE_START: begin
-                compute_start = run_en_i;
-                if (run_en_i) begin
-                    state_w = COMPUTE_WAIT;
-                end
-            end
-
-            COMPUTE_WAIT: begin
-                if (compute_done) begin
-                    if (residual_en_r && (mode_r == MODE_RESIDUAL)) begin
-                        residual_row_w = '0;
-                        residual_pending_w = 1'b0;
-                        residual_pending_row_w = '0;
-                        state_w = RESIDUAL_READ;
-                    end else begin
-                        wb_capture_en = 1'b1;
-                        state_w = WRITEBACK_WAIT;
-                    end
-                end
-            end
-
-            RESIDUAL_READ: begin
-                if (residual_row_r < WB_ADDR_W'(ROW)) begin
-                    residual_rd_en = run_en_i &&
-                                     ((row_base_r + DIM_W'(residual_row_r)) < m_size_r);
-                    residual_rd_addr = residual_addr_r;
-                    residual_pending_w = residual_rd_en;
-                    residual_pending_row_w = residual_row_r[WB_ADDR_W-1:0];
-                    residual_row_w = residual_row_r + WB_ADDR_W'(1);
-                    residual_addr_w = residual_addr_r + n_tiles_r;
-                end else begin
-                    residual_pending_w = 1'b0;
-                    state_w = residual_pending_r ? RESIDUAL_CAPTURE : WRITEBACK_WAIT;
-                    wb_capture_en = !residual_pending_r;
-                end
-            end
-
-            RESIDUAL_CAPTURE: begin
-                residual_pending_w = 1'b0;
-                wb_capture_en = 1'b1;
-                state_w = WRITEBACK_WAIT;
-            end
-
-            WRITEBACK_WAIT: begin
-                if (state_r == WRITEBACK_WAIT && wb_done) begin
-                    if (last_tile_r) begin
-                        state_w = DONE;
-                    end else if (tile_r_r + DIM_W'(1) < DIM_W'(m_tiles_r)) begin
-                        tile_r_w = tile_r_r + DIM_W'(1);
-                        state_w = CONFIG_TILE;
-                    end else begin
-                        tile_r_w = '0;
-                        tile_c_w = tile_c_r + DIM_W'(1);
-                        state_w = CONFIG_TILE;
-                    end
-                end
-            end
-
-            DONE: begin
-                done_o = 1'b1;
-                if (run_en_i) begin
-                    state_w = IDLE;
-                end
-            end
-
-            default: begin
-                state_w = IDLE;
-            end
-        endcase
-    end
-
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            state_r <= IDLE;
-            tile_r_r <= '0;
-            tile_c_r <= '0;
             layer_idx_r <= '0;
             k_size_r <= '0;
             m_size_r <= '0;
@@ -468,11 +345,6 @@ module conv1x1_level3_top #(
             m_tiles_r <= '0;
             row_base_r <= '0;
             col_base_r <= '0;
-            last_tile_r <= 1'b0;
-            residual_addr_r <= '0;
-            residual_row_r <= '0;
-            residual_pending_r <= 1'b0;
-            residual_pending_row_r <= '0;
             for (int c = 0; c < COL; c++) begin
                 post_bias[c] <= '0;
                 post_multiplier[c] <= '0;
@@ -490,16 +362,9 @@ module conv1x1_level3_top #(
                 end
             end
         end else begin
-            state_r <= state_w;
-            tile_r_r <= tile_r_w;
-            tile_c_r <= tile_c_w;
-            residual_addr_r <= residual_addr_w;
-            residual_row_r <= residual_row_w;
-            residual_pending_r <= residual_pending_w;
-            residual_pending_row_r <= residual_pending_row_w;
             residual_data <= residual_data_w;
 
-            if (state_r == IDLE && start_i && run_en_i) begin
+            if (load_layer_cfg) begin
                 k_size_r <= k_size_i;
                 layer_idx_r <= layer_idx_i;
                 m_size_r <= m_size_i;
@@ -514,11 +379,9 @@ module conv1x1_level3_top #(
                 m_tiles_r <= m_tiles_w;
             end
 
-            if (state_r == CONFIG_TILE && run_en_i) begin
+            if (config_tile) begin
                 row_base_r <= row_base_w;
                 col_base_r <= col_base_w;
-                last_tile_r <= (tile_r_r + DIM_W'(1) >= DIM_W'(m_tiles_r)) &&
-                               (tile_c_r + DIM_W'(1) >= DIM_W'(n_tiles_r));
 
                 for (int c = 0; c < COL; c++) begin
                     if (USE_INTERNAL_QUANT_PARAMS) begin

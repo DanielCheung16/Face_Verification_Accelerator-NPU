@@ -20,6 +20,7 @@ vlog -sv -work work "../rtl/src/array_level2_top.sv"
 vlog -sv +incdir+../rtl/src -work work "../rtl/src/conv1x1_output_postprocess.sv"
 vlog -sv -work work "../rtl/src/wb_buffer.sv"
 vlog -sv -work work "../rtl/src/wr_controller.sv"
+vlog -sv -work work "../rtl/src/conv1x1_inside_controller.sv"
 vlog -sv -work work "../rtl/src/conv1x1_level3_top.sv"
 vlog -sv -work work "../rtl/tb/tb_conv1x1_level3_top.sv"
 

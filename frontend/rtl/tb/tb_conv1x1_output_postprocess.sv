@@ -10,6 +10,12 @@ module tb_conv1x1_output_postprocess;
     parameter int MULT_W = 32;
     parameter int SHIFT_W = 6;
     parameter int DIM_W = 16;
+    localparam int POST_LATENCY = 6;
+
+    logic clk;
+    logic rst_n;
+    logic run_en_i;
+    logic valid_tile_i;
 
     logic [DIM_W-1:0] row_base_i;
     logic [DIM_W-1:0] col_base_i;
@@ -31,6 +37,7 @@ module tb_conv1x1_output_postprocess;
     logic signed [ACC_W-1:0] residual_zero_point_i [COL];
 
     logic valid_o [ROW][COL];
+    logic valid_tile_o;
     logic signed [OUT_W-1:0] data_o [ROW][COL];
 
     int pass_cnt;
@@ -47,6 +54,10 @@ module tb_conv1x1_output_postprocess;
         .SHIFT_W(SHIFT_W),
         .DIM_W(DIM_W)
     ) u_dut (
+        .clk(clk),
+        .rst_n(rst_n),
+        .run_en_i(run_en_i),
+        .valid_tile_i(valid_tile_i),
         .row_base_i(row_base_i),
         .col_base_i(col_base_i),
         .m_size_i(m_size_i),
@@ -65,6 +76,7 @@ module tb_conv1x1_output_postprocess;
         .residual_shift_i(residual_shift_i),
         .residual_zero_point_i(residual_zero_point_i),
         .valid_o(valid_o),
+        .valid_tile_o(valid_tile_o),
         .data_o(data_o)
     );
 
@@ -165,9 +177,28 @@ module tb_conv1x1_output_postprocess;
         end
     endtask
 
+    task automatic run_tile(input string tag);
+        begin
+            valid_tile_i = 1'b1;
+            @(posedge clk);
+            valid_tile_i = 1'b0;
+            repeat (POST_LATENCY) @(posedge clk);
+            #1;
+            check(valid_tile_o === 1'b1, $sformatf("%s tile valid missing", tag));
+        end
+    endtask
+
+    initial begin
+        clk = 1'b0;
+        forever #5 clk = ~clk;
+    end
+
     initial begin
         pass_cnt = 0;
         fail_cnt = 0;
+        rst_n = 1'b0;
+        run_en_i = 1'b1;
+        valid_tile_i = 1'b0;
         mode_i = MODE_REQUANT;
         row_base_i = 2;
         col_base_i = 3;
@@ -194,7 +225,11 @@ module tb_conv1x1_output_postprocess;
             end
         end
 
-        #1;
+        repeat (2) @(posedge clk);
+        rst_n = 1'b1;
+        @(posedge clk);
+
+        run_tile("requant");
         for (int r = 0; r < ROW; r++) begin
             for (int c = 0; c < COL; c++) begin
                 bit exp_valid;
@@ -220,7 +255,7 @@ module tb_conv1x1_output_postprocess;
         shift_i[1] = 0;
         zero_point_i[0] = 0;
         zero_point_i[1] = 0;
-        #1;
+        run_tile("saturation");
         check(data_o[0][0] === 8'sd127, "positive saturation failed");
         check(data_o[0][1] === -8'sd128, "negative saturation failed");
 
@@ -232,7 +267,7 @@ module tb_conv1x1_output_postprocess;
         multiplier_i[0] = 32'sd1;
         shift_i[0] = 0;
         zero_point_i[0] = 0;
-        #1;
+        run_tile("prelu");
         check(data_o[0][0] === -8'sd16,
               $sformatf("prelu mode failed exp=%0d got=%0d", -16, data_o[0][0]));
 
@@ -243,7 +278,7 @@ module tb_conv1x1_output_postprocess;
         multiplier_i[0] = 32'sd1;
         shift_i[0] = 0;
         zero_point_i[0] = 0;
-        #1;
+        run_tile("residual");
         check(data_o[0][0] === 8'sd31, "residual mode failed");
 
         if (fail_cnt != 0) begin
