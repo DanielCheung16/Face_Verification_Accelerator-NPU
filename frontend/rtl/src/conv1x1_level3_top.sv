@@ -77,6 +77,7 @@ module conv1x1_level3_top #(
 );
     typedef enum logic [3:0] {
         IDLE,
+        CONFIG_TILE,
         PRELOAD_START,
         PRELOAD_WAIT,
         COMPUTE_START,
@@ -90,6 +91,22 @@ module conv1x1_level3_top #(
     state_t state_r, state_w;
     logic [DIM_W-1:0] tile_r_r, tile_r_w;
     logic [DIM_W-1:0] tile_c_r, tile_c_w;
+    logic [LAYER_IDX_W-1:0] layer_idx_r;
+    logic [K_ADDR_W:0] k_size_r;
+    logic [DIM_W-1:0] m_size_r;
+    logic [DIM_W-1:0] n_size_r;
+    logic [GB_ADDR_W-1:0] act_base_addr_r;
+    logic [GB_ADDR_W-1:0] wgt_base_addr_r;
+    logic [GB_ADDR_W-1:0] out_base_addr_r;
+    logic residual_en_r;
+    logic [GB_ADDR_W-1:0] residual_base_addr_r;
+    logic [1:0] mode_r;
+    logic [GB_ADDR_W-1:0] n_tiles_r;
+    logic [GB_ADDR_W-1:0] m_tiles_r;
+    logic [DIM_W-1:0] row_base_r;
+    logic [DIM_W-1:0] col_base_r;
+    logic last_tile_r;
+    logic [GB_ADDR_W-1:0] residual_addr_r, residual_addr_w;
 
     logic [GB_DATA_W-1:0] ao_rd_data;
 
@@ -104,8 +121,8 @@ module conv1x1_level3_top #(
     logic wb_capture_en;
     logic wb_done;
 
-    logic [DIM_W-1:0] row_base;
-    logic [DIM_W-1:0] col_base;
+    logic [DIM_W-1:0] row_base_w;
+    logic [DIM_W-1:0] col_base_w;
     logic ao_preload_rd_en;
     logic [GB_ADDR_W-1:0] ao_preload_addr;
     logic [GB_ADDR_W-1:0] wgt_preload_addr;
@@ -143,15 +160,12 @@ module conv1x1_level3_top #(
 
     logic [GB_ADDR_W-1:0] n_tiles_w;
     logic [GB_ADDR_W-1:0] m_tiles_w;
-    logic last_tile_w;
 
     assign busy_o = (state_r != IDLE);
     assign n_tiles_w = (GB_ADDR_W'(n_size_i) + GB_ADDR_W'(COL - 1)) / GB_ADDR_W'(COL);
     assign m_tiles_w = (GB_ADDR_W'(m_size_i) + GB_ADDR_W'(ROW - 1)) / GB_ADDR_W'(ROW);
-    assign row_base = tile_r_r * DIM_W'(ROW);
-    assign col_base = tile_c_r * DIM_W'(COL);
-    assign last_tile_w = (tile_r_r + DIM_W'(1) >= DIM_W'(m_tiles_w)) &&
-                         (tile_c_r + DIM_W'(1) >= DIM_W'(n_tiles_w));
+    assign row_base_w = tile_r_r * DIM_W'(ROW);
+    assign col_base_w = tile_c_r * DIM_W'(COL);
 
     always_comb begin
         residual_data_w = residual_data;
@@ -167,32 +181,6 @@ module conv1x1_level3_top #(
                 residual_data_w[residual_pending_row_r][c] =
                     {{(ACC_W-DATA_W){gb_act_rd_data_i[c*DATA_W + DATA_W - 1]}},
                      gb_act_rd_data_i[c*DATA_W +: DATA_W]};
-            end
-        end
-    end
-
-    always_comb begin
-        for (int c = 0; c < COL; c++) begin
-            if (USE_INTERNAL_QUANT_PARAMS) begin
-                post_bias[c]             = BIAS_W'(qf_bias(int'(layer_idx_i), int'(col_base) + c));
-                post_multiplier[c]       = qf_multiplier(int'(layer_idx_i), int'(col_base) + c);
-                post_shift[c]            = qf_shift(int'(layer_idx_i), int'(col_base) + c);
-                post_zero_point[c]       = qf_zero_point(int'(layer_idx_i), int'(col_base) + c);
-                post_prelu_multiplier[c] = qf_prelu_multiplier(int'(layer_idx_i), int'(col_base) + c);
-                post_prelu_shift[c]      = qf_prelu_shift(int'(layer_idx_i), int'(col_base) + c);
-                post_residual_multiplier[c] = qf_residual_multiplier(int'(layer_idx_i), int'(col_base) + c);
-                post_residual_shift[c]      = qf_residual_shift(int'(layer_idx_i), int'(col_base) + c);
-                post_residual_zero_point[c] = qf_residual_zero_point(int'(layer_idx_i), int'(col_base) + c);
-            end else begin
-                post_bias[c]             = bias_i[c];
-                post_multiplier[c]       = multiplier_i[c];
-                post_shift[c]            = shift_i[c];
-                post_zero_point[c]       = zero_point_i[c];
-                post_prelu_multiplier[c] = prelu_multiplier_i[c];
-                post_prelu_shift[c]      = prelu_shift_i[c];
-                post_residual_multiplier[c] = residual_multiplier_i[c];
-                post_residual_shift[c]      = residual_shift_i[c];
-                post_residual_zero_point[c] = residual_zero_point_i[c];
             end
         end
     end
@@ -227,13 +215,13 @@ module conv1x1_level3_top #(
         .run_en_i(run_en_i),
         .busy_o(preload_busy),
         .done_o(preload_done),
-        .m_size_i(m_size_i),
-        .k_size_i(k_size_i),
-        .n_size_i(n_size_i),
-        .row_base_i(row_base),
-        .col_base_i(col_base),
-        .act_base_addr_i(act_base_addr_i),
-        .wgt_base_addr_i(GB_ADDR_W'(wgt_base_addr_i)),
+        .m_size_i(m_size_r),
+        .k_size_i(k_size_r),
+        .n_size_i(n_size_r),
+        .row_base_i(row_base_r),
+        .col_base_i(col_base_r),
+        .act_base_addr_i(act_base_addr_r),
+        .wgt_base_addr_i(wgt_base_addr_r),
         .gb_act_rd_valid_o(ao_preload_rd_en),
         .gb_act_rd_addr_o(ao_preload_addr),
         .gb_act_rd_data_i(ao_rd_data),
@@ -263,7 +251,7 @@ module conv1x1_level3_top #(
         .wr_bank_i(preload_wr_bank),
         .wr_idx_i(preload_wr_idx),
         .wr_data_i(preload_wr_data),
-        .k_size_i(k_size_i),
+        .k_size_i(k_size_r),
         .start_i(compute_start),
         .done_o(compute_done),
         .valid_o(mac_valid),
@@ -280,13 +268,13 @@ module conv1x1_level3_top #(
         .SHIFT_W(SHIFT_W),
         .DIM_W(DIM_W)
     ) u_postprocess (
-        .row_base_i(row_base),
-        .col_base_i(col_base),
-        .m_size_i(m_size_i),
-        .n_size_i(n_size_i),
+        .row_base_i(row_base_r),
+        .col_base_i(col_base_r),
+        .m_size_i(m_size_r),
+        .n_size_i(n_size_r),
         .valid_i(mac_valid),
         .acc_i(mac_data),
-        .mode_i(mode_i),
+        .mode_i(mode_r),
         .bias_i(post_bias),
         .multiplier_i(post_multiplier),
         .shift_i(post_shift),
@@ -324,9 +312,9 @@ module conv1x1_level3_top #(
     ) u_wr_controller (
         .aclk(clk),
         .aresetn(rst_n),
-        .n_size_i(n_size_i),
-        .m_size_i(m_size_i),
-        .out_base_addr_i(out_base_addr_i),
+        .n_size_i(n_size_r),
+        .m_size_i(m_size_r),
+        .out_base_addr_i(out_base_addr_r),
         .tile_process_done(wb_capture_en),
         .data_i(wb_data),
         .rd_addr_o(wb_rd_addr),
@@ -342,6 +330,7 @@ module conv1x1_level3_top #(
         tile_r_w = tile_r_r;
         tile_c_w = tile_c_r;
         residual_row_w = residual_row_r;
+        residual_addr_w = residual_addr_r;
         residual_pending_w = residual_pending_r;
         residual_pending_row_w = residual_pending_row_r;
         preload_start = 1'b0;
@@ -356,7 +345,23 @@ module conv1x1_level3_top #(
                 tile_r_w = '0;
                 tile_c_w = '0;
                 if (start_i && run_en_i) begin
-                    state_w = PRELOAD_START;
+                    state_w = CONFIG_TILE;
+                end
+            end
+
+            // Register all values that are constant for the current tile. This
+            // keeps preload/writeback/postprocess from seeing the layer ROM and
+            // tile-base arithmetic in their active-cycle timing paths.
+            CONFIG_TILE: begin
+                state_w = PRELOAD_START;
+                residual_addr_w = residual_base_addr_r +
+                                  (GB_ADDR_W'(row_base_w) * n_tiles_r) +
+                                  GB_ADDR_W'(tile_c_r);
+                residual_pending_w = 1'b0;
+                residual_pending_row_w = '0;
+                residual_row_w = '0;
+                if (!run_en_i) begin
+                    state_w = CONFIG_TILE;
                 end
             end
 
@@ -382,7 +387,7 @@ module conv1x1_level3_top #(
 
             COMPUTE_WAIT: begin
                 if (compute_done) begin
-                    if (residual_en_i && (mode_i == MODE_RESIDUAL)) begin
+                    if (residual_en_r && (mode_r == MODE_RESIDUAL)) begin
                         residual_row_w = '0;
                         residual_pending_w = 1'b0;
                         residual_pending_row_w = '0;
@@ -397,13 +402,12 @@ module conv1x1_level3_top #(
             RESIDUAL_READ: begin
                 if (residual_row_r < WB_ADDR_W'(ROW)) begin
                     residual_rd_en = run_en_i &&
-                                     ((row_base + DIM_W'(residual_row_r)) < m_size_i);
-                    residual_rd_addr = residual_base_addr_i +
-                                       (GB_ADDR_W'(row_base + DIM_W'(residual_row_r)) * n_tiles_w) +
-                                       GB_ADDR_W'(tile_c_r);
+                                     ((row_base_r + DIM_W'(residual_row_r)) < m_size_r);
+                    residual_rd_addr = residual_addr_r;
                     residual_pending_w = residual_rd_en;
                     residual_pending_row_w = residual_row_r[WB_ADDR_W-1:0];
                     residual_row_w = residual_row_r + WB_ADDR_W'(1);
+                    residual_addr_w = residual_addr_r + n_tiles_r;
                 end else begin
                     residual_pending_w = 1'b0;
                     state_w = residual_pending_r ? RESIDUAL_CAPTURE : WRITEBACK_WAIT;
@@ -419,15 +423,15 @@ module conv1x1_level3_top #(
 
             WRITEBACK_WAIT: begin
                 if (state_r == WRITEBACK_WAIT && wb_done) begin
-                    if (last_tile_w) begin
+                    if (last_tile_r) begin
                         state_w = DONE;
-                    end else if (tile_r_r + DIM_W'(1) < DIM_W'(m_tiles_w)) begin
+                    end else if (tile_r_r + DIM_W'(1) < DIM_W'(m_tiles_r)) begin
                         tile_r_w = tile_r_r + DIM_W'(1);
-                        state_w = PRELOAD_START;
+                        state_w = CONFIG_TILE;
                     end else begin
                         tile_r_w = '0;
                         tile_c_w = tile_c_r + DIM_W'(1);
-                        state_w = PRELOAD_START;
+                        state_w = CONFIG_TILE;
                     end
                 end
             end
@@ -450,9 +454,36 @@ module conv1x1_level3_top #(
             state_r <= IDLE;
             tile_r_r <= '0;
             tile_c_r <= '0;
+            layer_idx_r <= '0;
+            k_size_r <= '0;
+            m_size_r <= '0;
+            n_size_r <= '0;
+            act_base_addr_r <= '0;
+            wgt_base_addr_r <= '0;
+            out_base_addr_r <= '0;
+            residual_en_r <= 1'b0;
+            residual_base_addr_r <= '0;
+            mode_r <= MODE_REQUANT;
+            n_tiles_r <= '0;
+            m_tiles_r <= '0;
+            row_base_r <= '0;
+            col_base_r <= '0;
+            last_tile_r <= 1'b0;
+            residual_addr_r <= '0;
             residual_row_r <= '0;
             residual_pending_r <= 1'b0;
             residual_pending_row_r <= '0;
+            for (int c = 0; c < COL; c++) begin
+                post_bias[c] <= '0;
+                post_multiplier[c] <= '0;
+                post_shift[c] <= '0;
+                post_zero_point[c] <= '0;
+                post_prelu_multiplier[c] <= '0;
+                post_prelu_shift[c] <= '0;
+                post_residual_multiplier[c] <= '0;
+                post_residual_shift[c] <= '0;
+                post_residual_zero_point[c] <= '0;
+            end
             for (int r = 0; r < ROW; r++) begin
                 for (int c = 0; c < COL; c++) begin
                     residual_data[r][c] <= '0;
@@ -462,10 +493,57 @@ module conv1x1_level3_top #(
             state_r <= state_w;
             tile_r_r <= tile_r_w;
             tile_c_r <= tile_c_w;
+            residual_addr_r <= residual_addr_w;
             residual_row_r <= residual_row_w;
             residual_pending_r <= residual_pending_w;
             residual_pending_row_r <= residual_pending_row_w;
             residual_data <= residual_data_w;
+
+            if (state_r == IDLE && start_i && run_en_i) begin
+                k_size_r <= k_size_i;
+                layer_idx_r <= layer_idx_i;
+                m_size_r <= m_size_i;
+                n_size_r <= n_size_i;
+                act_base_addr_r <= act_base_addr_i;
+                wgt_base_addr_r <= wgt_base_addr_i;
+                out_base_addr_r <= out_base_addr_i;
+                residual_en_r <= residual_en_i;
+                residual_base_addr_r <= residual_base_addr_i;
+                mode_r <= mode_i;
+                n_tiles_r <= n_tiles_w;
+                m_tiles_r <= m_tiles_w;
+            end
+
+            if (state_r == CONFIG_TILE && run_en_i) begin
+                row_base_r <= row_base_w;
+                col_base_r <= col_base_w;
+                last_tile_r <= (tile_r_r + DIM_W'(1) >= DIM_W'(m_tiles_r)) &&
+                               (tile_c_r + DIM_W'(1) >= DIM_W'(n_tiles_r));
+
+                for (int c = 0; c < COL; c++) begin
+                    if (USE_INTERNAL_QUANT_PARAMS) begin
+                        post_bias[c] <= BIAS_W'(qf_bias(int'(layer_idx_r), int'(col_base_w) + c));
+                        post_multiplier[c] <= qf_multiplier(int'(layer_idx_r), int'(col_base_w) + c);
+                        post_shift[c] <= qf_shift(int'(layer_idx_r), int'(col_base_w) + c);
+                        post_zero_point[c] <= qf_zero_point(int'(layer_idx_r), int'(col_base_w) + c);
+                        post_prelu_multiplier[c] <= qf_prelu_multiplier(int'(layer_idx_r), int'(col_base_w) + c);
+                        post_prelu_shift[c] <= qf_prelu_shift(int'(layer_idx_r), int'(col_base_w) + c);
+                        post_residual_multiplier[c] <= qf_residual_multiplier(int'(layer_idx_r), int'(col_base_w) + c);
+                        post_residual_shift[c] <= qf_residual_shift(int'(layer_idx_r), int'(col_base_w) + c);
+                        post_residual_zero_point[c] <= qf_residual_zero_point(int'(layer_idx_r), int'(col_base_w) + c);
+                    end else begin
+                        post_bias[c] <= bias_i[c];
+                        post_multiplier[c] <= multiplier_i[c];
+                        post_shift[c] <= shift_i[c];
+                        post_zero_point[c] <= zero_point_i[c];
+                        post_prelu_multiplier[c] <= prelu_multiplier_i[c];
+                        post_prelu_shift[c] <= prelu_shift_i[c];
+                        post_residual_multiplier[c] <= residual_multiplier_i[c];
+                        post_residual_shift[c] <= residual_shift_i[c];
+                        post_residual_zero_point[c] <= residual_zero_point_i[c];
+                    end
+                end
+            end
         end
     end
 endmodule

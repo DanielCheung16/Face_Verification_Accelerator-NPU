@@ -52,12 +52,28 @@ module gemm_preload #(
 );
     localparam int GB_LANES = (GB_DATA_W + DATA_W - 1) / DATA_W;
     localparam int LANE_W = (GB_LANES <= 1) ? 1 : $clog2(GB_LANES);
+    localparam int K_COUNT_W = K_ADDR_W + 1;
 
     typedef enum logic [1:0] {IDLE, RUN, DONE} state_t;
 
     state_t state;
     logic [LOAD_COUNT_W-1:0] load_count;
-    logic [LOAD_COUNT_W-1:0] max_entries;
+    logic [LOAD_COUNT_W-1:0] max_entries_w;
+
+    // These counters replace the old load_count/k_size_i and load_count%k_size_i
+    // datapath. They are loaded once per tile and then increment by one, so the
+    // RUN state address generation only sees counters and adders.
+    logic [BANK_ADDR_W-1:0] act_row_r;
+    logic [K_ADDR_W-1:0] act_k_r;
+    logic [LANE_W-1:0] act_lane_r;
+    logic [GB_ADDR_W-1:0] act_word_idx_r;
+    logic [GB_ADDR_W-1:0] act_row_addr_r;
+
+    logic [K_ADDR_W-1:0] wgt_k_r;
+    logic [BANK_ADDR_W-1:0] wgt_col_r;
+    logic [LANE_W-1:0] wgt_lane_r;
+    logic [GB_ADDR_W-1:0] wgt_word_idx_r;
+    logic [GB_ADDR_W-1:0] wgt_row_addr_r;
 
     logic gb_act_rd_valid_q;
     logic [GB_ADDR_W-1:0] gb_act_rd_addr_q;
@@ -86,21 +102,14 @@ module gemm_preload #(
     logic [BANK_ADDR_W-1:0] wgt_write_pending_bank;
     logic [K_ADDR_W-1:0] wgt_write_pending_idx;
 
-    int act_row;
-    int act_k;
-    int wgt_k;
-    int wgt_col;
-    int act_word_idx;
-    int act_lane_idx;
-    int wgt_word_idx;
-    int wgt_lane_idx;
     logic [DIM_W-1:0] global_row;
     logic [DIM_W-1:0] global_col;
     logic [GB_ADDR_W-1:0] k_word_tiles;
     logic [GB_ADDR_W-1:0] n_word_tiles;
 
     assign busy_o = (state == RUN);
-    assign max_entries = (ROW*k_size_i > COL*k_size_i) ? ROW*k_size_i : COL*k_size_i;
+    assign max_entries_w = (ROW > COL) ? LOAD_COUNT_W'(ROW) * LOAD_COUNT_W'(k_size_i) :
+                                         LOAD_COUNT_W'(COL) * LOAD_COUNT_W'(k_size_i);
     assign k_word_tiles = (GB_ADDR_W'(k_size_i) + GB_ADDR_W'(GB_LANES - 1)) / GB_ADDR_W'(GB_LANES);
     assign n_word_tiles = (GB_ADDR_W'(n_size_i) + GB_ADDR_W'(GB_LANES - 1)) / GB_ADDR_W'(GB_LANES);
     assign gb_act_rd_valid_o = run_en_i && gb_act_rd_valid_q;
@@ -123,6 +132,16 @@ module gemm_preload #(
         if (!rst_n) begin
             state <= IDLE;
             load_count <= '0;
+            act_row_r <= '0;
+            act_k_r <= '0;
+            act_lane_r <= '0;
+            act_word_idx_r <= '0;
+            act_row_addr_r <= '0;
+            wgt_k_r <= '0;
+            wgt_col_r <= '0;
+            wgt_lane_r <= '0;
+            wgt_word_idx_r <= '0;
+            wgt_row_addr_r <= '0;
             done_o <= 1'b0;
             gb_act_rd_valid_q <= 1'b0;
             gb_act_rd_addr_q <= '0;
@@ -156,6 +175,16 @@ module gemm_preload #(
             case (state)
                 IDLE: begin
                     load_count <= '0;
+                    act_row_r <= '0;
+                    act_k_r <= '0;
+                    act_lane_r <= '0;
+                    act_word_idx_r <= '0;
+                    act_row_addr_r <= act_base_addr_i + (GB_ADDR_W'(row_base_i) * k_word_tiles);
+                    wgt_k_r <= '0;
+                    wgt_col_r <= '0;
+                    wgt_lane_r <= col_base_i[LANE_W-1:0];
+                    wgt_word_idx_r <= GB_ADDR_W'(col_base_i) / GB_ADDR_W'(GB_LANES);
+                    wgt_row_addr_r <= wgt_base_addr_i;
                     gb_act_rd_valid_q <= 1'b0;
                     gb_wgt_rd_valid_q <= 1'b0;
                     act_pending <= 1'b0;
@@ -209,37 +238,61 @@ module gemm_preload #(
                         act_pending <= 1'b0;
                         wgt_pending <= 1'b0;
 
-                        if (load_count < max_entries) begin
-                            if (load_count < ROW*k_size_i) begin
-                                act_row = load_count / k_size_i;
-                                act_k = load_count % k_size_i;
-                                act_word_idx = act_k / GB_LANES;
-                                act_lane_idx = act_k % GB_LANES;
-                                global_row = row_base_i + act_row[DIM_W-1:0];
+                        if (load_count < max_entries_w) begin
+                            if (load_count < LOAD_COUNT_W'(ROW) * LOAD_COUNT_W'(k_size_i)) begin
+                                global_row = row_base_i + DIM_W'(act_row_r);
 
                                 act_pending <= 1'b1;
                                 act_pending_pad <= (global_row >= m_size_i);
-                                act_pending_lane <= act_lane_idx[$bits(act_pending_lane)-1:0];
-                                act_pending_bank <= act_row[BANK_ADDR_W-1:0];
-                                act_pending_idx <= act_k[K_ADDR_W-1:0];
+                                act_pending_lane <= act_lane_r;
+                                act_pending_bank <= act_row_r;
+                                act_pending_idx <= act_k_r;
                                 gb_act_rd_valid_q <= (global_row < m_size_i);
-                                gb_act_rd_addr_q <= act_base_addr_i + (global_row * k_word_tiles) + act_word_idx;
+                                gb_act_rd_addr_q <= act_row_addr_r + act_word_idx_r;
+
+                                if ({1'b0, act_k_r} + K_COUNT_W'(1) >= k_size_i) begin
+                                    act_k_r <= '0;
+                                    act_lane_r <= '0;
+                                    act_word_idx_r <= '0;
+                                    act_row_r <= act_row_r + BANK_ADDR_W'(1);
+                                    act_row_addr_r <= act_row_addr_r + k_word_tiles;
+                                end else begin
+                                    act_k_r <= act_k_r + K_ADDR_W'(1);
+                                    if (act_lane_r == LANE_W'(GB_LANES - 1)) begin
+                                        act_lane_r <= '0;
+                                        act_word_idx_r <= act_word_idx_r + GB_ADDR_W'(1);
+                                    end else begin
+                                        act_lane_r <= act_lane_r + LANE_W'(1);
+                                    end
+                                end
                             end
 
-                            if (load_count < COL*k_size_i) begin
-                                wgt_k = load_count / COL;
-                                wgt_col = load_count % COL;
-                                global_col = col_base_i + wgt_col[DIM_W-1:0];
-                                wgt_word_idx = global_col / GB_LANES;
-                                wgt_lane_idx = global_col % GB_LANES;
+                            if (load_count < LOAD_COUNT_W'(COL) * LOAD_COUNT_W'(k_size_i)) begin
+                                global_col = col_base_i + DIM_W'(wgt_col_r);
 
                                 wgt_pending <= 1'b1;
                                 wgt_pending_pad <= (global_col >= n_size_i);
-                                wgt_pending_lane <= wgt_lane_idx[$bits(wgt_pending_lane)-1:0];
-                                wgt_pending_bank <= wgt_col[BANK_ADDR_W-1:0];
-                                wgt_pending_idx <= wgt_k[K_ADDR_W-1:0];
+                                wgt_pending_lane <= wgt_lane_r;
+                                wgt_pending_bank <= wgt_col_r;
+                                wgt_pending_idx <= wgt_k_r;
                                 gb_wgt_rd_valid_q <= (global_col < n_size_i);
-                                gb_wgt_rd_addr_q <= wgt_base_addr_i + (wgt_k * n_word_tiles) + wgt_word_idx;
+                                gb_wgt_rd_addr_q <= wgt_row_addr_r + wgt_word_idx_r;
+
+                                if (wgt_col_r == BANK_ADDR_W'(COL - 1)) begin
+                                    wgt_col_r <= '0;
+                                    wgt_lane_r <= col_base_i[LANE_W-1:0];
+                                    wgt_word_idx_r <= GB_ADDR_W'(col_base_i) / GB_ADDR_W'(GB_LANES);
+                                    wgt_k_r <= wgt_k_r + K_ADDR_W'(1);
+                                    wgt_row_addr_r <= wgt_row_addr_r + n_word_tiles;
+                                end else begin
+                                    wgt_col_r <= wgt_col_r + BANK_ADDR_W'(1);
+                                    if (wgt_lane_r == LANE_W'(GB_LANES - 1)) begin
+                                        wgt_lane_r <= '0;
+                                        wgt_word_idx_r <= wgt_word_idx_r + GB_ADDR_W'(1);
+                                    end else begin
+                                        wgt_lane_r <= wgt_lane_r + LANE_W'(1);
+                                    end
+                                end
                             end
 
                             load_count <= load_count + 1'b1;
