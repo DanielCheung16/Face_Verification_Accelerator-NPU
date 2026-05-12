@@ -27,3 +27,22 @@ software/golden/layer*_out_fixed.txt
 
 # Local cache
 software/embedding_cache.json
+
+# Genus Synthesis artifacts (generated, large or binary)
+hardware/frontend/syn/fv/
+hardware/frontend/syn/genus.cmd
+hardware/frontend/syn/synthesis.log
+
+# Innovus P&R artifacts (generated, large or binary)
+hardware/backend/*.enc
+hardware/backend/*.enc.dat/
+hardware/backend/innovus.cmd*
+hardware/backend/innovus.log*
+hardware/backend/innovus.logv*
+hardware/backend/timingReports/
+hardware/backend/mfn_frontend_top_final.sdf
+hardware/backend/mfn_frontend_top_final_nophy.v
+hardware/backend/mfn_frontend_top_syn_pg.v
+hardware/backend/mfn_frontend_top.antenna.lef
+hardware/backend/power.rpt
+hardware/backend/.mfn_frontend_top*.rs.fp*

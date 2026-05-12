@@ -1,4 +1,84 @@
-# MobileFaceNet Golden Reference C Model (v1.0) - 開發筆記
+# MobileFaceNet ASIC — 開發筆記
+
+---
+
+## 0. 硬體實作進度 (Hardware Status) — 2026-05-11
+
+### 0.1 Genus 合成結果 (frontend/syn/)
+
+| 指標 | 數值 |
+|------|------|
+| 目標頻率 | 100 MHz |
+| WNS (pre-layout) | +5.751 ns |
+| 最大可達頻率 (pre-layout) | ~235 MHz |
+| 總面積 | 182,530 µm² |
+| 總功耗 | 51.7 mW |
+| Critical path | u_ctrl psum_mem 累加器 38-stage FA_X1 ripple carry (4118 ps) |
+
+### 0.2 Innovus P&R 結果 v1 (frontend/syn/ → backend/)
+
+**成功完成：0 DRC / 0 Connectivity / 0 Antenna violations**
+
+| 指標 | 數值 |
+|------|------|
+| 目標頻率 | 100 MHz |
+| WNS (post-layout) | **+3.611 ns** ✅ |
+| 最大可達頻率 (post-layout) | **~156 MHz** |
+| 總功耗 (activity=0.2) | 26.66 mW |
+| Sequential power | 15.93 mW (59.8%) — psum_mem FF 主導 |
+| Clock network power | 4.43 mW (16.6%) |
+
+Critical path (post-layout): `c_out_d2_reg[0]/Q → 38×FA_X1 carry chain → psum_mem_reg[181][38]/D`  
+→ 與合成時相同路徑，確認 CLA 優化（v2 Item 4）是正確方向。
+
+### 0.3 RTL v2 優化 (frontend/sv/v2/)
+
+已完成，等待合成驗證：
+
+| Item | 優化 | 效果 |
+|------|------|------|
+| 3 | Wide SRAM fetch (9-wide read) | Standard/DW conv FETCH: 11→3 cycles |
+| 4 | 40-bit CLA psum adder | 打破 38-stage ripple carry critical path |
+| 5 | Dual c_out MAC | PW CALC_PSUM 每 cycle 處理 2 個輸出通道 |
+
+新增/修改的檔案均在 `hardware/frontend/sv/v2/`。
+
+### 0.4 Innovus v2 Script (backend/run_innovus_2.tcl)
+
+相較 v1 加入：
+- CTS NDR：CTS_2W1S (leaf M1-4, 2W/1S) + CTS_2W2S (trunk M7-10, 2W/2S + VSS shield)
+- `timeDesign` before each `optDesign`（timing visibility）
+- `addFiller` before routing（N-well continuity）
+
+### 0.5 Git 追蹤策略（Backend 檔案）
+
+**要 commit 的（固定、有意義）：**
+- `hardware/backend/run_innovus.tcl` / `run_innovus_2.tcl`
+- `hardware/backend/mfn_frontend_top.view`
+- `hardware/backend/add_pin.py` / `Makefile`
+- `hardware/backend/mfn_frontend_top.{drc,conn,antenna}.rpt`（驗證報告）
+- `hardware/backend/pnr_timing.rep` / `pnr_power.rep`（P&R 結果）
+- `hardware/frontend/syn/mfn_frontend_top_syn.v`（合成 netlist）
+- `hardware/frontend/syn/*.rep`（timing/area/power 報告）
+- `hardware/frontend/sv/v2/*.sv`（v2 RTL）
+
+**不 commit（已加入 .gitignore）：**
+- `*.enc` / `*.enc.dat/`（Innovus DB，20MB binary）
+- `innovus.log*` / `innovus.cmd*`（run logs）
+- `timingReports/`
+- `mfn_frontend_top_final.sdf` / `_nophy.v`（generated outputs）
+- `mfn_frontend_top_syn_pg.v`（由 add_pin.py 生成）
+
+---
+
+## 下一步建議 (Next Steps)
+
+1. **合成 v2 RTL**：更新 Genus synthesis.tcl 使用 `sv/v2/` 目錄，重新跑合成，觀察 CLA 是否消除 ripple carry critical path，頻率能否達到 200+ MHz
+2. **Innovus v2 P&R**：用 `run_innovus_2.tcl` 跑 P&R，比較 CTS NDR 對 clock skew 的影響
+3. **v2 Simulation**：補寫 v2 testbench，驗證 wide fetch / dual MAC 功能正確性
+4. **開 GitHub PR**：整理 `will_dev` branch，PR 回 `main`
+
+---
 
 ## 1. 架構與目的
 這份專案旨在建立一個硬體友善、精確對齊（Bit-true）的 C 語言參考模型（C Reference Model），對應提案規劃中的 `Week 3-4` 目標。這會為接下來的 SystemVerilog RTL 開發提供一個穩固的黃金標準比對對象。
