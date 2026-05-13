@@ -7,7 +7,8 @@
 # ============================================================
 
 GENUS     := genus
-TCL       := synthesis.tcl
+# TCL       := synthesis.tcl
+TCL       := synthesis_v2.tcl
 
 .PHONY: syn clean
 

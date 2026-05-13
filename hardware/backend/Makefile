@@ -8,21 +8,33 @@
 # ============================================================
 
 INNOVUS   := innovus
-TCL       := run_innovus.tcl
-SYN_V     := ../frontend/syn/mfn_frontend_top_syn.v
-PG_V      := mfn_frontend_top_syn_pg.v
 ENV       := /vol/ece303/genus_tutorial/cadence.env
 
-.PHONY: pg pnr clean
+# v1: original synthesis netlist
+SYN_V     := ../frontend/syn/mfn_frontend_top_syn.v
+PG_V      := mfn_frontend_top_syn_pg.v
+
+# v2: CLA + hierarchy synthesis netlist
+SYN_V2    := ../frontend/syn/mfn_frontend_top_v2_syn.v
+PG_V2     := mfn_frontend_top_v2_syn_pg.v
+
+.PHONY: pg pg_v2 pnr pnr_v2 clean
 
 pg: $(PG_V)
-
 $(PG_V): $(SYN_V)
 	python3 add_pin.py $(SYN_V) $(PG_V)
 	@echo "PG netlist written: $(PG_V)"
 
+pg_v2: $(PG_V2)
+$(PG_V2): $(SYN_V2)
+	python3 add_pin.py $(SYN_V2) $(PG_V2)
+	@echo "PG netlist written: $(PG_V2)"
+
 pnr: $(PG_V)
-	tcsh -c "source $(ENV) && $(INNOVUS) -files $(TCL)"
+	tcsh -c "source $(ENV) && $(INNOVUS) -files run_innovus.tcl"
+
+pnr_v2: $(PG_V2)
+	tcsh -c "source $(ENV) && $(INNOVUS) -files run_innovus_2.tcl"
 
 clean:
 	rm -rf fv innovus.cmd* innovus.log* innovus.rpt* \

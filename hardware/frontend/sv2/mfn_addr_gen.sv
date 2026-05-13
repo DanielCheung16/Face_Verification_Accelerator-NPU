@@ -143,24 +143,31 @@ module mfn_addr_gen #(
     // col_step = in_ch      (column stride)
     // addr[i] = center + dy[i]*row_step + dx[i]*col_step
     //   (dx,dy) for i=0..8: (-1,-1)(0,-1)(1,-1)(-1,0)(0,0)(1,0)(-1,1)(0,1)(1,1)
+    //
+    // Stage 3 register: captures Stage2 outputs on the next posedge.
+    // Breaks the FF(Stage1) → multiply+add chain → output-port combinational path
+    // (was 2003 ps at synthesis) into a FF→FF setup check (well within period).
+    // Cost: controller FETCH wide_mode adds 1 cycle (k=0..3 instead of k=0..2).
 
     logic [M_ADDR_WIDTH-1:0] wide_row_step, wide_col_step, wide_center;
+    logic [M_ADDR_WIDTH-1:0] wide_addr_s2 [0:8];
+    logic                    is_pad_wide_s2 [0:8];
 
-    assign wide_center   = sram_rd_addr;   // identical to single-pixel center (k=4 pixel)
+    assign wide_center   = sram_rd_addr;
     assign wide_col_step = M_ADDR_WIDTH'(ch_s1);
     assign wide_row_step = M_ADDR_WIDTH'({1'b0, W_s1} * {1'b0, ch_s1});
 
-    assign sram_rd_addr_wide[0] = wide_center - wide_row_step - wide_col_step;
-    assign sram_rd_addr_wide[1] = wide_center - wide_row_step;
-    assign sram_rd_addr_wide[2] = wide_center - wide_row_step + wide_col_step;
-    assign sram_rd_addr_wide[3] = wide_center - wide_col_step;
-    assign sram_rd_addr_wide[4] = wide_center;
-    assign sram_rd_addr_wide[5] = wide_center + wide_col_step;
-    assign sram_rd_addr_wide[6] = wide_center + wide_row_step - wide_col_step;
-    assign sram_rd_addr_wide[7] = wide_center + wide_row_step;
-    assign sram_rd_addr_wide[8] = wide_center + wide_row_step + wide_col_step;
+    assign wide_addr_s2[0] = wide_center - wide_row_step - wide_col_step;
+    assign wide_addr_s2[1] = wide_center - wide_row_step;
+    assign wide_addr_s2[2] = wide_center - wide_row_step + wide_col_step;
+    assign wide_addr_s2[3] = wide_center - wide_col_step;
+    assign wide_addr_s2[4] = wide_center;
+    assign wide_addr_s2[5] = wide_center + wide_col_step;
+    assign wide_addr_s2[6] = wide_center + wide_row_step - wide_col_step;
+    assign wide_addr_s2[7] = wide_center + wide_row_step;
+    assign wide_addr_s2[8] = wide_center + wide_row_step + wide_col_step;
 
-    // is_pad_wide: padding check for each 3×3 neighbour
+    // is_pad_wide Stage 2 (combinational)
     logic signed [8:0] px [0:8], py [0:8];
     assign px[0]=x_s1-9'sd1; assign py[0]=y_s1-9'sd1;
     assign px[1]=x_s1;        assign py[1]=y_s1-9'sd1;
@@ -175,11 +182,28 @@ module mfn_addr_gen #(
     genvar wi;
     generate
         for (wi = 0; wi < 9; wi++) begin : PAD_WIDE
-            assign is_pad_wide[wi] =
+            assign is_pad_wide_s2[wi] =
                 (px[wi] < 9'sd0) || (px[wi] >= $signed({1'b0, W_s1})) ||
                 (py[wi] < 9'sd0) || (py[wi] >= $signed({1'b0, H_s1}));
         end
     endgenerate
+
+    // ── Stage 3 register (wide-mode outputs only) ─────────────────────────────
+    // sram_rd_addr (single-pixel PW/DW path) stays combinational — its pipeline
+    // timing is already correct and registering it would misalign with load_pixel_d2.
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            for (int i = 0; i < 9; i++) begin
+                sram_rd_addr_wide[i] <= '0;
+                is_pad_wide[i]       <= 1'b1;
+            end
+        end else begin
+            for (int i = 0; i < 9; i++) begin
+                sram_rd_addr_wide[i] <= wide_addr_s2[i];
+                is_pad_wide[i]       <= is_pad_wide_s2[i];
+            end
+        end
+    end
 
     // ── Write address (sequential, ping-pong) ─────────────────────────────────
     logic [M_ADDR_WIDTH-1:0] wr_ptr_reg;

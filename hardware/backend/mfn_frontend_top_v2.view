@@ -1,0 +1,39 @@
+# ============================================================
+# MMMC View File v2 — MobileFaceNet Frontend
+# Target: 83 MHz / 12 ns (see constraints_v2.sdc)
+# ============================================================
+
+create_library_set \
+    -name tt_libs \
+    -timing { \
+        /vol/ece303/genus_tutorial/NangateOpenCellLibrary_typical.lib \
+        ../frontend/syn/lib/sram_psum_a_1rw1r0w_40_512_freepdk45.lib \
+        ../frontend/syn/lib/sram_psum_b_1rw0r0w_40_512_freepdk45.lib \
+    }
+
+create_rc_corner \
+    -name rc_typical \
+    -T 25
+
+create_delay_corner \
+    -name dc_typical \
+    -library_set tt_libs \
+    -rc_corner rc_typical
+
+create_constraint_mode \
+    -name cm_func \
+    -sdc_files { ./constraints_v2.sdc }
+
+create_analysis_view \
+    -name setup_view \
+    -constraint_mode cm_func \
+    -delay_corner dc_typical
+
+create_analysis_view \
+    -name hold_view \
+    -constraint_mode cm_func \
+    -delay_corner dc_typical
+
+set_analysis_view \
+    -setup { setup_view } \
+    -hold  { hold_view }

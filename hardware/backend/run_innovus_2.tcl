@@ -1,7 +1,7 @@
 # ============================================================
 # Innovus P&R Script v2 — MobileFaceNet Frontend
 # Top module : mfn_frontend_top
-# Target     : 100 MHz (NangateOpenCellLibrary / FreePDK45)
+# Target     : 83 MHz / 12 ns (NangateOpenCellLibrary / FreePDK45)
 #
 # v2 improvements over v1:
 #   1. CTS NDR (CTS_2W1S leaf + CTS_2W2S trunk w/ VSS shielding)
@@ -13,18 +13,28 @@
 # ── 1. Design Import ─────────────────────────────────────────
 setDesignMode -process 45
 
-set init_verilog      "./mfn_frontend_top_syn_pg.v"
+set init_verilog      "./mfn_frontend_top_v2_syn_pg.v"
 set init_top_cell     "mfn_frontend_top"
-set init_lef_file     "/vol/ece303/genus_tutorial/NangateOpenCellLibrary.lef"
-set init_mmmc_file    "./mfn_frontend_top.view"
+set init_lef_file     [list \
+    "/vol/ece303/genus_tutorial/NangateOpenCellLibrary.lef" \
+    "./sram_lef/mfn_psum_sram.lef" \
+]
+set init_mmmc_file    "./mfn_frontend_top_v2.view"
 set init_pwr_net      "VDD"
 set init_gnd_net      "VSS"
 
 init_design
 
 # ── 2. Floorplan ─────────────────────────────────────────────
-floorPlan -r 1.0 0.5 5 5 5 5
+# SRAM macro: 275.49 x 481.005 um → core must be >= 300 x 510 um
+# Standard cells are tiny (~1,585 cells after SRAM black-box swap)
+floorPlan -s 310 510 5 5 5 5
 fit
+
+# ── 2b. SRAM Macro Placement ─────────────────────────────────
+# Place u_psum_mem at lower-left with 10 um margin (inside core)
+# Standard cells will fill the remaining area around it
+placeInstance u_psum_mem 10 10 R0
 
 # ── 3. Power Connections ─────────────────────────────────────
 globalNetConnect VDD -type pgpin -pin VDD -inst *
@@ -78,14 +88,14 @@ placeDesign
 #
 # CTS_2W1S (leaf): Double-Width / Single-Spacing → M1–M4
 #   Keeps leaf distribution on lower metals; wider wire = lower resistance = less skew
-create_ndr -name CTS_2W1S \
+add_ndr -name CTS_2W1S \
     -width   {metal1 0.14 metal2 0.14 metal3 0.14 metal4 0.28} \
     -spacing {metal1 0.07 metal2 0.07 metal3 0.07 metal4 0.14}
 
 # CTS_2W2S (trunk): Double-Width / Double-Spacing + VSS shield → M7–M10
 #   Wide/spaced trunk on top metals = low RC + EMI immunity
 #   VSS shield on M7 absorbs crosstalk from adjacent signal wires
-create_ndr -name CTS_2W2S \
+add_ndr -name CTS_2W2S \
     -width   {metal7 0.8  metal8 0.8  metal9 1.6  metal10 1.6} \
     -spacing {metal7 0.42 metal8 0.42 metal9 0.84 metal10 0.84}
 

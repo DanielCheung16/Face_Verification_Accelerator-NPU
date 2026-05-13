@@ -174,24 +174,45 @@ module mfn_controller #(
     end
 
     // --------------------------------------------------------------------------
-    // Partial Sum Register File
+    // Partial Sum SRAM (replaces 512×40 FF array)
+    // Synthesis: black-box stub in v2_rom_stubs.sv → 0 cells in netlist.
+    // Simulation: behavioral model in sv2/mfn_psum_sram.sv (async read).
     // --------------------------------------------------------------------------
-    logic signed [AWIDTH-1:0] psum_mem [0:511];
+    logic [AWIDTH-1:0] psum_rd_a, psum_rd_b, psum_rd_c;
+    logic              psum_we_a, psum_we_b;
+    logic [8:0]        psum_waddr_a, psum_waddr_b;
+    logic [AWIDTH-1:0] psum_wdata_a, psum_wdata_b;
+    logic [AWIDTH-1:0] cla_sum_a, cla_sum_b;  // forward-declared: used in wdata_a/b below
+    logic [9:0]        c_out_d2_p1;            // c_out_d2 + 1, intermediate to avoid expr bit-select
 
-    // CLA adder outputs (Item 4)
-    logic [AWIDTH-1:0] cla_sum_a, cla_sum_b;
+    assign c_out_d2_p1 = c_out_d2 + 10'd1;
 
-    mfn_cla40 u_cla_a (
-        .a(psum_mem[c_out_d2]),
-        .b(mac_data_in),
-        .sum(cla_sum_a)
+    // Write port A: INIT_PSUM writes bias; calc_psum_d2 writes CLA_a result.
+    // Both are mutually exclusive by FSM (INIT_PSUM and CALC_PSUM are separate states,
+    // and calc_psum_d2 is already past INIT_PSUM by the 2-cycle pipeline delay).
+    assign psum_we_a    = (state_reg == STATE_INIT_PSUM) || calc_psum_d2;
+    assign psum_waddr_a = (state_reg == STATE_INIT_PSUM)
+                          ? (layer_is_dw ? 9'b0 : c_out_reg[8:0])
+                          : (layer_is_dw ? 9'b0 : c_out_d2[8:0]);
+    assign psum_wdata_a = (state_reg == STATE_INIT_PSUM) ? mac_bias_in : cla_sum_a;
+
+    // Write port B: CLA_b result for dual-MAC c_out+1
+    assign psum_we_b    = calc_psum_d2 && enable_mac_b_d2;
+    assign psum_waddr_b = c_out_d2_p1[8:0];
+    assign psum_wdata_b = cla_sum_b;
+
+    mfn_psum_sram #(.AWIDTH(AWIDTH)) u_psum_mem (
+        .clk    (clk),
+        .we_a   (psum_we_a),    .waddr_a(psum_waddr_a), .wdata_a(psum_wdata_a),
+        .we_b   (psum_we_b),    .waddr_b(psum_waddr_b), .wdata_b(psum_wdata_b),
+        .raddr_a(layer_is_dw ? 9'b0 : c_out_d2[8:0]),  .rdata_a(psum_rd_a),
+        .raddr_b(c_out_d2_p1[8:0]),                     .rdata_b(psum_rd_b),
+        .raddr_c(layer_is_dw ? 9'b0 : c_out_reg[8:0]), .rdata_c(psum_rd_c)
     );
 
-    mfn_cla40 u_cla_b (
-        .a(psum_mem[c_out_d2 + 1]),
-        .b(mac_data_in_b),
-        .sum(cla_sum_b)
-    );
+    // CLA adders (Item 4) — cla_sum_a/b declared above with SRAM signals
+    mfn_cla40 u_cla_a (.a(psum_rd_a), .b(mac_data_in),   .sum(cla_sum_a));
+    mfn_cla40 u_cla_b (.a(psum_rd_b), .b(mac_data_in_b), .sum(cla_sum_b));
 
     // --------------------------------------------------------------------------
     // Config Decoding
@@ -307,14 +328,18 @@ module mfn_controller #(
                     end
                 end else begin
                     // ── Standard/DW: wide-mode fetch (Item 3) ──────────────────
-                    // k=0: present center coords; addr_gen Stage1 captures next cycle
-                    // k=1: Stage2 outputs 9 addrs; SRAM reads
-                    // k=2: SRAM data valid; load all 9 into window; → CALC_PSUM
+                    // k=0: present center; addr_gen Stage1 captures at next posedge
+                    // k=1: Stage2 computes 9 addrs; Stage3 captures at next posedge
+                    // k=2: Stage3 outputs registered addrs → SRAM reads
+                    // k=3: SRAM data valid; load all 9 into window; → CALC_PSUM
+                    // (Extra cycle vs v2-initial because addr_gen now has Stage3 FF,
+                    //  which breaks the FF→output 2003 ps combinational critical path.)
                     wide_mode = (k_reg <= 4'd1);
                     case (k_reg)
                         4'd0: k_next = 4'd1;
                         4'd1: k_next = 4'd2;
-                        default: begin  // k=2
+                        4'd2: k_next = 4'd3;
+                        default: begin  // k=3
                             wide_load_en  = 1'b1;
                             wgt_addr_next = wgt_cin_base_reg;
                             k_next        = '0;
@@ -474,27 +499,8 @@ module mfn_controller #(
         endcase
     end
 
-    // --------------------------------------------------------------------------
-    // Partial Sum Management (Item 4: CLA replaces + operator)
-    // --------------------------------------------------------------------------
-    always_ff @(posedge clk) begin
-        if (state_reg == STATE_INIT_PSUM) begin
-            if (layer_is_dw)
-                psum_mem[0] <= mac_bias_in;
-            else
-                psum_mem[c_out_reg] <= mac_bias_in;
-        end else if (calc_psum_d2) begin
-            if (layer_is_dw) begin
-                psum_mem[0] <= cla_sum_a;         // DW: single channel
-            end else begin
-                psum_mem[c_out_d2] <= cla_sum_a;  // standard: primary c_out
-                if (enable_mac_b_d2)              // Item 5: second c_out if valid
-                    psum_mem[c_out_d2 + 1] <= cla_sum_b;
-            end
-        end
-    end
-
-    assign psum_to_act = layer_is_dw ? psum_mem[0] : psum_mem[c_out_reg];
+    // psum_to_act: driven directly from SRAM read port C (psum_mem[c_out_reg])
+    assign psum_to_act = psum_rd_c;
 
     // Drive top-level enable_mac_b from comb
     assign enable_mac_b = enable_mac_b_comb;

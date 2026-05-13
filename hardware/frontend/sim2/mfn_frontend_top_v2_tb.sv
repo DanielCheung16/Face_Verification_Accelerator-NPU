@@ -1,13 +1,17 @@
 // ==============================================================================
-// Module: mfn_frontend_top_tb
-// Description: Integration testbench for MobileFaceNet Frontend.
-//              Runs all 48 layers (L0-L47) and saves SRAM snapshots.
+// Testbench: mfn_frontend_top_v2_tb
+// v2 changes vs. v1 TB:
+//   - SRAM wide read interface: sram_rd_addr_wide[0:8] → pixel_in_wide[0:8]
+//     (used by std/DW conv FETCH; single sram_rd_addr still used for PW/residual)
+//   - Cycle counter lets you compare v1 vs v2 speedup in simulation log
+//   - Verification: output should match v1 hex exactly (same functional result,
+//     just fewer cycles). Use diff layer_hex/ against sim/layer_hex/ to confirm.
 // ==============================================================================
 
-module mfn_frontend_top_tb;
+module mfn_frontend_top_v2_tb;
 
-    parameter int DWIDTH = 16;
-    parameter int AWIDTH = 40;
+    parameter int DWIDTH       = 16;
+    parameter int AWIDTH       = 40;
     parameter int M_ADDR_WIDTH = 20;
 
     logic clk;
@@ -15,16 +19,20 @@ module mfn_frontend_top_tb;
     logic start_inference;
     logic inference_done;
 
-    logic valid_in;
-    logic signed [DWIDTH-1:0] pixel_in;
-
     logic valid_out;
     logic signed [DWIDTH-1:0] pixel_out;
 
-    logic [M_ADDR_WIDTH-1:0] sram_rd_addr;
-    logic [M_ADDR_WIDTH-1:0] sram_wr_addr;
+    // Single-pixel SRAM interface (PW conv, global-DW, residual reads)
+    logic [M_ADDR_WIDTH-1:0]  sram_rd_addr;
+    logic signed [DWIDTH-1:0] pixel_in;
 
-    // SRAM Model
+    // Wide-mode SRAM interface (std conv / DW conv — 9 simultaneous reads)
+    logic [M_ADDR_WIDTH-1:0]  sram_rd_addr_wide [0:8];
+    logic signed [DWIDTH-1:0] pixel_in_wide      [0:8];
+
+    logic [M_ADDR_WIDTH-1:0]  sram_wr_addr;
+
+    // Shared SRAM model (both interfaces read/write same array)
     logic signed [DWIDTH-1:0] sram_mem [0:(1<<M_ADDR_WIDTH)-1];
 
     // DUT
@@ -34,25 +42,50 @@ module mfn_frontend_top_tb;
         .M_ADDR_WIDTH(M_ADDR_WIDTH)
     ) dut (.*);
 
-    // Clock generation
+    // ── Clock ────────────────────────────────────────────────────────────────
     initial begin
         clk = 0;
         forever #5 clk = ~clk;
     end
 
-    // SRAM write-back
+    // ── SRAM write-back ──────────────────────────────────────────────────────
     always @(posedge clk) begin
         if (valid_out)
             sram_mem[sram_wr_addr] <= pixel_out;
     end
 
-    // Save SRAM snapshot
+    // ── SRAM read responses (both interfaces, 1-cycle registered read) ────────
+    always_ff @(posedge clk) begin
+        // Single-pixel path (PW / global-DW / residual)
+        pixel_in <= sram_mem[sram_rd_addr];
+        // Wide-mode path (std / DW conv)
+        for (int i = 0; i < 9; i++)
+            pixel_in_wide[i] <= sram_mem[sram_rd_addr_wide[i]];
+    end
+
+    // ── Cycle counter ────────────────────────────────────────────────────────
+    integer cycle_count;
+    logic   counting;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            cycle_count <= 0;
+            counting    <= 1'b0;
+        end else begin
+            if (start_inference) counting <= 1'b1;
+            if (inference_done)  counting <= 1'b0;
+            if (counting)        cycle_count <= cycle_count + 1;
+        end
+    end
+
+    // ── Layer snapshot on STATE_NEXT_LAYER ──────────────────────────────────
     initial begin
         @(posedge rst_n);
         forever begin
             @(dut.u_ctrl.state_reg);
             if (dut.u_ctrl.state_reg == dut.u_ctrl.STATE_NEXT_LAYER) begin
-                $display(">>> Time=%0t | Finished Layer %0d", $time, dut.u_ctrl.layer_idx);
+                $display(">>> Time=%0t | Finished Layer %0d | Cycles so far: %0d",
+                         $time, dut.u_ctrl.layer_idx, cycle_count);
                 case (dut.u_ctrl.layer_idx)
                      6'd0:  $writememh("layer_hex/rtl_out_layer0.hex",  sram_mem);
                      6'd1:  $writememh("layer_hex/rtl_out_layer1.hex",  sram_mem);
@@ -108,7 +141,7 @@ module mfn_frontend_top_tb;
 
                 if (dut.u_ctrl.layer_idx == 6'd49) begin
                     $display("========================================");
-                    $display("All 50 layers complete (L0-L49).");
+                    $display("All 50 layers complete (L0-L49). [v2]");
                     $display("========================================");
                     #100;
                     $finish;
@@ -117,33 +150,17 @@ module mfn_frontend_top_tb;
         end
     end
 
-    // --- Cycle Counter ---
-    integer cycle_count;
-    logic   counting;
-
-    always_ff @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            cycle_count <= 0;
-            counting    <= 1'b0;
-        end else begin
-            if (start_inference)
-                counting <= 1'b1;
-            if (inference_done)
-                counting <= 1'b0;
-            if (counting)
-                cycle_count <= cycle_count + 1;
-        end
-    end
-
-    // Test Sequence
+    // ── Test Sequence ────────────────────────────────────────────────────────
     initial begin
-        rst_n = 0;
+        rst_n           = 0;
         start_inference = 0;
 
         for (int i=0; i<(1<<M_ADDR_WIDTH); i++) sram_mem[i] = '0;
+        // Share the same hex input as sim/ (generated by gen_hex.py)
         $readmemh("hex/input.hex", sram_mem);
 
-        $display("Starting MobileFaceNet Full Inference (Layers 0-49)...");
+        $display("[v2] Starting MobileFaceNet Full Inference (L0-L49)...");
+        $display("[v2] Wide SRAM fetch: std/DW conv 11->3 cycles | Dual MAC | CLA adder");
 
         #50 rst_n = 1;
         #50 start_inference = 1;
@@ -151,19 +168,14 @@ module mfn_frontend_top_tb;
 
         wait(inference_done);
         $display("========================================");
-        $display("Inference Done at %0t", $time);
-        $display("Total Cycles: %0d", cycle_count);
+        $display("[v2] Inference Done at %0t", $time);
+        $display("[v2] Total Cycles: %0d", cycle_count);
         $display("========================================");
+        $display("[v2] To compare with v1: diff layer_hex/ ../sim/layer_hex/");
 
         $writememh("hex/rtl_out.hex", sram_mem);
         #100;
         $finish;
-    end
-
-    // SRAM Read Response
-    always_ff @(posedge clk) begin
-        pixel_in <= sram_mem[sram_rd_addr];
-        valid_in <= 1'b1;
     end
 
 endmodule

@@ -42,7 +42,7 @@
 
 ---
 
-## v2 結果 (`run_innovus_2.tcl`) — 進行中
+## v2 結果 (`run_innovus_2.tcl`) — 2026-05-11（v2 RTL：run 1）
 
 ### v2 新增項目
 1. **CTS NDR**：
@@ -51,10 +51,82 @@
 2. **`timeDesign` before each `optDesign`**：post-CTS 和 post-route 各加一次 timing snapshot
 3. **`addFiller` before routing**：FILLCELL_X32→X1，保持 N-well continuity 與 M1 rail bridging
 
-### 預期改善
-- Clock skew 降低（NDR 使 trunk 更一致）
-- `optDesign` 有更好的 timing 起點（`timeDesign` 先報告）
-- DFM 改善（filler 先插）
+### 時序（run 1：v1 netlist + v2 tcl）
+| 指標 | 數值 |
+|------|------|
+| WNS post-layout | **+3.710 ns** ✅ |
+| 最大可達頻率 | **~159 MHz** |
+| Critical path start | `u_ctrl/c_out_d2_reg[1]/Q` |
+| Critical path end | `u_ctrl/psum_mem_reg[191][39]/D` |
+| 路徑內容 | 38-stage FA_X1 ripple carry（**與 v1 相同**），~2.85 ns |
+
+> ⚠️ Critical path 無改善：v2 P&R 仍使用 v1 Genus netlist（ripple carry）。
+> CLA 效果需重新合成 `synthesis_v2.tcl` 才能看到。
+
+### 功耗（run 1，default activity = 0.2）
+| 項目 | 數值 | vs v1 |
+|------|------|-------|
+| 總功耗 | **26.24 mW** | −0.42 mW |
+| Sequential | 15.79 mW (60.2%) | −0.14 mW |
+| Clock network | **4.154 mW (15.8%)** | **−0.28 mW** ← NDR 效果 |
+| Combinational | 6.298 mW (24.0%) | ≈ 持平 |
+
+### 驗證（run 1）
+| 項目 | 結果 |
+|------|------|
+| DRC | **No violations** ✅ |
+| Connectivity | **No problems or warnings** ✅ |
+| Antenna | **No violations** ✅ |
+
+---
+
+## v2 RTL P&R 結果 (`run_innovus_2.tcl` + `synthesis_v2.tcl`) — 2026-05-12（run 2）
+
+使用正確的 v2 synthesis netlist（CLA + hierarchy 保留）。
+
+### v2 RTL 合成結果
+| 指標 | 數值 | vs v1 |
+|------|------|-------|
+| Total cells | 137,976 | +68,667（CLA + dual-MAC + FF array） |
+| Total area | 479,455 µm² | +194,000 µm² |
+| Synthesis WNS | **+5,897 ps** ✅ | 改善（原 ripple carry 消失） |
+| Synthesis critical path | addr_gen output 2,003 ps | 新 critical（CLA 消除了 psum carry chain） |
+
+### 時序（run 2，P&R 後，100 MHz target）
+| 指標 | 數值 |
+|------|------|
+| WNS post-layout | **−0.922 ns** ❌ VIOLATED |
+| Critical path | `c_out_d2_reg[2]` → psum_mem decode → `u_cla_b` → `psum_mem_reg[467][38]` |
+| 路徑長度 | 11.461 ns (required 10.539 ns) |
+| 問題根因 | 512-to-1 psum_mem decode + CLA + 16+ 個 routing buffer（因 congestion 插入） |
+
+### 功耗（run 2，default activity = 0.2）
+| 項目 | 數值 |
+|------|------|
+| 總功耗 | **57.46 mW** |
+| Sequential (FF) | 18.39 mW (32%) |
+| Combinational | 34.39 mW (60%) |
+| Clock (NDR CTS) | 4.69 mW (8.1%) |
+
+> 功耗比 v1 大是因為 cell count 2× 多（CLA adder + dual-MAC array + 512×40 psum FF）。
+
+### 驗證（run 2）
+| 項目 | 結果 |
+|------|------|
+| DRC | **1,000 violations** ❌（832 SHORT, 115 CUTSPACING, 53 SPACING） |
+| Connectivity | **No problems** ✅ |
+| Antenna | **No violations** ✅ |
+
+### DRC 根本原因
+全部集中在 u_ctrl 模組（psum_mem + CLA 區域）：
+- floorplan utilization 50%，但 u_ctrl 有 125,720 cells（全設計 91%）
+- Router 空間不足 → metal2/3 short，via 間距違反
+- 與 timing violation 同一根因：設計太大、floorplan 太小
+
+### 修復計劃（run 3 待執行）
+1. **Floorplan 放大**：`floorPlan -r 1.0 0.35 5 5 5 5`（35% utilization → router 多 43% 空間）→ 已套用至 `run_innovus_2.tcl`
+2. **降低 clock target**：100 MHz → 83 MHz（12 ns period）→ 已建立 `constraints_v2.sdc` + `mfn_frontend_top_v2.view`
+3. 預期：DRC 大幅減少或清零，timing WNS 轉正
 
 ---
 
@@ -75,14 +147,28 @@ Genus 在 5751 ps 大 slack 下選了 area-optimal FA_X1，Innovus 沒有理由�
 ## 如何重新跑
 
 ```bash
-# PG netlist（已存在，不需重跑）
-make pg
+# v1 合成（ripple carry，flat netlist）
+cd hardware/frontend/syn
+tcsh -c "source /vol/ece303/genus_tutorial/cadence.env && genus -files synthesis.tcl"
+
+# v2 合成（含 CLA，保留 hierarchy）
+tcsh -c "source /vol/ece303/genus_tutorial/cadence.env && genus -files synthesis_v2.tcl"
+# 輸出：mfn_frontend_top_v2_syn.v  timing_v2.rep  area_v2.rep
+
+# PG netlist（合成後需執行）
+cd hardware/backend
+make pg   # 將 v2_syn.v 加入 VDD/VSS port → mfn_frontend_top_syn_pg.v
 
 # v1 P&R
 make pnr
 
 # v2 P&R（NDR + timeDesign + filler-first）
 tcsh -c "source /vol/ece303/genus_tutorial/cadence.env && innovus -files run_innovus_2.tcl"
+
+# 開 Innovus GUI 看 v2 layout
+tcsh -c "source /vol/ece303/genus_tutorial/cadence.env && innovus"
+# 在 Innovus console 輸入：
+# restoreDesign mfn_frontend_top_v2_final.enc mfn_frontend_top
 ```
 
 ## 輸出檔案對照
