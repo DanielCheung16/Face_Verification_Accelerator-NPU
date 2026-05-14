@@ -1,3 +1,4 @@
+`ifdef ENABLE_OLD_ARRAY_LEVEL2_TOP_TB
 `timescale 1ns/1ps
 
 module tb_array_level2_top;
@@ -271,3 +272,4 @@ module tb_array_level2_top;
         $fatal(1, "[TB] timeout after %0d cycles", TIMEOUT_CYCLES);
     end
 endmodule
+`endif

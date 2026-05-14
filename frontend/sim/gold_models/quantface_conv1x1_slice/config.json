@@ -1,0 +1,43 @@
+{
+  "model_path": "../../../../pretrained_models/quantface_mobilefacenet_w8a8_real/backbone.pt",
+  "quantface_path": "../../../../QuantFace",
+  "input": {
+    "shape": [1, 3, 112, 112],
+    "seed": 392
+  },
+  "packing": {
+    "data_w": 8,
+    "lanes": 16,
+    "ao_depth": 65536,
+    "wgt_depth": 65536,
+    "out_base": 32768
+  },
+  "layers": [
+    {
+      "name": "conv_3_project_residual_quant",
+      "type": "LY_CONV1X1",
+      "mode": "MODE_RESIDUAL",
+      "conv": "conv_3.model.0.0.project.conv",
+      "bn": "conv_3.model.0.0.project.bn",
+      "output_quant": "conv_3.model.0.1",
+      "input_quant": "conv_3.model.0.0.conv_dw.prelu.quantAct",
+      "residual_source": "conv_3.model.0.0",
+      "residual_base": 8192,
+      "wgt_base": 0,
+      "act_base": 0,
+      "out_base": 32768
+    },
+    {
+      "name": "conv_3_next_pw_prelu_quant",
+      "type": "LY_CONV1X1",
+      "mode": "MODE_PRELU",
+      "conv": "conv_3.model.1.0.conv.conv",
+      "bn": "conv_3.model.1.0.conv.bn",
+      "output_quant": "conv_3.model.1.0.conv.prelu.quantAct",
+      "input_quant": "conv_3.model.0.1",
+      "wgt_base": "auto_after_previous",
+      "act_base": 32768,
+      "out_base": 0
+    }
+  ]
+}

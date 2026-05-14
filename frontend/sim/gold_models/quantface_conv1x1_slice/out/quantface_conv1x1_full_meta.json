@@ -1,0 +1,53 @@
+{
+  "layers": [
+    {
+      "name": "conv_3_project_residual_quant",
+      "m": 784,
+      "k": 128,
+      "n": 64,
+      "wgt_base": 0,
+      "act_base": 0,
+      "out_base": 32768,
+      "requant_shift": 30,
+      "prelu_shift": 16,
+      "residual_shift": 21,
+      "residual_base": 8192,
+      "residual_zero_point": 27,
+      "act_scale": 78.17430877685547,
+      "act_zero_point": 85.0,
+      "out_scale": 35.40067672729492,
+      "out_zero_point": 18.0
+    },
+    {
+      "name": "conv_3_next_pw_prelu_quant",
+      "m": 784,
+      "k": 64,
+      "n": 128,
+      "wgt_base": 512,
+      "act_base": 32768,
+      "out_base": 0,
+      "requant_shift": 30,
+      "prelu_shift": 16,
+      "residual_shift": 0,
+      "residual_base": 0,
+      "residual_zero_point": 0,
+      "act_scale": 35.40067672729492,
+      "act_zero_point": 18.0,
+      "out_scale": 157.56947326660156,
+      "out_zero_point": 77.0
+    }
+  ],
+  "error_vs_quantface_true_output": {
+    "mae": 0.23885922133922577,
+    "max_abs": 4.0,
+    "mismatch_count": 22161,
+    "num_values": 100352
+  },
+  "files": {
+    "ao_init": "quantface_conv1x1_full_ao_init.hex",
+    "wgt_init": "quantface_conv1x1_full_wgt_init.hex",
+    "golden": "quantface_conv1x1_full_golden.hex",
+    "true_quantface": "quantface_conv1x1_full_true_quantface.hex",
+    "rtl_params": "/home/jzh2008/nu_classes/ce392/Face_Verification_Accelerator-NPU/frontend/rtl/src/quantface_conv1x1_params_pkg.sv"
+  }
+}

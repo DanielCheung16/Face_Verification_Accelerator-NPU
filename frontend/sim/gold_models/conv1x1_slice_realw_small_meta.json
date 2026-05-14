@@ -1,0 +1,30 @@
+{
+  "data_w": 8,
+  "lanes": 4,
+  "word_w": 32,
+  "ao_depth": 128,
+  "wgt_depth": 128,
+  "out_base": 64,
+  "m": 5,
+  "layers": [
+    {
+      "name": "conv1x1_residual_quant",
+      "k": 6,
+      "n": 4,
+      "mode": "MODE_RESIDUAL",
+      "wgt_base": 0
+    },
+    {
+      "name": "conv1x1_prelu_quant",
+      "k": 4,
+      "n": 4,
+      "mode": "MODE_PRELU",
+      "wgt_base": 6
+    }
+  ],
+  "files": {
+    "ao_init": "conv1x1_slice_realw_small_ao_init.hex",
+    "wgt_init": "conv1x1_slice_realw_small_wgt_init.hex",
+    "golden": "conv1x1_slice_realw_small_golden.hex"
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "layers": [
+    {
+      "name": "conv_3_project_residual_quant",
+      "m": 784,
+      "k": 128,
+      "n": 64,
+      "mode": 2,
+      "shift": 30,
+      "prelu_shift": 16,
+      "residual_shift": 21,
+      "residual_zero_point": 27
+    },
+    {
+      "name": "conv_3_next_pw_prelu_quant",
+      "m": 784,
+      "k": 64,
+      "n": 128,
+      "mode": 1,
+      "shift": 30,
+      "prelu_shift": 16,
+      "residual_shift": 0,
+      "residual_zero_point": 0
+    }
+  ]
+}

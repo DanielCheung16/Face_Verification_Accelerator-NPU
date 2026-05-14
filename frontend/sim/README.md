@@ -42,3 +42,78 @@ This means:
 ps:
 - The `.do` file runs `STALL_MODE=0` first, then `STALL_MODE=1`.
 - Temporary local-buffer preload from TB is no longer used in this Level2 test; TB provides a fake 1-cycle global-buffer memory model.
+
+## Level3 array top
+`array_level2_top.sv` now only contains the local banked buffers, skew read path, controller, and systolic array. `gemm_preload.sv` is the global-buffer-to-local-buffer preload block. `array_level2_gb_top.sv` connects both blocks and is the top used by the global-buffer-facing test.
+
+Default regression:
+- `ROW = 14`
+- `COL = 16`
+- `K_MAX = 512`
+- Runs several built-in matrix sizes, including partial tiles and a `K=512` case.
+- Runs twice: `STALL_MODE=0`, then `STALL_MODE=1`.
+
+Run the default regression:
+- `vsim -c -do array_level2_gb_top.do`
+
+Run one matrix size:
+- `vsim -c -do "set SINGLE_CASE 1; set ROW 14; set COL 16; set K_MAX 512; set M 3; set K 5; set N 4; do array_level2_gb_top.do"`
+
+Matrix meaning:
+- `C[M][N] = A[M][K] * B[K][N]`
+- `ROW` tiles the `M` dimension.
+- `COL` tiles the `N` dimension.
+
+`array_level2_top.do` is kept as an alias to the same Level2 global-buffer-facing regression.
+
+## Conv1x1 output postprocess
+`conv1x1_output_postprocess.sv` converts the `INT32` accumulator tile from the systolic array to signed int8. The supported postprocess modes are:
+
+- `POST_MODE=0`: requant only
+- `POST_MODE=1`: PReLU, then requant
+- `POST_MODE=2`: residual add, then requant
+
+`out = saturate_int8((((acc + bias) * multiplier) + rounding) >>> shift + zero_point)`
+
+In `POST_MODE=1`, negative `acc + bias` values are first multiplied by `prelu_multiplier` and shifted by `prelu_shift`.
+
+In `POST_MODE=2`, `residual_i` is added in the accumulator domain before requantization.
+
+Run the standalone 32-bit to 8-bit postprocess test:
+- `vsim -c -do conv1x1_output_postprocess.do`
+
+Run the full conv1x1 flow, including preload, systolic GEMM, and output postprocess:
+- `vsim -c -do conv1x1_gb_top.do`
+
+Run the full conv1x1 flow with PReLU postprocess:
+- `vsim -c -do "set POST_MODE 1; do conv1x1_gb_top.do"`
+
+Run the full conv1x1 flow with residual-add postprocess:
+- `vsim -c -do "set POST_MODE 2; do conv1x1_gb_top.do"`
+
+Run one conv1x1 matrix size:
+- `vsim -c -do "set SINGLE_CASE 1; set ROW 14; set COL 16; set K_MAX 512; set M 3; set K 5; set N 4; do conv1x1_gb_top.do"`
+
+The current conv1x1 tests use deterministic synthetic int8 activations, weights, bias, and requant parameters. They verify the hardware dataflow and fixed-point requantization, not a bit-exact MobileFaceNet checkpoint layer yet.
+
+## Conv1x1 Level3 closed flow
+`conv1x1_level3_top.sv` is the conv1x1 layer engine used below the future global-buffer switch/controller. It does not instantiate the global SRAMs directly; the testbench owns `activation_output_global_buffer.sv` and `weight_global_buffer.sv` and connects them to the layer ports.
+
+In the current Level3 design, one output tile row must fit exactly into one global memory word:
+- `COL * 8 bits = one memory word`
+- More generally, `COL * DATA_IN_W == DATA_OUT_W` for `wb_buffer.sv`
+
+The default Level3 regression uses `COL=4` and `GB_DATA_W=32` for a small fast test. The target accelerator setting is `COL=16` and `GB_DATA_W=128`.
+
+Run the closed two-layer conv1x1 regression:
+- `vsim -c -do conv1x1_level3_top.do`
+
+## Whole system version 1:
+### For verification of the model C you should download  lfw and agedb_30 benchmarks
+mkdir -p datasets/faces_eval
+
+curl -L -o datasets/faces_eval/lfw.bin \
+  'https://huggingface.co/datasets/gaunernst/face-recognition-eval/resolve/main/lfw.bin?download=true'
+
+curl -L -o datasets/faces_eval/agedb_30.bin \
+  'https://huggingface.co/datasets/gaunernst/face-recognition-eval/resolve/main/agedb_30.bin?download=true'
