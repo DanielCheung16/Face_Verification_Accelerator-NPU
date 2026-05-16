@@ -26,10 +26,38 @@ import numpy as np
 from PIL import Image
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
-SIM_DIR      = os.path.join(PROJECT_ROOT, "hardware/frontend/sim")
 GOLDEN_DIR   = os.path.join(PROJECT_ROOT, "software/golden")
-LAYER_HEX_DIR = os.path.join(SIM_DIR, "layer_hex")
-HEX_DIR      = os.path.join(SIM_DIR, "hex")
+
+# Resolved per --sim argument in main()
+_sim          = "v1"
+SIM_DIR       = None
+LAYER_HEX_DIR = None
+HEX_DIR       = None
+MAKE_TARGET   = None
+
+SIM_CONFIGS = {
+    "v1": {
+        "sim_dir":       os.path.join(PROJECT_ROOT, "hardware/frontend/sim"),
+        "layer_hex_dir": os.path.join(PROJECT_ROOT, "hardware/frontend/sim/layer_hex"),
+        "hex_dir":       os.path.join(PROJECT_ROOT, "hardware/frontend/sim/hex"),
+        "make_target":   "top",
+        "label":         "RTL v1",
+    },
+    "v2": {
+        "sim_dir":       os.path.join(PROJECT_ROOT, "hardware/frontend/sim2"),
+        "layer_hex_dir": os.path.join(PROJECT_ROOT, "hardware/frontend/sim2/layer_hex"),
+        "hex_dir":       os.path.join(PROJECT_ROOT, "hardware/frontend/sim2/hex"),
+        "make_target":   "top",
+        "label":         "RTL v2",
+    },
+    "gl": {
+        "sim_dir":       os.path.join(PROJECT_ROOT, "hardware/frontend/sim2"),
+        "layer_hex_dir": os.path.join(PROJECT_ROOT, "hardware/frontend/sim2/layer_hex_gl"),
+        "hex_dir":       os.path.join(PROJECT_ROOT, "hardware/frontend/sim2/hex"),
+        "make_target":   "gl",
+        "label":         "Gate-Level (v2 netlist)",
+    },
+}
 
 B0 = 0x00000
 B1 = 0x54000
@@ -125,30 +153,35 @@ def run_golden():
 
 
 def run_rtl():
-    print("[RTL] Running gen_hex.py ...")
+    label  = SIM_CONFIGS[_sim]["label"]
+    target = SIM_CONFIGS[_sim]["make_target"]
+    print(f"[Sim] Running gen_hex.py ({label}) ...")
     r = subprocess.run(
         [sys.executable, "gen_hex.py"],
         cwd=SIM_DIR,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     if r.returncode != 0:
-        sys.exit(f"[RTL] gen_hex.py FAILED:\n{r.stderr.decode()}")
+        sys.exit(f"[Sim] gen_hex.py FAILED:\n{r.stderr.decode()}")
 
-    print("[RTL] Running make top (this takes ~5 min) ...")
+    est = {"top": "~5 min", "gl": "~several hours"}.get(target, "")
+    print(f"[Sim] Running make {target} {est} ...")
     r = subprocess.run(
-        ["make", "top"],
+        ["make", target],
         cwd=SIM_DIR,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     if r.returncode != 0:
-        sys.exit(f"[RTL] make top FAILED:\n{r.stderr.decode()}")
-    print("[RTL] Simulation complete.")
+        sys.exit(f"[Sim] make {target} FAILED:\n{r.stderr.decode()}")
+    print(f"[Sim] {label} simulation complete.")
 
 
 def load_rtl_hex(layer):
     hex_file = os.path.join(LAYER_HEX_DIR, f"rtl_out_layer{layer}.hex")
     if not os.path.exists(hex_file):
-        hex_file = os.path.join(HEX_DIR, "rtl_out.hex")
+        # GL sim writes final SRAM to hex/rtl_out_gl.hex; RTL v1 to hex/rtl_out.hex
+        fallback = "rtl_out_gl.hex" if _sim == "gl" else "rtl_out.hex"
+        hex_file = os.path.join(HEX_DIR, fallback)
     if not os.path.exists(hex_file):
         return None, None
     with open(hex_file) as f:
@@ -191,6 +224,8 @@ def print_summary(results):
     RED   = "\033[31m"
     RESET = "\033[0m"
 
+    label = SIM_CONFIGS[_sim]["label"]
+    print(f"\n[{label}] Layer comparison vs golden")
     print(f"\n{'Layer':>6}  {'Exact%':>8}  {'±1%':>7}  {'MeanErr':>8}  {'MaxErr':>7}")
     print("-" * 50)
     all_pass = True
@@ -210,17 +245,28 @@ def print_summary(results):
 
 
 def main():
+    global SIM_DIR, LAYER_HEX_DIR, HEX_DIR, MAKE_TARGET, _sim
+
     ap = argparse.ArgumentParser(description="RTL end-to-end layer verification")
+    ap.add_argument("--sim",          choices=["v1", "v2", "gl"], default="v1",
+                    help="Simulation source: v1=sim/, v2=sim2/RTL, gl=sim2/gate-level (default: v1)")
     ap.add_argument("--image",        help="Input face image (triggers full flow)")
     ap.add_argument("--skip-golden",  action="store_true",
                     help="Skip gen_all_golden.py (reuse existing golden files)")
     ap.add_argument("--skip-rtl",     action="store_true",
-                    help="Skip make top (reuse existing layer_hex files)")
+                    help="Skip simulation run (reuse existing layer_hex files)")
     ap.add_argument("--verify-only",  action="store_true",
                     help="Only compare existing files, run nothing")
     ap.add_argument("--layers",       nargs="+", type=int,
                     help="Specific layers to verify (default: all 0-49)")
     args = ap.parse_args()
+
+    _sim = args.sim
+    cfg  = SIM_CONFIGS[_sim]
+    SIM_DIR       = cfg["sim_dir"]
+    LAYER_HEX_DIR = cfg["layer_hex_dir"]
+    HEX_DIR       = cfg["hex_dir"]
+    MAKE_TARGET   = cfg["make_target"]
 
     if not args.verify_only:
         if args.image:

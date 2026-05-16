@@ -40,6 +40,11 @@ current_design mfn_frontend_top
 read_sdc ./constraints.sdc
 
 # ── 5. Preserve ROM/SRAM black boxes ─────────────────────────
+# Prevent Genus from deleting "unloaded" instances (GLO-34).
+# Black-box SRAMs have outputs that feed back through the design;
+# Genus cannot trace the dependency and marks them as unloaded.
+set_db / .delete_unloaded_insts false
+
 set_db [get_db insts u_wgt_rom]  .dont_touch true
 set_db [get_db insts u_wgt_rom]  .boundary_opto false
 set_db [get_db insts u_bias_rom] .dont_touch true
@@ -48,9 +53,13 @@ set_db [get_db insts u_prelu_rom] .dont_touch true
 set_db [get_db insts u_prelu_rom] .boundary_opto false
 set_db [get_db insts u_cfg_rom]  .dont_touch true
 set_db [get_db insts u_cfg_rom]  .boundary_opto false
-# psum_sram is inside u_ctrl (hierarchical path)
-set_db [get_db insts u_ctrl/u_psum_mem] .dont_touch true
-set_db [get_db insts u_ctrl/u_psum_mem] .boundary_opto false
+# psum_sram wrapper is inside u_ctrl; leaf macros are one level deeper
+set_db [get_db insts u_ctrl/u_psum_mem/u_sram_a] .dont_touch true
+set_db [get_db insts u_ctrl/u_psum_mem/u_sram_a] .boundary_opto false
+set_db [get_db insts u_ctrl/u_psum_mem/u_sram_a] .preserve true
+set_db [get_db insts u_ctrl/u_psum_mem/u_sram_b] .dont_touch true
+set_db [get_db insts u_ctrl/u_psum_mem/u_sram_b] .boundary_opto false
+set_db [get_db insts u_ctrl/u_psum_mem/u_sram_b] .preserve true
 
 # ── 6. Preserve module hierarchy ─────────────────────────────
 # Prevents syn_opt from flattening sub-modules so Innovus can

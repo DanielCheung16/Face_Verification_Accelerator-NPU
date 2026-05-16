@@ -1793,3 +1793,275 @@ innovus -files run_innovus_2.tcl
 cd hardware/backend
 innovus -files run_innovus_2.tcl
 ```
+
+---
+
+## 29. GL Simulation 全 50 層驗證通過（2026-05-13）
+
+### 29.1 結果
+
+| 項目 | 結果 |
+|------|------|
+| Netlist | `mfn_frontend_top_v2_syn.v`（May 13，兩個 OpenRAM macro） |
+| 執行時間 | **7 小時 39 分** |
+| 全 50 層結果 | **All 50 layers MATCH ✅（GL == RTL）** |
+| Total Cycles | **25,768,847 cycles** |
+
+Layer 0 / Layer 49 修正後（NBA guard 移出 rst_n 外 + explicit layer49 snapshot）全部通過。  
+GL sim 花 7.5 小時正常——Xcelium 逐 gate 模擬整個 stdcell netlist，比 RTL sim 慢約 80–100x 是預期內。
+
+### 29.2 Throughput 比較
+
+| | v1 | v2 |
+|---|---|---|
+| Total cycles | 43,158,478 | **25,768,847** |
+| 改善倍率 | baseline | **1.67x 更少 cycles** |
+| @ 83 MHz | 0.52 s / 1.9 fps | **0.31 s / 3.2 fps** |
+| @ 110 MHz（P&R 後實際可達）| — | **0.23 s / 4.3 fps** |
+
+---
+
+## 30. Innovus P&R v2 最終結果（兩個 OpenRAM macro，2026-05-13）
+
+### 30.1 Macro 配置
+
+| Macro | 大小 | 位置 | 功能 |
+|-------|------|------|------|
+| `u_sram_a` (1RW+1R) | 275.49 × 240.5 µm | (10, 10) | psum 主路徑：write_a / read_a / read_c |
+| `u_sram_b` (1RW) | 158.995 × 204.86 µm | (10, 260) | psum 副路徑：write_b / read_b |
+
+### 30.2 Timing
+
+| 指標 | 數值 |
+|------|------|
+| SDC 目標 | 83 MHz（12 ns）|
+| Setup WNS | **+2.928 ns** ✅ |
+| Hold WNS | **+0.414 ns** ✅ |
+| TNS | 0.000（無 violation）|
+| P&R 後實際可達 | **~110 MHz** |
+
+Critical path：`u_sram_a/dout0 → u_cla_a carry chain → u_sram_a/din0` = 9.326 ns。  
+瓶頸：40-bit 加法器進位鏈（Genus 合成成 ripple carry）。
+
+### 30.3 功耗 / 面積
+
+| 項目 | 數值 |
+|------|------|
+| **Total power** | **7.83 mW** |
+| SRAM macro | 2.35 mW（30%）|
+| 組合邏輯 | 4.27 mW（55%）|
+| Clock tree | 0.26 mW（3%）|
+| Floorplan | 650 × 620 µm = 0.403 mm² |
+| Standard cell | 0.0331 mm² |
+| Core 使用率 | ~33% |
+
+### 30.4 DRC 狀態（需重跑）
+
+390 violations（metal3/4 short，集中於 SRAM 周圍）。  
+已在 `run_innovus_2.tcl` 加入：
+- `globalNetConnect VDD/VSS -pin vdd/gnd`（修 NRIG-34）
+- `createPlacementBlockage` 在 SRAM 周圍 5 µm（修 routing 擁塞）
+
+---
+
+## 31. RTL v3：12×12 Systolic Array 設計與驗證（2026-05-14）
+
+### 31.1 v3 架構概覽
+
+v2 使用 6×1 SA（6 output channel 平行，1 input channel/cycle），v3 改為 **12×12 Output-Stationary SA**：
+- **SA_ROWS = 12**：同時處理 12 個 output channels
+- **SA_COLS = 12**：每個 PE row 一次接收 12 個 input channels（一個 c_in tile）
+- 每個 MAC cycle：12 × 12 = 144 個 multiply-accumulate 同時執行
+- PW conv：每個 output pixel 只需 `ceil(in_ch / 12)` 個 SA cycles（v2 需 `ceil(in_ch / 1)` 個）
+
+主要新模組：
+
+| 模組 | 功能 |
+|------|------|
+| `mfn_sa_12x12` | 12×12 PE array，output-stationary accumulation |
+| `mfn_weight_rom_v3` | 12-port weight ROM（每個 output row 獨立 addr） |
+| `mfn_act_buf` | 512-entry FF activation buffer；`max_ch` 限制有效欄位 |
+| `mfn_controller_v3` | 分層 FSM，處理 STD / DW / PW / Global-DW / Residual |
+
+`mfn_psum_sram`、`mfn_activation`、ROMs 均沿用 v2 實作，介面不變。
+
+#### 31.1.1 mfn_act_buf
+
+```
+load phase: buf[load_ch] ← pixel_in（每 cycle 1 channel）
+read phase: act_out[0..11] = buf[base_ch .. base_ch+11]
+            若 base_ch+k >= max_ch → act_out[k] = 0（zero-pad）
+```
+
+MAX_CH = 512 覆蓋最寬的 layer（L47/L48 為 512ch）。  
+`max_ch` input 由 controller 動態設定，在 PW conv 最後一個 c_in tile 時自動 zero-pad，避免讀到 stale 資料。
+
+#### 31.1.2 Global DW（Layer 48）
+
+Layer 48 是 `is_pw=1 && is_dw=1` 的 Global Depthwise Conv（6×7 kernel = 42 positions）：
+- 每個 output channel 讀 42 個像素（掃描整張 feature map）
+- `wgt_step = 45`（ceil(42 / 9) × 9，對齊 9-entry 打包單位）
+- S_DW_FETCH 以絕對座標 (gdw_kx, gdw_ky) 掃描；act_buf[0..41] 儲存 42 個像素
+- S_DW_COMPUTE 分 4 個 c_in tile（0..11 / 12..23 / 24..35 / 36..41）循環
+
+---
+
+### 31.2 Debug 歷程
+
+驗證方式：執行 `make diff`（sim3/），比對 v3 與 v2 全 50 層輸出；v2 為 golden reference。
+
+#### Bug 1：Layer 7 MISMATCH — `read_res` 未在 S_ADD_RESIDUAL 拉高
+
+**現象**：Layer 7（第一個 residual block）所有 output 與 v2 不符。  
+**根因**：S_ADD_RESIDUAL 狀態驅動 `inc_write=1`，但 `read_res` 維持 default 0。  
+TB 的 pixel_in mux 以 `read_res` 訊號決定要從 res_buf 或 rd_buf 讀；`read_res=0` 時讀了普通輸入資料，`mfn_activation` 拿到錯誤的 `residual_in`。  
+**修法**：在 S_ADD_RESIDUAL 加入 `read_res = 1'b1`。  
+**影響**：修後 Layer 7–42 全數通過。
+
+#### Bug 2：Layer 43 MISMATCH — PW conv stale act_buf 污染
+
+**現象**：Layer 43（256-ch PW）最後幾個 output pixel 與 v2 不符；layer 40（512-ch PW）沒問題。  
+**根因**：`pack_pw_weights` 以 9 為單位打包 weights，SA 每次讀 12 columns。  
+- in_ch=256：wgt_step=ceil(256/9)×9=261，最後一個 c_in tile 從 c_in=252 開始
+- act_out[0..8] = act_buf[252..260]（有效），act_out[9..11] = act_buf[261..263]（stale，殘留上一層資料）
+- weight 端 wgt_addr[r] = base + 252，columns 9..11 讀到下一個 output channel 的 weight bit
+- 兩者相乘累加，造成錯誤 partial sum
+
+Layer 40（512-ch）沒問題是因為 act_buf[512..515] OOB → MAX_CH guard 已回傳 0，但 `max_ch` guard 此時尚未實作。  
+Layer 7（128-ch，wgt_step=135）也沒問題：最後 tile 從 c_in=126，columns 2..11 = act_buf[128..137]，超出 MAX_CH=512 範圍前先超出 eff_in_ch=128 → 應為 0；但實際當時 act_buf 裡存的是全 0（剛重置），所以僥倖通過。  
+
+**修法**：為 `mfn_act_buf` 增加 `max_ch` 輸入；controller 在 S_CIN_COMPUTE 設 `act_max_ch = eff_in_ch_reg`；超出 max_ch 的 columns 強制輸出 0。  
+**影響**：修後 Layer 43–47 全數通過。
+
+#### Bug 3：Layer 48 MISMATCH — Global DW 實作不完整
+
+**現象**：Layer 48（Global DW, 512-ch, 6×7 kernel）cycle 數只有 7,174（正確應為 ~25,606），輸出全錯。  
+**根因**：
+1. `sub_k_reg` 只有 4 bits，無法計到 41（需 6 bits）
+2. S_DW_FETCH 只處理 sub_k=0..8（按普通 DW 邏輯），實際需要 42 次 fetch
+3. `wgt_step` 設為 9（正確應為 45）
+4. S_DW_COMPUTE 沒有 c_in tile 循環，一次 SA cycle 只用 act_buf 前 12 entries
+
+**修法**：
+- `sub_k_reg` 擴展為 6 bits
+- 新增 `gdw_kx_reg / gdw_ky_reg` 掃描 6×7 絕對座標
+- S_WAIT_CFG：is_global_dw → `wgt_step=45, eff_in_ch=9`
+- S_DW_FETCH：is_global_dw 分支，sub_k 從 0 到 41，act_buf[0..41] 逐一載入
+- S_DW_COMPUTE：is_global_dw 分支，c_in_tile 從 0 到 3（4 tiles × 12 = 48 > 42，最後 tile zero-pad 靠 max_ch guard）
+- `act_max_ch = layer_w * layer_h`（=42）確保最後 tile 不讀 stale
+
+**影響**：修後 Layer 48–49 全數通過（Layer 49 依賴 Layer 48 輸出）。
+
+---
+
+### 31.3 Cycle 數比較
+
+```
+make sim（Xcelium RTL simulation）
+```
+
+| 版本 | 架構 | Total Cycles | @ 83 MHz | FPS |
+|------|------|-------------|----------|-----|
+| v1 | 4×1 SA | 43,158,478 | 0.520 s | 1.9 fps |
+| v2 | 6×1 SA | 25,768,847 | 0.310 s | 3.2 fps |
+| **v3** | **12×12 SA** | **24,044,536** | **0.290 s** | **3.5 fps** |
+
+v3 比 v2 減少約 **6.7%**（1,724,311 cycles），主要節省來自 PW conv 的 c_in tiling（12 channels/cycle 取代 1 channel/cycle）。
+
+節省有限的原因：
+- MobileFaceNet 大部分 cycles 花在 DW conv 和 spatial loop（逐像素、逐 kernel position），與 SA 寬度無關
+- PW conv 雖然 c_in 循環大幅縮短，但 load 階段（逐 channel 載入 act_buf）仍需和 v2 一樣的 cycles
+- SA 計算之外的 overhead（BIAS_LOAD、WRITEBACK、spatial loop transition）佔比相對增大
+
+---
+
+### 31.4 距離 30fps 還差多遠？優化建議
+
+目標：在 83 MHz 時脈下達到 30fps（每張 face 推論）。
+
+**需求分析**：
+```
+30 fps @ 83 MHz  →  最多 83,000,000 / 30 ≈ 2,766,667 cycles
+目前 v3：24,044,536 cycles
+需要再縮短約 8.7 倍
+```
+
+**目前瓶頸分解（估算）**：
+
+| 來源 | 估算佔比 | 說明 |
+|------|---------|------|
+| DW conv fetch（sub_k loop） | ~35% | 逐 kernel position 逐 channel 載入，sequential |
+| Spatial loop（逐 pixel/row/col） | ~25% | STD conv 的空間掃描 |
+| PW conv load phase | ~20% | act_buf 逐 channel load，仍是 1 ch/cycle |
+| PW conv compute phase | ~10% | SA 12 cols 已有效降低 |
+| Misc（bias, writeback, cfg）| ~10% | FSM overhead |
+
+**優化策略**：
+
+#### A. 進一步加寬 SA（短期，可行）
+- 目前 SA_COLS=12 → 升級至 SA_COLS=24 或 32
+- PW load 階段可同步多 channel（需加寬 act_buf 寫入 port 或 double-pump）
+- 預估 PW 部分節省 2x；全局改善約 20–30%
+- 限制：weight ROM port 數增加，布線複雜度上升
+
+#### B. Ping-pong act_buf（load/compute 重疊）
+- 雙 bank：bank A load 下一個 tile 的 activations，同時 bank B 供 SA compute
+- 消除 load phase 與 compute phase 的串行等待
+- 適用於 PW conv load-heavy 的 layers，估計改善 10–15%
+
+#### C. 輸入資料預取（DW fetch overlap）
+- 目前 S_DW_FETCH 需要等 pixel_in 從 SRAM 回來再存入 act_buf（synchronous）
+- 若外部 SRAM 支援 burst read，可以預載下一個 kernel position 的資料
+
+#### D. 提高時脈頻率（後端優化）
+- v2 P&R 後實際可達 ~110 MHz（WNS = +2.928 ns）
+- v3 若能維持 110 MHz：24,044,536 / 110e6 ≈ **0.219 s → 4.6 fps**
+- 仍距 30fps 差距 6.5x，單靠提頻不夠
+
+#### E. 模型端優化（關鍵路徑）
+- MobileFaceNet 原始推論對嵌入式已屬輕量，若接受精度損失：
+  - 量化至 INT8 可能允許 2x 以上速度（配合 INT8 MAC）
+  - 結構剪枝（channel pruning）可減少 in_ch/out_ch，直接縮短 DW/PW cycles
+- 完整 30fps 需要架構層面的多個改動同步進行
+
+**結論**：單靠 SA 加寬（A）加上 ping-pong（B）約可達 **5–6 fps**；要到 30fps 需要更激進的架構改動（更大 SA + 硬體流水線 + 模型壓縮）。
+
+---
+
+### 31.5 SRAM Macro 使用狀況
+
+#### 目前 v3 的 memory 實作
+
+| 模組 | 型態 | 是否 SRAM macro |
+|------|------|----------------|
+| `mfn_psum_sram` | 行為模型（RTL sim） / OpenRAM macro（P&R） | **v3 sim 用 behavioral，P&R 用 macro（同 v2）** |
+| `mfn_weight_rom_v3` | 12-port 學術寬 ROM（`logic [..] rom [..]`） | **否，FF/LUTRAM，非 SRAM macro** |
+| `mfn_act_buf` | 512-entry FF array（`logic signed [..] act_mem [..]`） | **否，FF array，非 SRAM macro** |
+
+#### psum SRAM（已有 macro）
+
+`mfn_psum_sram` 在 P&R 流程中換為兩個 OpenRAM macro（同 v2 §30）：
+- `sram_psum_a_1rw1r0w_40_512`：1RW + 1R，512 × 40-bit
+- `sram_psum_b_1rw0r0w_40_512`：1RW，512 × 40-bit
+
+v3 RTL sim 仍使用行為模型（`mfn_psum_sram.sv`），P&R 時以 LEF/LIB 替換（流程同 v2）。
+
+#### weight ROM（尚無 macro）
+
+`mfn_weight_rom_v3` 有 12 個獨立讀 port（每個 SA row 一個 addr）。實際上這是「12-port ROM」，標準 SRAM macro 只支援 1RW 或 2R1W：
+- **問題**：若要換成 SRAM macro，需要 12 個獨立 single-port SRAM，每個 cycle 做 12 次不同 addr 的讀取，面積代價極高
+- **替代方案**：使用 TSMC/Global Foundries 的 multi-port register file macro（通常 2R1W），搭配 time-multiplexed 讀取，或改用 banked 架構（每 bank 負責部分 output channels）
+
+#### act_buf（尚無 macro）
+
+512 × 16-bit FF array，合成後會變成大量 flip-flops（512 × 16 = 8192 FF）：
+- **問題**：面積大、功耗高（每個 FF 每 cycle 都 clock-gated）
+- **最佳化**：改成 single-port SRAM macro（512 × 16-bit）；load 與 read 分時操作（load phase / compute phase 已天然分開，1-cycle read latency 可接受）
+- 預估面積節省：FF array → SRAM macro 通常節省 **5–8x 面積**
+
+#### 建議
+
+若 v3 要進入 P&R 流程，至少需要：
+1. `mfn_psum_sram`：沿用 v2 的兩個 OpenRAM macro ✅
+2. `mfn_act_buf`：換成單 port SRAM macro（512×16-bit，1RW）
+3. `mfn_weight_rom_v3`：ROM 內容量大（所有層 weights，約 1.5M × 16-bit = 3 MB），最實際的方案是用 **embedded Flash 或 DRAM**，或在 tape-out 前改為從片外 SRAM 串流（現有 TB 的 pixel_in 介面即模擬此情況）

@@ -3,6 +3,11 @@
 Evaluate MobileFaceNet C-fixed model on personal photos.
 Computes a cosine-similarity matrix and per-person intra/inter stats.
 
+Used Engines: 
+    - C Float (c_model)
+    - C INT16 (c_model_fixed)
+    - C INT8 (c_model_fixed8)
+
 Usage (from project root):
   python3 software/eval/eval_my_photos.py                                    # default: c_fixed model
   python3 software/eval/eval_my_photos.py --engine pytorch                   # PyTorch instead

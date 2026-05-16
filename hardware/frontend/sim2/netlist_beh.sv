@@ -2,8 +2,13 @@
 // netlist_beh.sv — Behavioral overrides for empty stubs in
 //                  mfn_frontend_top_v2_syn.v (gate-level sim)
 //
-// Module names match the parameter-specialised names Genus uses:
-//   mfn_psum_sram_AWIDTH40
+// v2 new-syn: mfn_psum_sram_AWIDTH40 is now a real structural wrapper
+// in the netlist (contains u_sram_a + u_sram_b). The two OpenRAM macro
+// stubs are stripped and replaced with these behavioral models:
+//   sram_psum_a_1rw1r0w_40_512_freepdk45  (1RW port A + 1R port B)
+//   sram_psum_b_1rw0r0w_40_512_freepdk45  (1RW port A only)
+//
+// Other stubs unchanged:
 //   mfn_weight_rom_DWIDTH16  (uses escaped-identifier ports)
 //   mfn_bias_rom_DWIDTH32
 //   mfn_prelu_rom_DWIDTH16
@@ -13,33 +18,59 @@
 // up these definitions and finds no duplicate when parsing the netlist.
 // ============================================================
 
-// -- psum_sram: 512×40-bit, 2W 3R, async read ----------------─
-module mfn_psum_sram_AWIDTH40(
-    input  logic              clk,
-    input  logic              we_a,
-    input  logic [8:0]        waddr_a,
-    input  logic [39:0]       wdata_a,
-    input  logic              we_b,
-    input  logic [8:0]        waddr_b,
-    input  logic [39:0]       wdata_b,
-    input  logic [8:0]        raddr_a,
-    output logic [39:0]       rdata_a,
-    input  logic [8:0]        raddr_b,
-    output logic [39:0]       rdata_b,
-    input  logic [8:0]        raddr_c,
-    output logic [39:0]       rdata_c
+// -- OpenRAM SRAM_A: 512×40-bit, 1RW (port A) + 1R (port B) --
+// Sync write / async read — matches mfn_psum_sram.sv RTL semantics.
+// csb = chip-select bar (active low), web = write-enable bar (active low)
+module sram_psum_a_1rw1r0w_40_512_freepdk45(
+    input  logic        clk0, csb0, web0,
+    input  logic [4:0]  wmask0,
+    input  logic [8:0]  addr0,
+    input  logic [39:0] din0,
+    output logic [39:0] dout0,
+    input  logic        clk1, csb1,
+    input  logic [8:0]  addr1,
+    output logic [39:0] dout1
 );
     logic [39:0] mem [0:511];
     initial foreach (mem[i]) mem[i] = '0;
 
-    always_ff @(posedge clk) begin
-        if (we_a) mem[waddr_a] <= wdata_a;
-        if (we_b) mem[waddr_b] <= wdata_b;
-    end
+    // Synchronous write (port A)
+    always_ff @(posedge clk0)
+        if (!csb0 && !web0) begin
+            if (wmask0[0]) mem[addr0][ 7: 0] <= din0[ 7: 0];
+            if (wmask0[1]) mem[addr0][15: 8] <= din0[15: 8];
+            if (wmask0[2]) mem[addr0][23:16] <= din0[23:16];
+            if (wmask0[3]) mem[addr0][31:24] <= din0[31:24];
+            if (wmask0[4]) mem[addr0][39:32] <= din0[39:32];
+        end
 
-    assign rdata_a = mem[raddr_a];
-    assign rdata_b = mem[raddr_b];
-    assign rdata_c = mem[raddr_c];
+    // Asynchronous read — same semantics as RTL mfn_psum_sram.sv
+    assign dout0 = mem[addr0];
+    assign dout1 = mem[addr1];
+endmodule
+
+// -- OpenRAM SRAM_B: 512×40-bit, 1RW (port A only) -----------
+// Sync write / async read — matches mfn_psum_sram.sv RTL semantics.
+module sram_psum_b_1rw0r0w_40_512_freepdk45(
+    input  logic        clk0, csb0, web0,
+    input  logic [4:0]  wmask0,
+    input  logic [8:0]  addr0,
+    input  logic [39:0] din0,
+    output logic [39:0] dout0
+);
+    logic [39:0] mem [0:511];
+    initial foreach (mem[i]) mem[i] = '0;
+
+    always_ff @(posedge clk0)
+        if (!csb0 && !web0) begin
+            if (wmask0[0]) mem[addr0][ 7: 0] <= din0[ 7: 0];
+            if (wmask0[1]) mem[addr0][15: 8] <= din0[15: 8];
+            if (wmask0[2]) mem[addr0][23:16] <= din0[23:16];
+            if (wmask0[3]) mem[addr0][31:24] <= din0[31:24];
+            if (wmask0[4]) mem[addr0][39:32] <= din0[39:32];
+        end
+
+    assign dout0 = mem[addr0];
 endmodule
 
 // -- weight ROM: dual-port, 9 weights per port, escaped identifiers --

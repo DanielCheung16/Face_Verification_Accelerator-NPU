@@ -19,8 +19,14 @@ placeholder; real pin assignment requires custom Innovus ECO steps.
 import sys
 import re
 
-SRAM_A_LEF = "macro/sram_psum_a_1rw1r0w_40_512_freepdk45/sram_psum_a_1rw1r0w_40_512_freepdk45.lef"
+SRAM_A_LEF  = "macro/sram_psum_a_1rw1r0w_40_512_freepdk45/sram_psum_a_1rw1r0w_40_512_freepdk45.lef"
 OUTPUT_LEF  = "macro/mfn_psum_sram.lef"
+MACRO_NAME  = "mfn_psum_sram_AWIDTH40"   # must match synthesis cell name
+MFG_GRID    = 0.005                       # FreePDK45 manufacturing grid (um)
+
+def snap(v):
+    """Round v to the nearest manufacturing grid point."""
+    return round(round(v / MFG_GRID) * MFG_GRID, 4)
 
 # ── Parse SRAM_A size ────────────────────────────────────────────────────────
 with open(SRAM_A_LEF) as f:
@@ -73,12 +79,12 @@ PIN_H     = 0.14    # pin rect height (um)
 PIN_Y_MID = total_h / 2.0
 
 def pin_block(name, direction, use, x_frac=0.5):
-    """Generate a single-bit PIN block with a small rect on metal3."""
-    pin_x = round(total_w * x_frac, 4)
-    rect_x0 = round(pin_x - 0.07, 4)
-    rect_x1 = round(pin_x + 0.07, 4)
-    rect_y0 = round(PIN_Y_MID - PIN_H / 2, 4)
-    rect_y1 = round(PIN_Y_MID + PIN_H / 2, 4)
+    """Generate a single-bit PIN block with a small rect on metal3, snapped to grid."""
+    pin_x  = snap(total_w * x_frac)
+    rect_x0 = snap(pin_x - 0.07)
+    rect_x1 = snap(pin_x + 0.07)
+    rect_y0 = snap(PIN_Y_MID - PIN_H / 2)
+    rect_y1 = snap(PIN_Y_MID + PIN_H / 2)
     return (
         f"  PIN {name}\n"
         f"    DIRECTION {direction} ;\n"
@@ -94,13 +100,12 @@ def pin_block(name, direction, use, x_frac=0.5):
 lines = []
 lines.append("VERSION 5.7 ;\n")
 lines.append("BUSBITCHARS \"[]\" ;\n\n")
-lines.append(f"MACRO mfn_psum_sram\n")
+lines.append(f"MACRO {MACRO_NAME}\n")
 lines.append(f"  CLASS BLOCK ;\n")
 lines.append(f"  ORIGIN 0.000 0.000 ;\n")
-lines.append(f"  FOREIGN mfn_psum_sram 0.000 0.000 ;\n")
-lines.append(f"  SIZE {total_w} BY {total_h} ;\n")
-lines.append(f"  SYMMETRY X Y R90 ;\n")
-lines.append(f"  SITE FreePDK45_38x28_10R_NP_162NW_34O ;\n\n")
+lines.append(f"  FOREIGN {MACRO_NAME} 0.000 0.000 ;\n")
+lines.append(f"  SIZE {snap(total_w)} BY {snap(total_h)} ;\n")
+lines.append(f"  SYMMETRY X Y R90 ;\n\n")
 
 x_step = 1.0 / (len(ports_1bit) + len(ports_addr) + len(ports_data) + len(power_ports) + 1)
 x_frac = x_step
@@ -118,7 +123,7 @@ for name, direction, use in power_ports:
     lines.append(pin_block(name, direction, use, x_frac))
     x_frac += x_step
 
-lines.append(f"END mfn_psum_sram\n\n")
+lines.append(f"END {MACRO_NAME}\n\n")
 lines.append("END LIBRARY\n")
 
 with open(OUTPUT_LEF, "w") as f:

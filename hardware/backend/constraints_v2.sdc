@@ -1,12 +1,11 @@
 # ============================================================
 # SDC Constraints v2 — MobileFaceNet Frontend
-# Target: 83 MHz (12 ns period)
-# Lowered from 100 MHz: post-route critical path through
-# psum_mem write-enable decode + CLA-b + routing buffers
-# was 11.461 ns at 100 MHz (WNS -0.922 ns).
+# Target: 125 MHz (8 ns period)
+# Post-route critical path (SRAM dout → CLA → SRAM din)
+# at 100 MHz WNS was +1.848 ns; pushing to 125 MHz for headroom.
 # ============================================================
 
-create_clock -name clk -period 12.0 [get_ports clk]
+create_clock -name clk -period 8.0 [get_ports clk]
 set_clock_uncertainty 0.1  [get_clocks clk]
 set_clock_transition  0.1  [get_clocks clk]
 

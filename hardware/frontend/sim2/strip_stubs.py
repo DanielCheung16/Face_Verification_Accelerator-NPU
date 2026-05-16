@@ -14,7 +14,10 @@ import re
 import sys
 
 STUBS = [
-    "mfn_psum_sram_AWIDTH40",
+    # v2 new-syn: real OpenRAM macro stubs (replaced behavioral mfn_psum_sram wrapper)
+    "sram_psum_a_1rw1r0w_40_512_freepdk45",
+    "sram_psum_b_1rw0r0w_40_512_freepdk45",
+    # ROM/config stubs (unchanged)
     "mfn_weight_rom_DWIDTH16",
     "mfn_bias_rom_DWIDTH32",
     "mfn_prelu_rom_DWIDTH16",

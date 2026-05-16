@@ -1,17 +1,23 @@
 // ============================================================
-// ROM Black-Box Stubs for Synthesis — v2
-// Differences from rom_stubs.sv (v1):
-//   mfn_weight_rom: dual-port (addr_a/addr_b, weights_a/weights_b)
-//   mfn_bias_rom, mfn_prelu_rom, mfn_layer_config_rom: unchanged
+// ROM / SRAM Black-Box Stubs for Synthesis — v3
+//
+// v3 vs v2:
+//   mfn_weight_rom_v3: 12-read-port ROM (one addr per SA row)
+//     — academic wide model, cannot be synthesized; black box.
+//   bias_rom, prelu_rom, layer_config_rom: unchanged from v2
+//   mfn_psum_sram + OpenRAM macros: identical to v2 (reused)
 // ============================================================
 
-// Weight ROM v2: dual read ports for simultaneous c_out / c_out+1 access
-module mfn_weight_rom #(parameter int DWIDTH = 16)(
-    input  logic              clk,
-    input  logic [19:0]       addr_a,
-    input  logic [19:0]       addr_b,
-    output logic signed [DWIDTH-1:0] weights_a [0:8],
-    output logic signed [DWIDTH-1:0] weights_b [0:8]
+// Weight ROM v3: 12 independent read ports (one per SA row).
+// Each addr[r] reads SA_COLS=12 consecutive weights → wgt_out[r][0..11].
+module mfn_weight_rom_v3 #(
+    parameter int DWIDTH   = 16,
+    parameter int MEM_BITS = 20,
+    parameter int SA_ROWS  = 12,
+    parameter int SA_COLS  = 12
+)(
+    input  logic [MEM_BITS-1:0]      addr    [SA_ROWS],
+    output logic signed [DWIDTH-1:0] wgt_out [SA_ROWS][SA_COLS]
 );
 endmodule
 
@@ -34,8 +40,8 @@ module mfn_layer_config_rom #(parameter int ADDR_WIDTH = 6)(
 );
 endmodule
 
-// ── OpenRAM leaf SRAM stubs (Genus black boxes) ──────────────
-// Synthesis treats these as physical macros; no cells generated.
+// ── OpenRAM leaf SRAM stubs (identical to v2) ────────────────
+// psum SRAM interface unchanged: 512×40-bit, 1RW+1R / 1RW.
 module sram_psum_a_1rw1r0w_40_512_freepdk45 (
     input        clk0, csb0, web0,
     input  [4:0] wmask0,
@@ -57,9 +63,8 @@ module sram_psum_b_1rw0r0w_40_512_freepdk45 (
 );
 endmodule
 
-// mfn_psum_sram: structural wrapper for synthesis / P&R.
-// Instantiates two OpenRAM macros so Innovus sees two physical SRAMs.
-// (RTL simulation uses behavioral sv2/mfn_psum_sram.sv instead.)
+// mfn_psum_sram: structural wrapper for synthesis / P&R (identical to v2).
+// RTL simulation uses sv3/mfn_psum_sram.sv (behavioral) instead.
 module mfn_psum_sram #(
     parameter int AWIDTH = 40,
     parameter int DEPTH  = 512,
@@ -79,8 +84,6 @@ module mfn_psum_sram #(
     input  logic [ABITS-1:0]  raddr_c,
     output logic [AWIDTH-1:0] rdata_c
 );
-    // Port 0 (RW): mux write_a / read_a on same address port
-    // Port 1 (R):  dedicated read_c
     sram_psum_a_1rw1r0w_40_512_freepdk45 u_sram_a (
         .clk0   (clk),
         .csb0   (1'b0),
@@ -95,7 +98,6 @@ module mfn_psum_sram #(
         .dout1  (rdata_c)
     );
 
-    // Port 0 (RW): mux write_b / read_b on same address port
     sram_psum_b_1rw0r0w_40_512_freepdk45 u_sram_b (
         .clk0   (clk),
         .csb0   (1'b0),

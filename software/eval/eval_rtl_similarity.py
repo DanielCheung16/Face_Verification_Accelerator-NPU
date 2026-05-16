@@ -3,19 +3,24 @@
 eval_rtl_similarity.py
 Similarity matrix across a folder of face images.
   - C fixed model: all images (fast)
-  - RTL simulation: N images per person (slow, ~5 min each)
+  - RTL v1 simulation: N images per person (slow, ~5 min each)
+  - RTL v2 simulation: N images per person (slow, ~5 min each)
 
 Naming convention: {person}_{idx}.jpg  (e.g. dan_1.jpg, wil_3.jpg)
 
-Usage:
+Run from project root:
+
   # C model only (fastest):
   python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new --no-rtl
 
-  # C model all + RTL for 1 image per person (default):
+  # C model all + RTL v1 for 1 image per person (default):
   python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new
 
-  # C model all + RTL for 2 images per person:
-  python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new --rtl-per-person 2
+  # C model all + RTL v1 + RTL v2 for 1 image per person:
+  python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new --v2-per-person 1
+
+  # Save embeddings to cache after running:
+  python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new --save-cache
 
   # Skip re-running, load from cache:
   python3 software/eval/eval_rtl_similarity.py --dir software/src/test_image_my_new --load-cache
@@ -33,8 +38,10 @@ from PIL import Image
 # ── Paths ──────────────────────────────────────────────────────────────────────
 PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__) + "/../..")
 SIM_DIR      = os.path.join(PROJECT_ROOT, "hardware/frontend/sim")
+SIM2_DIR     = os.path.join(PROJECT_ROOT, "hardware/frontend/sim2")
 GOLDEN_DIR   = os.path.join(PROJECT_ROOT, "software/golden")
-HEX_DIR      = os.path.join(SIM_DIR, "hex")
+HEX_DIR      = os.path.join(SIM_DIR,  "hex")
+HEX2_DIR     = os.path.join(SIM2_DIR, "hex")
 C_FIXED_EXE  = os.path.join(PROJECT_ROOT, "software/c_model_fixed/c_inference_model_fixed")
 CACHE_FILE   = os.path.join(PROJECT_ROOT, "software/embedding_cache.json")
 B1           = 0x54000   # L49 linear1 output offset in SRAM
@@ -98,6 +105,36 @@ def run_rtl(image_path):
     return emb
 
 
+def run_rtl_v2(image_path):
+    label = os.path.basename(image_path)
+    print(f"  [RTLv2] {label} — writing input ...")
+
+    inp = preprocess(image_path)
+    with open(os.path.join(GOLDEN_DIR, "layer0_in.txt"), "w") as f:
+        for v in inp.flatten():
+            f.write(f"{v:.6f}\n")
+
+    print(f"  [RTLv2] gen_hex.py ...")
+    r = subprocess.run(["python3", "gen_hex.py"], cwd=SIM2_DIR,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if r.returncode != 0:
+        raise RuntimeError(f"[RTLv2] gen_hex failed:\n{r.stderr.decode()}")
+
+    print(f"  [RTLv2] make top (~5 min) ...")
+    r = subprocess.run(["make", "top"], cwd=SIM2_DIR,
+                       stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if r.returncode != 0:
+        raise RuntimeError(f"[RTLv2] make top failed:\n{r.stderr.decode()}")
+
+    hex_path = os.path.join(HEX2_DIR, "rtl_out.hex")
+    with open(hex_path) as f:
+        lines = [l.strip() for l in f if l.strip() and not l.startswith("@")]
+
+    emb = np.array([hex_to_int16(lines[B1 + i]) for i in range(128)], dtype=np.int16)
+    print(f"  [RTLv2] Done. norm={np.linalg.norm(emb.astype(float)):.1f}")
+    return emb
+
+
 # ── Cache (keyed by basename so path-portable) ─────────────────────────────────
 def load_cache():
     if os.path.exists(CACHE_FILE):
@@ -106,16 +143,18 @@ def load_cache():
         out = {}
         for k, v in raw.items():
             out[k] = {
-                "c":   np.array(v["c"],   dtype=np.int16) if v.get("c")   else None,
-                "rtl": np.array(v["rtl"], dtype=np.int16) if v.get("rtl") else None,
+                "c":      np.array(v["c"],      dtype=np.int16) if v.get("c")      else None,
+                "rtl":    np.array(v["rtl"],    dtype=np.int16) if v.get("rtl")    else None,
+                "rtl_v2": np.array(v["rtl_v2"], dtype=np.int16) if v.get("rtl_v2") else None,
             }
         return out
     return {}
 
 
 def save_cache(cache):
-    raw = {k: {"c":   v["c"].tolist()   if v.get("c")   is not None else None,
-               "rtl": v["rtl"].tolist() if v.get("rtl") is not None else None}
+    raw = {k: {"c":      v["c"].tolist()      if v.get("c")      is not None else None,
+               "rtl":    v["rtl"].tolist()    if v.get("rtl")    is not None else None,
+               "rtl_v2": v["rtl_v2"].tolist() if v.get("rtl_v2") is not None else None}
            for k, v in cache.items()}
     with open(CACHE_FILE, "w") as f:
         json.dump(raw, f, indent=2)
@@ -216,7 +255,9 @@ def main():
     ap.add_argument("--no-rtl", action="store_true",
                     help="skip RTL simulation, C model only")
     ap.add_argument("--rtl-per-person", type=int, default=1,
-                    help="RTL runs per person (default 1, ~5 min each)")
+                    help="RTL v1 runs per person (default 1, ~5 min each)")
+    ap.add_argument("--v2-per-person", type=int, default=0,
+                    help="RTL v2 runs per person (default 0 = skip, ~5 min each)")
     ap.add_argument("--load-cache", action="store_true",
                     help="load cached embeddings (skip re-running)")
     ap.add_argument("--save-cache", action="store_true",
@@ -257,7 +298,9 @@ def main():
     for img in images:
         k = os.path.basename(img)
         if k not in cache:
-            cache[k] = {"c": None, "rtl": None}
+            cache[k] = {"c": None, "rtl": None, "rtl_v2": None}
+        elif "rtl_v2" not in cache[k]:
+            cache[k]["rtl_v2"] = None
 
     # ── C model ──
     print("── C Fixed Model ──────────────────────────────")
@@ -269,13 +312,30 @@ def main():
         else:
             print(f"  [{i+1:2d}/{len(images)}] {k}  (cached)")
 
-    # ── RTL ──
+    # ── RTL v1 ──
     if rtl_targets:
-        print(f"\n── RTL Simulation ({len(rtl_targets)} images) ──────────────────")
+        print(f"\n── RTL v1 Simulation ({len(rtl_targets)} images) ─────────────────")
         for img in sorted(rtl_targets):
             k = os.path.basename(img)
             if cache[k]["rtl"] is None:
                 cache[k]["rtl"] = run_rtl(img)
+            else:
+                print(f"  {k}  (cached)")
+
+    # ── RTL v2 ──
+    v2_targets = set()
+    if args.v2_per_person > 0:
+        for p in unique_persons:
+            person_imgs = [images[i] for i, x in enumerate(persons) if x == p]
+            for img in person_imgs[:args.v2_per_person]:
+                v2_targets.add(img)
+
+    if v2_targets:
+        print(f"\n── RTL v2 Simulation ({len(v2_targets)} images) ─────────────────")
+        for img in sorted(v2_targets):
+            k = os.path.basename(img)
+            if cache[k]["rtl_v2"] is None:
+                cache[k]["rtl_v2"] = run_rtl_v2(img)
             else:
                 print(f"  {k}  (cached)")
 
@@ -287,44 +347,90 @@ def main():
     print_matrix("C Fixed Model — Cosine Similarity", names, persons, sim_c)
     print_stats("C Fixed", names, persons, sim_c)
 
-    # ── RTL matrix (if any) ──
+    # ── RTL v1 matrix (if any) ──
     rtl_done = [img for img in images
                 if cache[os.path.basename(img)].get("rtl") is not None]
     if rtl_done:
         sim_rtl = build_sim_matrix(images, cache, "rtl")
-        rtl_names   = [os.path.basename(p) for p in images]
-        rtl_persons = persons
-        print_matrix("RTL Simulation — Cosine Similarity", rtl_names, rtl_persons, sim_rtl)
-        print_stats("RTL", rtl_names, rtl_persons, sim_rtl)
+        print_matrix("RTL v1 Simulation — Cosine Similarity", names, persons, sim_rtl)
+        print_stats("RTL v1", names, persons, sim_rtl)
         print_rtl_vs_c(names, images, cache)
 
-        # Side-by-side gap comparison
-        all_intra_c   = [sim_c[i][j]   for i in range(len(images))
-                          for j in range(len(images))
-                          if i != j and persons[i] == persons[j]]
-        all_inter_c   = [sim_c[i][j]   for i in range(len(images))
-                          for j in range(len(images)) if persons[i] != persons[j]]
-        all_intra_rtl = [sim_rtl[i][j] for i in range(len(images))
-                          for j in range(len(images))
-                          if i != j and persons[i] == persons[j]
-                          and cache[os.path.basename(images[i])].get("rtl") is not None
-                          and cache[os.path.basename(images[j])].get("rtl") is not None]
-        all_inter_rtl = [sim_rtl[i][j] for i in range(len(images))
-                          for j in range(len(images))
-                          if persons[i] != persons[j]
-                          and cache[os.path.basename(images[i])].get("rtl") is not None
-                          and cache[os.path.basename(images[j])].get("rtl") is not None]
+    # ── RTL v2 matrix (if any) ──
+    v2_done = [img for img in images
+               if cache[os.path.basename(img)].get("rtl_v2") is not None]
+    sim_rtl_v2 = None
+    if v2_done:
+        sim_rtl_v2 = build_sim_matrix(images, cache, "rtl_v2")
+        print_matrix("RTL v2 Simulation — Cosine Similarity", names, persons, sim_rtl_v2)
+        print_stats("RTL v2", names, persons, sim_rtl_v2)
 
-        print(f"\n{'Summary Comparison':=^50}")
-        print(f"{'':20} {'C Fixed':>12} {'RTL':>12}")
-        print("-" * 46)
-        if all_intra_c and all_intra_rtl:
-            print(f"{'Intra avg':<20} {np.mean(all_intra_c):>12.4f} {np.mean(all_intra_rtl):>12.4f}")
-            print(f"{'Inter avg':<20} {np.mean(all_inter_c):>12.4f} {np.mean(all_inter_rtl):>12.4f}")
-            gc = np.mean(all_intra_c) - np.mean(all_inter_c)
-            gr = np.mean(all_intra_rtl) - np.mean(all_inter_rtl)
-            print(f"{'Gap':<20} {gc:>+12.4f} {gr:>+12.4f}")
-        print("=" * 50)
+        # RTL v2 vs C comparison
+        print(f"\n{'RTL v2 vs C Model — Embedding Exact Match':=^70}")
+        print(f"{'Image':<26} {'Match':>9} {'MaxDiff':>9} {'MeanAbsErr':>12}")
+        print("-" * 60)
+        for img in v2_done:
+            k = os.path.basename(img)
+            c_emb, v2_emb = cache[k]["c"], cache[k]["rtl_v2"]
+            diffs = np.abs(c_emb.astype(np.int32) - v2_emb.astype(np.int32))
+            print(f"{k:<26} {int(np.sum(diffs==0)):>6}/128 "
+                  f"{int(np.max(diffs)):>9} {np.mean(diffs):>12.4f}")
+        print("=" * 70)
+
+    # ── Summary comparison ──
+    if rtl_done or v2_done:
+        all_intra_c = [sim_c[i][j] for i in range(len(images))
+                       for j in range(len(images))
+                       if i != j and persons[i] == persons[j]]
+        all_inter_c = [sim_c[i][j] for i in range(len(images))
+                       for j in range(len(images)) if persons[i] != persons[j]]
+
+        has_rtl = bool(rtl_done)
+        has_v2  = bool(v2_done)
+        col_w   = 12
+        header  = f"{'':20} {'C Fixed':>{col_w}}"
+        if has_rtl: header += f" {'RTL v1':>{col_w}}"
+        if has_v2:  header += f" {'RTL v2':>{col_w}}"
+        sep = "=" * (20 + col_w * (1 + has_rtl + has_v2) + 2 * (1 + has_rtl + has_v2))
+
+        print(f"\n{sep}\n{'Summary Comparison':^{len(sep)}}\n{sep}")
+        print(header)
+        print("-" * len(sep))
+
+        def _intra(sim, key):
+            return [sim[i][j] for i in range(len(images))
+                    for j in range(len(images))
+                    if i != j and persons[i] == persons[j]
+                    and cache[os.path.basename(images[i])].get(key) is not None
+                    and cache[os.path.basename(images[j])].get(key) is not None]
+
+        def _inter(sim, key):
+            return [sim[i][j] for i in range(len(images))
+                    for j in range(len(images))
+                    if persons[i] != persons[j]
+                    and cache[os.path.basename(images[i])].get(key) is not None
+                    and cache[os.path.basename(images[j])].get(key) is not None]
+
+        intra_c = _intra(sim_c, "c"); inter_c = _inter(sim_c, "c")
+        row_intra = f"{'Intra avg':<20} {np.mean(intra_c):>{col_w}.4f}"
+        row_inter = f"{'Inter avg':<20} {np.mean(inter_c):>{col_w}.4f}"
+        row_gap   = f"{'Gap':<20} {np.mean(intra_c)-np.mean(inter_c):>+{col_w}.4f}"
+
+        if has_rtl:
+            ia = _intra(sim_rtl, "rtl"); ie = _inter(sim_rtl, "rtl")
+            if ia:
+                row_intra += f" {np.mean(ia):>{col_w}.4f}"
+                row_inter += f" {np.mean(ie):>{col_w}.4f}"
+                row_gap   += f" {np.mean(ia)-np.mean(ie):>+{col_w}.4f}"
+        if has_v2:
+            ia2 = _intra(sim_rtl_v2, "rtl_v2"); ie2 = _inter(sim_rtl_v2, "rtl_v2")
+            if ia2:
+                row_intra += f" {np.mean(ia2):>{col_w}.4f}"
+                row_inter += f" {np.mean(ie2):>{col_w}.4f}"
+                row_gap   += f" {np.mean(ia2)-np.mean(ie2):>+{col_w}.4f}"
+
+        print(row_intra); print(row_inter); print(row_gap)
+        print(sep)
 
 
 if __name__ == "__main__":

@@ -1,3 +1,18 @@
+"""
+Quantization and Inference Similarity Test Suite
+
+Used Engines: 
+    - C Float (c_model)
+    - C INT16 (c_model_fixed)
+    - C INT8 (c_model_fixed8)
+    - PyTorch (pytorch)
+
+Usage (from project root):
+  python3 software/eval/compare_similarity.py                        # auto-detect all
+  python3 software/eval/compare_similarity.py --engines pytorch      # PyTorch
+"""
+
+
 import argparse
 import os
 import sys
@@ -10,11 +25,13 @@ _EVAL_DIR = os.path.dirname(os.path.abspath(__file__))
 _SW_DIR   = os.path.join(_EVAL_DIR, "..")
 sys.path.insert(0, os.path.join(_SW_DIR, "python"))
 
-import torch
-import tensorflow as tf
-from model import MobileFacenet
-from inference import preprocess_image
-from tfrecord_same_person import generate_test_pairs
+def _require_pytorch():
+    global torch, tf, MobileFacenet, preprocess_image, generate_test_pairs
+    import torch
+    import tensorflow as tf
+    from model import MobileFacenet
+    from inference import preprocess_image
+    from tfrecord_same_person import generate_test_pairs
 
 # === CONFIGURATION PATHS ===
 TFRECORD_FILE   = os.path.join(_SW_DIR, "src/faces_ms1m_refine_v2_112x112-0-of-16.tfrecord")
@@ -30,6 +47,13 @@ NUM_TEST_PAIRS = 10
 TEST_IMG_DIR = os.path.join(_SW_DIR, "src/test_images")
 ENGINE_CHOICES = ["pytorch", "c", "c_fixed", "c_fixed8"]
 # ===========================
+
+
+def _preprocess_np(image_path):
+    """PIL+numpy only — no torch needed. Returns CHW float32 array in [-1, 1]."""
+    img = Image.open(image_path).convert('RGB').resize((96, 112))
+    img_np = (np.array(img, dtype=np.float32) - 127.5) / 128.0
+    return img_np.transpose((2, 0, 1))  # CHW
 
 
 def _check_executable(exe_path):
@@ -90,6 +114,7 @@ class PyTorchEngine:
     label = "PyTorch"
 
     def __init__(self, ckpt_path=CKPT_PATH):
+        _require_pytorch()
         print("[PyTorchEngine] Loading model weights...")
         self.device = torch.device("cpu")
         self.net = MobileFacenet()
@@ -128,11 +153,13 @@ class CModelEngine:
     def get_embedding(self, image_path):
         if not os.path.exists(image_path):
             return None
-        _, input_np = preprocess_image(image_path)
-        tmp_in, tmp_out = "tmp_in.txt", "tmp_out.txt"
+        input_np = _preprocess_np(image_path)
+        cwd = os.path.dirname(self.exe_path)
+        tmp_in  = os.path.join(cwd, "tmp_in.txt")
+        tmp_out = os.path.join(cwd, "tmp_out.txt")
         with open(tmp_in, "w") as f:
             np.savetxt(f, input_np.flatten(), fmt="%.6f")
-        result = subprocess.run([self.exe_path, tmp_in, tmp_out], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+        result = subprocess.run([self.exe_path, tmp_in, tmp_out], cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         if result.returncode != 0:
             print(f"[CModelEngine] CRASH: {result.stdout}\n{result.stderr}")
             raise subprocess.CalledProcessError(result.returncode, result.args)
@@ -156,12 +183,14 @@ class CFixedModelEngine:
     def get_embedding(self, image_path):
         if not os.path.exists(image_path):
             return None
-        _, input_np = preprocess_image(image_path)
+        input_np = _preprocess_np(image_path)
         input_q16 = np.clip(np.round(input_np * SCALE), -32768, 32767).astype(np.int16)
-        tmp_in, tmp_out = "tmp_in_fixed.txt", "tmp_out_fixed.txt"
+        cwd = os.path.dirname(self.exe_path)
+        tmp_in  = os.path.join(cwd, "tmp_in_fixed.txt")
+        tmp_out = os.path.join(cwd, "tmp_out_fixed.txt")
         with open(tmp_in, "w") as f:
             np.savetxt(f, input_q16.flatten(), fmt="%d")
-        result = subprocess.run([self.exe_path, tmp_in, tmp_out], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+        result = subprocess.run([self.exe_path, tmp_in, tmp_out], cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         if result.returncode != 0:
             print(f"[CFixedModelEngine] CRASH: {result.stdout}\n{result.stderr}")
             raise subprocess.CalledProcessError(result.returncode, result.args)
@@ -185,12 +214,14 @@ class CFixed8ModelEngine:
     def get_embedding(self, image_path):
         if not os.path.exists(image_path):
             return None
-        _, input_np = preprocess_image(image_path)
+        input_np = _preprocess_np(image_path)
         input_q8 = np.clip(np.round(input_np * SCALE8), -128, 127).astype(np.int8)
-        tmp_in, tmp_out = "tmp_in_fixed8.txt", "tmp_out_fixed8.txt"
+        cwd = os.path.dirname(self.exe_path)
+        tmp_in  = os.path.join(cwd, "tmp_in_fixed8.txt")
+        tmp_out = os.path.join(cwd, "tmp_out_fixed8.txt")
         with open(tmp_in, "w") as f:
             np.savetxt(f, input_q8.flatten(), fmt="%d")
-        result = subprocess.run([self.exe_path, tmp_in, tmp_out], stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+        result = subprocess.run([self.exe_path, tmp_in, tmp_out], cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
         if result.returncode != 0:
             print(f"[CFixed8ModelEngine] CRASH: {result.stdout}\n{result.stderr}")
             raise subprocess.CalledProcessError(result.returncode, result.args)
@@ -290,12 +321,31 @@ def parse_args():
     return parser.parse_args()
 
 
+def _pairs_from_existing_images(img_dir, n):
+    """Build test pairs from already-extracted images (no TFRecord / torch needed)."""
+    imgs = sorted([
+        int(f.split("_")[1].split(".")[0])
+        for f in os.listdir(img_dir) if f.startswith("img_") and f.endswith(".jpg")
+    ])
+    if len(imgs) < 2:
+        raise SystemExit(f"No images found in {img_dir}. Run with --engines pytorch first to extract them.")
+    same, diff = [], []
+    for i in range(min(n, len(imgs) - 1)):
+        same.append((imgs[i], imgs[i]))          # same image = definite positive
+        diff.append((imgs[i], imgs[i + 1]))       # adjacent images = negative proxy
+    return same, diff
+
+
 def main():
     args = parse_args()
 
-    print("Generating Test Pairs...")
-    same_pairs, diff_pairs, all_indices = generate_test_pairs(TFRECORD_FILE, args.num_pairs)
-    extract_batch_indices(TFRECORD_FILE, all_indices, TEST_IMG_DIR)
+    if "pytorch" in args.engines:
+        _require_pytorch()
+        print("Generating Test Pairs...")
+        same_pairs, diff_pairs, all_indices = generate_test_pairs(TFRECORD_FILE, args.num_pairs)
+        extract_batch_indices(TFRECORD_FILE, all_indices, TEST_IMG_DIR)
+    else:
+        same_pairs, diff_pairs = _pairs_from_existing_images(TEST_IMG_DIR, args.num_pairs)
 
     print("\n--- Initializing Inference Engines ---")
     engines = build_engines(args.engines)
