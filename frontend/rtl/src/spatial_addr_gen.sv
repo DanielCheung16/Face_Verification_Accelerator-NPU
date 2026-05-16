@@ -43,9 +43,17 @@ module spatial_addr_gen #(
     logic [ADDR_W-1:0] wgt_row1_base;
     logic [ADDR_W-1:0] wgt_row2_base;
     logic [ADDR_W-1:0] ix0;
+    logic [ADDR_W-1:0] ix1;
+    logic [ADDR_W-1:0] ix2;
     logic [ADDR_W-1:0] iy0;
+    logic [ADDR_W-1:0] iy1;
+    logic [ADDR_W-1:0] iy2;
     logic [ADDR_W-1:0] ix0_x7;
+    logic [ADDR_W-1:0] ix1_x7;
+    logic [ADDR_W-1:0] ix2_x7;
     logic [ADDR_W-1:0] pixel_idx_x0;
+    logic [ADDR_W-1:0] pixel_idx_x1;
+    logic [ADDR_W-1:0] pixel_idx_x2;
     logic [ADDR_W-1:0] y0_offset;
     logic [ADDR_W-1:0] y1_offset;
     logic [ADDR_W-1:0] y2_offset;
@@ -77,17 +85,25 @@ module spatial_addr_gen #(
     assign ifmap_size_s = $signed({1'b0, ifmap_size});
 
     assign ix0 = sx0[ADDR_W-1:0];
+    assign ix1 = sx1[ADDR_W-1:0];
+    assign ix2 = sx2[ADDR_W-1:0];
     assign iy0 = sy0[ADDR_W-1:0];
+    assign iy1 = sy1[ADDR_W-1:0];
+    assign iy2 = sy2[ADDR_W-1:0];
     assign ix0_x7 = (ix0 << 3) - ix0;
+    assign ix1_x7 = (ix1 << 3) - ix1;
+    assign ix2_x7 = (ix2 << 3) - ix2;
     assign pixel_idx_x0 = ix0_x7 << ifmap_size_code_r_i;
+    assign pixel_idx_x1 = ix1_x7 << ifmap_size_code_r_i;
+    assign pixel_idx_x2 = ix2_x7 << ifmap_size_code_r_i;
     assign y0_offset = iy0 << num_filter_shift_i;
-    assign y1_offset = (iy0 + ADDR_W'(1)) << num_filter_shift_i;
-    assign y2_offset = (iy0 + ADDR_W'(2)) << num_filter_shift_i;
+    assign y1_offset = iy1 << num_filter_shift_i;
+    assign y2_offset = iy2 << num_filter_shift_i;
     assign three_pixel_stride = pixel_stride_i + (pixel_stride_i << 1);
 
     assign row0_base = act_base_addr_i + (pixel_idx_x0 << num_filter_shift_i) + tile_offset_r_i;
-    assign row1_base = row0_base + row_stride_i;
-    assign row2_base = row1_base + row_stride_i;
+    assign row1_base = act_base_addr_i + (pixel_idx_x1 << num_filter_shift_i) + tile_offset_r_i;
+    assign row2_base = act_base_addr_i + (pixel_idx_x2 << num_filter_shift_i) + tile_offset_r_i;
 
     assign act_addr_o[0] = row0_base + y0_offset;
     assign act_addr_o[1] = row0_base + y1_offset;

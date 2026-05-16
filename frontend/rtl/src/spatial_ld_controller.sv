@@ -71,10 +71,16 @@ module spatial_ld_controller #(
 
     logic [POS_W-1:0] act_wr_pos_pipe, act_wr_pos_pipe_nxt;
     logic [POS_W-1:0] wgt_wr_pos_pipe, wgt_wr_pos_pipe_nxt;
+    logic [POS_W-1:0] act_wr_pos_pipe2, act_wr_pos_pipe2_nxt;
+    logic [POS_W-1:0] wgt_wr_pos_pipe2, wgt_wr_pos_pipe2_nxt;
     logic act_rd_valid_pipe, act_rd_valid_pipe_nxt;
     logic wgt_rd_valid_pipe, wgt_rd_valid_pipe_nxt;
+    logic act_rd_valid_pipe2, act_rd_valid_pipe2_nxt;
+    logic wgt_rd_valid_pipe2, wgt_rd_valid_pipe2_nxt;
     logic act_zero_pipe, act_zero_pipe_nxt;
+    logic act_zero_pipe2, act_zero_pipe2_nxt;
     logic last_issue_pipe, last_issue_pipe_nxt;
+    logic last_issue_pipe2, last_issue_pipe2_nxt;
 
     logic gb_act_rd_en_nxt;
     logic [ADDR_W-1:0] gb_act_rd_addr_nxt;
@@ -178,10 +184,16 @@ module spatial_ld_controller #(
             ifmap_size_code <= '0;
             act_wr_pos_pipe <= '0;
             wgt_wr_pos_pipe <= '0;
+            act_wr_pos_pipe2 <= '0;
+            wgt_wr_pos_pipe2 <= '0;
             act_rd_valid_pipe <= 1'b0;
             wgt_rd_valid_pipe <= 1'b0;
+            act_rd_valid_pipe2 <= 1'b0;
+            wgt_rd_valid_pipe2 <= 1'b0;
             act_zero_pipe <= 1'b0;
+            act_zero_pipe2 <= 1'b0;
             last_issue_pipe <= 1'b0;
+            last_issue_pipe2 <= 1'b0;
             gb_act_rd_en_o <= 1'b0;
             gb_act_rd_addr_o <= '0;
             gb_wgt_rd_en_o <= 1'b0;
@@ -211,10 +223,16 @@ module spatial_ld_controller #(
             ifmap_size_code <= ifmap_size_code_nxt;
             act_wr_pos_pipe <= act_wr_pos_pipe_nxt;
             wgt_wr_pos_pipe <= wgt_wr_pos_pipe_nxt;
+            act_wr_pos_pipe2 <= act_wr_pos_pipe2_nxt;
+            wgt_wr_pos_pipe2 <= wgt_wr_pos_pipe2_nxt;
             act_rd_valid_pipe <= act_rd_valid_pipe_nxt;
             wgt_rd_valid_pipe <= wgt_rd_valid_pipe_nxt;
+            act_rd_valid_pipe2 <= act_rd_valid_pipe2_nxt;
+            wgt_rd_valid_pipe2 <= wgt_rd_valid_pipe2_nxt;
             act_zero_pipe <= act_zero_pipe_nxt;
+            act_zero_pipe2 <= act_zero_pipe2_nxt;
             last_issue_pipe <= last_issue_pipe_nxt;
+            last_issue_pipe2 <= last_issue_pipe2_nxt;
             gb_act_rd_en_o <= gb_act_rd_en_nxt;
             gb_act_rd_addr_o <= gb_act_rd_addr_nxt;
             gb_wgt_rd_en_o <= gb_wgt_rd_en_nxt;
@@ -240,21 +258,30 @@ module spatial_ld_controller #(
         issue_pos_cnt_nxt = issue_pos_cnt;
         act_wr_pos_pipe_nxt = issue_pos_cnt;
         wgt_wr_pos_pipe_nxt = issue_pos_cnt;
+        act_wr_pos_pipe2_nxt = act_wr_pos_pipe;
+        wgt_wr_pos_pipe2_nxt = wgt_wr_pos_pipe;
         act_rd_valid_pipe_nxt = 1'b0;
         wgt_rd_valid_pipe_nxt = 1'b0;
+        act_rd_valid_pipe2_nxt = act_rd_valid_pipe;
+        wgt_rd_valid_pipe2_nxt = wgt_rd_valid_pipe;
         act_zero_pipe_nxt = 1'b0;
+        act_zero_pipe2_nxt = act_zero_pipe;
         last_issue_pipe_nxt = 1'b0;
+        last_issue_pipe2_nxt = last_issue_pipe;
         gb_act_rd_en_nxt = 1'b0;
         gb_act_rd_addr_nxt = gb_act_rd_addr_o;
         gb_wgt_rd_en_nxt = 1'b0;
         gb_wgt_rd_addr_nxt = gb_wgt_rd_addr_o;
-        act_wr_en_nxt = act_rd_valid_pipe;
-        act_wr_pos_nxt = act_wr_pos_pipe;
-        act_wr_data_nxt = act_zero_pipe ? '0 : gb_act_rd_data_i;
-        wgt_wr_en_nxt = wgt_rd_valid_pipe;
-        wgt_wr_pos_nxt = wgt_wr_pos_pipe;
+        // gb_*_rd_en_o/addr_o are registered outputs and the SRAM is a
+        // one-cycle synchronous read. This second pipe aligns the returned
+        // SRAM word with the local-buffer write position.
+        act_wr_en_nxt = act_rd_valid_pipe2;
+        act_wr_pos_nxt = act_wr_pos_pipe2;
+        act_wr_data_nxt = act_zero_pipe2 ? '0 : gb_act_rd_data_i;
+        wgt_wr_en_nxt = wgt_rd_valid_pipe2;
+        wgt_wr_pos_nxt = wgt_wr_pos_pipe2;
         wgt_wr_data_nxt = gb_wgt_rd_data_i;
-        load_done_nxt = last_issue_pipe;
+        load_done_nxt = last_issue_pipe2;
 
         case (state)
             IDLE: begin
@@ -303,7 +330,9 @@ module spatial_ld_controller #(
             end
 
             WAIT_LAST: begin
-                state_nxt = IDLE;
+                if (last_issue_pipe2) begin
+                    state_nxt = IDLE;
+                end
             end
 
             default: begin

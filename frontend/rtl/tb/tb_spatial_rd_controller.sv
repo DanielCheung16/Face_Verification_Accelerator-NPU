@@ -13,9 +13,8 @@ module tb_spatial_rd_controller;
 
     logic clk;
     logic rst_n;
-    logic layer_start_i;
+    logic read_start_i;
     logic [WGT_RD_ADDR_W:0] current_num_filter_i;
-    logic stride;
     logic window_loaded_i;
     logic weights_loaded_i;
     logic all_weights_loaded_i;
@@ -36,9 +35,8 @@ module tb_spatial_rd_controller;
     ) u_dut (
         .clk(clk),
         .rst_n(rst_n),
-        .layer_start_i(layer_start_i),
+        .read_start_i(read_start_i),
         .current_num_filter_i(current_num_filter_i),
-        .stride(stride),
         .window_loaded_i(window_loaded_i),
         .weights_loaded_i(weights_loaded_i),
         .all_weights_loaded_i(all_weights_loaded_i),
@@ -57,12 +55,12 @@ module tb_spatial_rd_controller;
         end
     endtask
 
-    task automatic start_layer();
+    task automatic start_read();
         begin
             @(negedge clk);
-            layer_start_i = 1'b1;
+            read_start_i = 1'b1;
             @(negedge clk);
-            layer_start_i = 1'b0;
+            read_start_i = 1'b0;
         end
     endtask
 
@@ -102,9 +100,8 @@ module tb_spatial_rd_controller;
     initial begin
         fail_cnt = 0;
         rst_n = 1'b0;
-        layer_start_i = 1'b0;
+        read_start_i = 1'b0;
         current_num_filter_i = (WGT_RD_ADDR_W+1)'(WGT_BYTE_DEPTH);
-        stride = 1'b0;
         window_loaded_i = 1'b0;
         weights_loaded_i = 1'b0;
         all_weights_loaded_i = 1'b0;
@@ -113,15 +110,15 @@ module tb_spatial_rd_controller;
         rst_n = 1'b1;
         repeat (2) @(posedge clk);
 
-        start_layer();
+        start_read();
         repeat (4) begin
             @(posedge clk);
             #1;
-            check(rd_en_o === 1'b0, "controller read before buffers were ready");
+            check(rd_en_o === 1'b0, "controller read before weights were ready");
         end
 
-        window_loaded_i = 1'b1;
         weights_loaded_i = 1'b1;
+        start_read();
         expect_read_burst(0, 1'b0);
 
         weights_loaded_i = 1'b0;
@@ -132,10 +129,12 @@ module tb_spatial_rd_controller;
         end
 
         weights_loaded_i = 1'b1;
+        start_read();
         expect_read_burst(16, 1'b1);
 
         weights_loaded_i = 1'b0;
         all_weights_loaded_i = 1'b1;
+        start_read();
         expect_read_burst(0, 1'b0);
 
         if (fail_cnt != 0) begin

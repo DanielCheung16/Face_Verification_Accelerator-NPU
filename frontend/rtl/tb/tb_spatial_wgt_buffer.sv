@@ -111,6 +111,36 @@ module tb_spatial_wgt_buffer;
         end
     endtask
 
+    task automatic read_old_write_next(input int byte_addr, input int wr_pos, input int wr_word_idx);
+        int word_idx;
+        int lane;
+        begin
+            word_idx = byte_addr / LANES;
+            lane = byte_addr % LANES;
+            @(negedge clk);
+            rd_en_i = 1'b1;
+            rd_addr_i = byte_addr[RD_ADDR_W-1:0];
+            wr_en_i = 1'b1;
+            wr_pos_i = wr_pos[3:0];
+            wr_data_i = make_word(wr_pos, wr_word_idx);
+            @(posedge clk);
+            #1;
+            for (int pos = 0; pos < NUM_BUF; pos++) begin
+                check(rd_valid_o[pos] === 1'b1,
+                      $sformatf("overlap rd_valid_o[%0d] low", pos));
+                check(rd_data_o[pos] === DATA_W'(pos * 32 + word_idx * 16 + lane),
+                      $sformatf("overlap pos=%0d byte_addr=%0d expected old=0x%02h got=0x%02h",
+                                pos, byte_addr,
+                                DATA_W'(pos * 32 + word_idx * 16 + lane),
+                                rd_data_o[pos][DATA_W-1:0]));
+            end
+            @(negedge clk);
+            rd_en_i = 1'b0;
+            wr_en_i = 1'b0;
+            wr_pos_i = '0;
+        end
+    endtask
+
     initial begin
         fail_cnt = 0;
         rst_n = 1'b0;
@@ -144,7 +174,7 @@ module tb_spatial_wgt_buffer;
         read_channel(15);
 
         for (int pos = 0; pos < NUM_BUF; pos++) begin
-            write_pos_word(pos, 1);
+            read_old_write_next(pos, pos, 1);
             #1;
             if (pos != (NUM_BUF - 1)) begin
                 check(weights_loaded_o === 1'b0,

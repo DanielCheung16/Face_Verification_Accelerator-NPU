@@ -12,7 +12,7 @@
 //   activation/weight buffer-ready levels are consumed inside this module.
 //
 // read_busy_o:
-//   Level. High after layer_start_i while spatial_rd_controller is armed or
+//   Level. High after read_start_i while spatial_rd_controller is armed or
 //   issuing read commands. It does not mean valid_o is high; valid_o comes
 //   from the local buffers' rd_valid_o.
 //
@@ -57,7 +57,7 @@ module window_generator #(
     input  logic clear_i,
     input  logic swap_i,
     input  logic load_start_i,
-    input  logic layer_start_i,
+    input  logic read_start_i,
 
     // Layer/window config from the upper controller.
     input  logic [ADDR_W-1:0] act_base_addr_i,
@@ -149,7 +149,7 @@ module window_generator #(
     ) u_spatial_rd_controller (
         .clk(clk),
         .rst_n(rst_n),
-        .layer_start_i(layer_start_i),
+        .read_start_i(read_start_i),
         .current_num_filter_i(current_num_filter_i),
         .window_loaded_i(window_loaded),
         .weights_loaded_i(weights_loaded),

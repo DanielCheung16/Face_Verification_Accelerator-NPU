@@ -13,7 +13,7 @@ module spatial_rd_controller #(
     input  logic rst_n,
 
     //system control signals
-    input  logic layer_start_i,          //should be one pulse
+    input  logic read_start_i,           //one pulse to start local-buffer read
     input  logic [WGT_RD_ADDR_W:0] current_num_filter_i,
         //refers to the number of current layer's filter
         //current_num_filter = ic*oc (for traditional conv3x3)
@@ -21,7 +21,7 @@ module spatial_rd_controller #(
         //this is a count, not the last address
 
     //control signals face to buffer
-    input  logic window_loaded_i,      //the ifmap is ready
+    input  logic window_loaded_i,      //kept for interface symmetry; read_start_i is the activation-ready contract
     input  logic weights_loaded_i,     //one filter tile is ready
     input  logic all_weights_loaded_i, //all weights are stored in the local spatial buffer
 
@@ -68,10 +68,13 @@ module spatial_rd_controller #(
     end
 
     // 2-stage FSM:
-    //   WAIT_READY checks that the current activation window and weight tile
-    //   are safe to read.
-    //   READ_TILE issues exactly 16 byte reads. Ready inputs are not re-sampled
-    //   during this burst, so preload may start preparing the next tile.
+    //   WAIT_READY checks that the current weight tile is safe to read.
+    //   Activation readiness is guaranteed by the inside controller: it only
+    //   pulses read_start_i after load_done and swap have made a full window
+    //   visible on the read-side ping-pong buffer.
+    //   READ_TILE issues exactly 16 byte reads for one read_start_i pulse.
+    //   Ready inputs are not re-sampled during this burst, so preload may
+    //   prepare the next tile in parallel.
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= IDLE;
@@ -120,16 +123,21 @@ module spatial_rd_controller #(
         case (state)
             IDLE: begin
                 lane_cnt_nxt = '0;
-                if (layer_start_i) begin
-                    wgt_rd_cnt_nxt = '0;
-                    weight_ready_used_nxt = 1'b0;
-                    state_nxt = WAIT_READY;
+                if (read_start_i) begin
+                    if (weight_ready) begin
+                        if (!all_weights_loaded_i) begin
+                            weight_ready_used_nxt = 1'b1;
+                        end
+                        state_nxt = READ_TILE;
+                    end else begin
+                        state_nxt = WAIT_READY;
+                    end
                 end
             end
 
             WAIT_READY: begin
                 lane_cnt_nxt = '0;
-                if (window_loaded_i && weight_ready) begin
+                if (weight_ready) begin
                     if (!all_weights_loaded_i) begin
                         weight_ready_used_nxt = 1'b1;
                     end
@@ -150,7 +158,7 @@ module spatial_rd_controller #(
 
                 if (last_lane) begin
                     lane_cnt_nxt = '0;
-                    state_nxt = WAIT_READY;
+                    state_nxt = IDLE;
                 end else begin
                     lane_cnt_nxt = lane_cnt + LANE_CNT_W'(1);
                 end
@@ -176,7 +184,7 @@ module spatial_rd_controller #(
     end
 
     always_ff @(posedge clk) begin
-        if (rst_n && layer_start_i) begin
+        if (rst_n && read_start_i) begin
             if (current_num_filter_i == '0) begin
                 $fatal(1, "spatial_rd_controller current_num_filter_i must be non-zero");
             end
