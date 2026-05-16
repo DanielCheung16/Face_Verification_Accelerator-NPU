@@ -183,3 +183,45 @@ cycle N 后:
 weights_loaded_o 会保持到下一组 weight tile 开始写入时清掉。
 all_weights_loaded_o 一旦拉高，会保持到 clear_i。
 ```
+
+### load part
+```
+config gives:
+  act_base
+  ifmap_size
+  num_filter
+  row_stride = ifmap_size * num_filter
+  pixel_stride = num_filter
+
+runtime counters:
+  x_cnt, y_cnt, tile_cnt
+
+runtime base:
+  tile_offset = tile_cnt * 16       // increment by 16
+  pixel_base = row_base + y offset + tile_offset
+
+window address:
+  precomputed 9 registered addresses
+
+```
+
+我觉得现在这个方案ok，有几个细节再讨论一下：
+1. 是不是一般考虑x,y是考虑filter的中心点会比较多（or更加合理？），这样就是win_row0_base - pixel_stride.
+2. 由于我们现在weight ram和A/O ram是分开的。所以FSM的act和wait应该是同时的。
+3. 还需要考虑padding 0 和 stride =2情况。
+
+```
+win_x0 = out_x * stride - 1
+win_y0 = out_y * stride - 1
+
+```
+样比“x/y 就是 center”更通用，因为 layer 的输出遍历天然是按 output coordinate 走的。stride=1/2、padding、输出尺寸判断也都围绕 output pixel 更清楚。
+
+### window_generator:
+应该由 window_generator 上层产生
+- clear_i：layer 开始时清 act ping-pong 和 weight buffer。这个是 layer lifecycle，不属于 window_generator 自己决定。
+- swap_i：当前 window compute 完成、next window 已加载完成时，由上层根据 ping-pong 调度决定。
+- layer_start_i：由 spatial layer inside controller 发出。
+- load_start_i：由上层在某个 output pixel/tile 需要 preload 时发出。
+- out_x_i/out_y_i/tile_offset_i：由上层 spatial layer inside controller 的坐标 counter 产生。
+- act_base/wgt_base/ifmap_size/code/stride/pad/current_num_filter：layer config，来自 layer_switcher/config ROM。
