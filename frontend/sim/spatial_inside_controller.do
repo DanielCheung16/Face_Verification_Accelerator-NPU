@@ -1,6 +1,8 @@
 vlib work
 vmap work work
 
+vlog -sv -work work "../rtl/src/spatial_inside_controller_dw.sv"
+vlog -sv -work work "../rtl/src/spatial_inside_controller_conv.sv"
 vlog -sv -work work "../rtl/src/spatial_inside_controller.sv"
 vlog -sv -work work "../rtl/tb/tb_spatial_inside_controller.sv"
 

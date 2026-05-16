@@ -28,3 +28,6 @@ frontend/sim/work/
 frontend/sim/*.ini
 frontend/sim/*transcript
 datasets/faces_eval/*.bin
+
+frontend/sim/gold_models/qface_c/generated/**
+frontend/sim/gold_models/qface_c/dump_spatial_top_dw

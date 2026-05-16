@@ -14,8 +14,12 @@ vlog -sv -work work "../rtl/src/spatial_inside_controller_conv.sv"
 vlog -sv -work work "../rtl/src/spatial_inside_controller.sv"
 vlog -sv -work work "../rtl/src/spatial3x3_pe_array.sv"
 vlog -sv -work work "../rtl/src/spatial3x3_dev.sv"
-vlog -sv -work work "../rtl/tb/tb_spatial3x3_dev_two_layer.sv"
+vlog -sv -work work "../rtl/src/small_output_process.sv"
+vlog -sv -work work "../rtl/src/spatial_pack_writeback.sv"
+vlog -sv -work work "../rtl/src/spatial_wb.sv"
+vlog -sv -work work "../rtl/src/spatial_top.sv"
+vlog -sv -work work "../rtl/tb/tb_spatial_top_c_ref.sv"
 
-vsim -c -t 1ns -classdebug -voptargs=+acc +notimingchecks -L work work.tb_spatial3x3_dev_two_layer -wlf tb_spatial3x3_dev_two_layer.wlf
+vsim -c -t 1ns -classdebug -voptargs=+acc +notimingchecks -L work work.tb_spatial_top_c_ref -wlf tb_spatial_top_c_ref.wlf
 run -all
 quit

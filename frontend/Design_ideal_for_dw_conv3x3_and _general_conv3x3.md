@@ -225,3 +225,17 @@ win_y0 = out_y * stride - 1
 - load_start_i：由上层在某个 output pixel/tile 需要 preload 时发出。
 - out_x_i/out_y_i/tile_offset_i：由上层 spatial layer inside controller 的坐标 counter 产生。
 - act_base/wgt_base/ifmap_size/code/stride/pad/current_num_filter：layer config，来自 layer_switcher/config ROM。
+
+## 回写逻辑
+因为我们读取就已经是天然的HWC的了，回写很自然类似与streaming，地址也是HWC的。所以不去与conv1x1共用回写逻辑。
+结构（boundary）是这样：
+spatial_wb.sv:
+  small_output_process（用来支持bypass quant, PReLu, requant, residual）
+  pack_writeback:
+    address generator
+    package128（pack的8bits to 32bits,考虑是否最终不满128bits的情况？）
+    如果有不满128bits的情况，需要额外设定mask
+
+
+其中small_output_process这里可以做pipeline的用来提高频率。（因为是stream也就只有初始有影响）
+pack_writeback输出的回写端口最终应该与A/O buffer的要求对齐。
