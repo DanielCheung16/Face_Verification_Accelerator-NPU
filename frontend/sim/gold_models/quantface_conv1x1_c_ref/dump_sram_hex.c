@@ -23,6 +23,23 @@ typedef struct {
     uint64_t hi;
 } qf_word128_t;
 
+typedef enum {
+    PROFILE_TWO_LAYER,
+    PROFILE_REQUANT,
+    PROFILE_PRELU
+} qf_dump_profile_t;
+
+static qf_dump_profile_t parse_profile(const char *profile)
+{
+    if (strcmp(profile, "requant") == 0) {
+        return PROFILE_REQUANT;
+    }
+    if (strcmp(profile, "prelu") == 0) {
+        return PROFILE_PRELU;
+    }
+    return PROFILE_TWO_LAYER;
+}
+
 static int64_t round_shift_i64(int64_t value, int shift)
 {
     if (shift == 0) {
@@ -224,7 +241,7 @@ int main(int argc, char **argv)
 {
     const char *out_dir = argc > 1 ? argv[1] : "out";
     const char *profile = argc > 2 ? argv[2] : "two_layer";
-    const int requant_only = strcmp(profile, "requant") == 0;
+    const qf_dump_profile_t dump_profile = parse_profile(profile);
     qf_word128_t *ao_mem = calloc(QF_AO_DEPTH, sizeof(qf_word128_t));
     qf_word128_t *wgt_mem = calloc(QF_WGT_DEPTH, sizeof(qf_word128_t));
     qf_word128_t *golden_mem = calloc(QF_AO_DEPTH, sizeof(qf_word128_t));
@@ -243,18 +260,32 @@ int main(int argc, char **argv)
         buf0[i] = qf_input_l0[i];
     }
 
-    pack_activation(ao_mem, QF_AO_IN_BASE, qf_input_l0, QF_L0_M, QF_L0_K);
-    pack_activation(ao_mem, QF_AO_RES_BASE, qf_residual_l0, QF_L0_M, QF_L0_N);
-    pack_weight(wgt_mem, QF_WGT0_BASE, qf_weight_l0, QF_L0_K, QF_L0_N);
-    pack_weight(wgt_mem, QF_WGT1_BASE, qf_weight_l1, QF_L1_K, QF_L1_N);
-
-    if (requant_only) {
+    switch (dump_profile) {
+    case PROFILE_REQUANT:
+        pack_activation(ao_mem, QF_AO_IN_BASE, qf_input_l0, QF_L0_M, QF_L0_K);
+        pack_weight(wgt_mem, QF_WGT0_BASE, qf_weight_l0, QF_L0_K, QF_L0_N);
         run_layer_with_mode(0, QF_MODE_REQUANT, buf0, buf1);
         pack_activation(golden_mem, QF_AO_OUT_BASE, buf1, QF_L0_M, QF_L0_N);
-    } else {
+        break;
+
+    case PROFILE_PRELU:
+        run_layer(0, buf0, buf1);
+        pack_activation(ao_mem, QF_AO_IN_BASE, buf1, QF_L1_M, QF_L1_K);
+        pack_weight(wgt_mem, QF_WGT0_BASE, qf_weight_l1, QF_L1_K, QF_L1_N);
+        run_layer(1, buf1, buf0);
+        pack_activation(golden_mem, QF_AO_OUT_BASE, buf0, QF_L1_M, QF_L1_N);
+        break;
+
+    case PROFILE_TWO_LAYER:
+    default:
+        pack_activation(ao_mem, QF_AO_IN_BASE, qf_input_l0, QF_L0_M, QF_L0_K);
+        pack_activation(ao_mem, QF_AO_RES_BASE, qf_residual_l0, QF_L0_M, QF_L0_N);
+        pack_weight(wgt_mem, QF_WGT0_BASE, qf_weight_l0, QF_L0_K, QF_L0_N);
+        pack_weight(wgt_mem, QF_WGT1_BASE, qf_weight_l1, QF_L1_K, QF_L1_N);
         run_layer(0, buf0, buf1);
         run_layer(1, buf1, buf0);
         pack_activation(golden_mem, QF_AO_IN_BASE, buf0, QF_L1_M, QF_L1_N);
+        break;
     }
 
     rc |= ensure_dir(out_dir);
@@ -271,9 +302,15 @@ int main(int argc, char **argv)
 
     if (rc == 0) {
         printf("Wrote C-generated SRAM hex images to %s (profile=%s)\n", out_dir, profile);
-        printf("  ao_init: QF input @%d, residual @%d\n", QF_AO_IN_BASE, QF_AO_RES_BASE);
-        printf("  wgt_init: layer0 @%d, layer1 @%d\n", QF_WGT0_BASE, QF_WGT1_BASE);
-        printf("  golden: final output @%d\n", requant_only ? QF_AO_OUT_BASE : QF_AO_IN_BASE);
+        if (dump_profile == PROFILE_TWO_LAYER) {
+            printf("  ao_init: QF input @%d, residual @%d\n", QF_AO_IN_BASE, QF_AO_RES_BASE);
+            printf("  wgt_init: layer0 @%d, layer1 @%d\n", QF_WGT0_BASE, QF_WGT1_BASE);
+            printf("  golden: final output @%d\n", QF_AO_IN_BASE);
+        } else {
+            printf("  ao_init: selected layer input @%d\n", QF_AO_IN_BASE);
+            printf("  wgt_init: selected layer weight @%d\n", QF_WGT0_BASE);
+            printf("  golden: selected layer output @%d\n", QF_AO_OUT_BASE);
+        }
     }
 
 done:
