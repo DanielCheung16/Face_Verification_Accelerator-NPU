@@ -24,13 +24,13 @@ module top #(
     parameter int COMMON_PARAM_DEPTH = 9792,
     parameter int PRELU_PARAM_DEPTH = 7552,
     parameter int RESIDUAL_PARAM_DEPTH = 1280,
+    parameter int LAYER_CONFIG_PROFILE = 0,
     parameter int PARAM_DEPTH = (COMMON_PARAM_DEPTH > PRELU_PARAM_DEPTH) ?
                                 ((COMMON_PARAM_DEPTH > RESIDUAL_PARAM_DEPTH) ? COMMON_PARAM_DEPTH : RESIDUAL_PARAM_DEPTH) :
                                 ((PRELU_PARAM_DEPTH > RESIDUAL_PARAM_DEPTH) ? PRELU_PARAM_DEPTH : RESIDUAL_PARAM_DEPTH),
     parameter int PARAM_ADDR_W = (PARAM_DEPTH <= 1) ? 1 : $clog2(PARAM_DEPTH),
     parameter int SPATIAL_ACT_DEPTH = 1,
     parameter int SPATIAL_WGT_DEPTH = 32,
-    parameter bit USE_INTERNAL_QUANT_PARAMS = 1'b0,
     parameter string QUANT_BIAS_INIT_FILE = "",
     parameter string QUANT_REQUANT_MULT_INIT_FILE = "",
     parameter string QUANT_REQUANT_SHIFT_INIT_FILE = "",
@@ -175,6 +175,7 @@ module top #(
     logic                     spatial_quant_residual_rd_en;
     logic [PARAM_ADDR_W-1:0]  spatial_quant_residual_rd_addr;
     logic                     conv_quant_active_w;
+    logic                     spatial_quant_active_w;
 
     logic [SPATIAL_ELEM_CNT_W-1:0] spatial_output_elements;
     logic [SPATIAL_FILTER_CNT_W-1:0] spatial_current_num_filter;
@@ -195,18 +196,42 @@ module top #(
     assign spatial_residual_stub = '0;
     assign spatial_output_zero_point = ACC_W'($signed(output_zero_point));
     assign conv_quant_active_w = dev_start[CONV1X1_DEV] || dev_busy[CONV1X1_DEV];
-    assign quant_common_rd_en = conv_quant_active_w ? conv_quant_common_rd_en :
-                                                    spatial_quant_common_rd_en;
-    assign quant_common_rd_addr = conv_quant_active_w ? conv_quant_common_rd_addr :
-                                                      spatial_quant_common_rd_addr;
-    assign quant_prelu_rd_en = conv_quant_active_w ? conv_quant_prelu_rd_en :
-                                                   spatial_quant_prelu_rd_en;
-    assign quant_prelu_rd_addr = conv_quant_active_w ? conv_quant_prelu_rd_addr :
-                                                     spatial_quant_prelu_rd_addr;
-    assign quant_residual_rd_en = conv_quant_active_w ? conv_quant_residual_rd_en :
-                                                      spatial_quant_residual_rd_en;
-    assign quant_residual_rd_addr = conv_quant_active_w ? conv_quant_residual_rd_addr :
-                                                        spatial_quant_residual_rd_addr;
+    assign spatial_quant_active_w = dev_start[SPATIAL_DEV] || dev_busy[SPATIAL_DEV];
+
+    // quant_param_mem is shared globally. The switcher only starts one device
+    // at a time, so this decode gives the active device ownership of all banks.
+    always_comb begin
+        quant_common_rd_en = 1'b0;
+        quant_common_rd_addr = '0;
+        quant_prelu_rd_en = 1'b0;
+        quant_prelu_rd_addr = '0;
+        quant_residual_rd_en = 1'b0;
+        quant_residual_rd_addr = '0;
+
+        unique case (1'b1)
+            conv_quant_active_w: begin
+                quant_common_rd_en = conv_quant_common_rd_en;
+                quant_common_rd_addr = conv_quant_common_rd_addr;
+                quant_prelu_rd_en = conv_quant_prelu_rd_en;
+                quant_prelu_rd_addr = conv_quant_prelu_rd_addr;
+                quant_residual_rd_en = conv_quant_residual_rd_en;
+                quant_residual_rd_addr = conv_quant_residual_rd_addr;
+            end
+
+            spatial_quant_active_w: begin
+                quant_common_rd_en = spatial_quant_common_rd_en;
+                quant_common_rd_addr = spatial_quant_common_rd_addr;
+                quant_prelu_rd_en = spatial_quant_prelu_rd_en;
+                quant_prelu_rd_addr = spatial_quant_prelu_rd_addr;
+                quant_residual_rd_en = spatial_quant_residual_rd_en;
+                quant_residual_rd_addr = spatial_quant_residual_rd_addr;
+            end
+
+            default: begin
+                // No active layer owns quant_param_mem.
+            end
+        endcase
+    end
 
 `ifndef SYNTHESIS
     initial begin
@@ -333,6 +358,7 @@ module top #(
         .WGT_ADDR_W(WGT_ADDR_W),
         .NUM_DEV(NUM_DEV),
         .MAX_LAYER(MAX_LAYER),
+        .LAYER_CONFIG_PROFILE(LAYER_CONFIG_PROFILE),
         .PARAM_ADDR_W(PARAM_ADDR_W)
     ) u_layer_switcher (
         .clk(aclk),
@@ -389,9 +415,9 @@ module top #(
         .final_vec_o(final_vec_o)
     );
 
-    // Conv1x1 still owns its legacy tile postprocess interface. Until the
-    // conv1x1_param_scheduler is added, top-level conv1x1 regressions should
-    // use USE_INTERNAL_QUANT_PARAMS=1; otherwise these defaults are harmless.
+    // Legacy scalar parameter wires are kept only to avoid a broad interface
+    // cleanup in this step. The formal conv1x1 path reads quant_param_mem
+    // through conv1x1_param_scheduler.
     always_comb begin
         for (int c = 0; c < COL; c++) begin
             bias[c] = '0;
@@ -428,7 +454,6 @@ module top #(
         .AO_ADDR_W(AO_ADDR_W),
         .WGT_ADDR_W(WGT_ADDR_W),
         .PARAM_ADDR_W(PARAM_ADDR_W),
-        .USE_INTERNAL_QUANT_PARAMS(USE_INTERNAL_QUANT_PARAMS),
         .LAYER_IDX_W(MAX_LAYER)
     ) u_conv1x1_dev (
         .clk(aclk),

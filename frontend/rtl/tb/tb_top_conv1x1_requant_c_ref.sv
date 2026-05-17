@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-module tb_top_quantface_conv1x1_closed_loop;
+module tb_top_conv1x1_requant_c_ref;
     parameter int ROW = 14;
     parameter int COL = 16;
     parameter int K_MAX = 512;
@@ -9,21 +9,22 @@ module tb_top_quantface_conv1x1_closed_loop;
     parameter int AO_DEPTH = 65536;
     parameter int WGT_DEPTH = 65536;
     parameter int HALF_CYCLE_TIME = 5;
-    parameter int TIMEOUT_CYCLES = 3000000;
+    parameter int TIMEOUT_CYCLES = 1500000;
 
     localparam int AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH);
     localparam int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH);
     localparam int MASK_W = GB_DATA_W / DATA_W;
     localparam int M_SIZE = 28 * 28;
-    localparam int FINAL_N = 128;
+    localparam int FINAL_N = 64;
     localparam int FINAL_N_TILES = (FINAL_N + COL - 1) / COL;
-    localparam int FINAL_BASE = 0;
+    localparam int FINAL_BASE = 32768;
 
-    localparam string GOLD_DIR = "gold_models/quantface_conv1x1_c_ref/out";
-    localparam string AO_INIT_HEX = {GOLD_DIR, "/quantface_conv1x1_c_ao_init.hex"};
-    localparam string WGT_INIT_HEX = {GOLD_DIR, "/quantface_conv1x1_c_wgt_init.hex"};
-    localparam string GOLDEN_HEX = {GOLD_DIR, "/quantface_conv1x1_c_golden.hex"};
-    localparam string DUT_AO_FINAL_HEX = {GOLD_DIR, "/quantface_conv1x1_c_dut_ao_final.hex"};
+    localparam string SRAM_DIR = "gold_models/quantface_conv1x1_c_ref/out_requant";
+    localparam string PARAM_DIR = "gold_models/quantface_conv1x1_c_ref/out";
+    localparam string AO_INIT_HEX = {SRAM_DIR, "/quantface_conv1x1_c_ao_init.hex"};
+    localparam string WGT_INIT_HEX = {SRAM_DIR, "/quantface_conv1x1_c_wgt_init.hex"};
+    localparam string GOLDEN_HEX = {SRAM_DIR, "/quantface_conv1x1_c_golden.hex"};
+    localparam string DUT_AO_FINAL_HEX = {SRAM_DIR, "/quantface_conv1x1_requant_dut_ao_final.hex"};
 
     logic clk;
     logic rst_n;
@@ -62,14 +63,15 @@ module tb_top_quantface_conv1x1_closed_loop;
         .WGT_DEPTH(WGT_DEPTH),
         .AO_TRUE_DUAL_PORT(1'b0),
         .WGT_TRUE_DUAL_PORT(1'b0),
-        .QUANT_BIAS_INIT_FILE({GOLD_DIR, "/quant_param_bias.hex"}),
-        .QUANT_REQUANT_MULT_INIT_FILE({GOLD_DIR, "/quant_param_requant_mult.hex"}),
-        .QUANT_REQUANT_SHIFT_INIT_FILE({GOLD_DIR, "/quant_param_requant_shift.hex"}),
-        .QUANT_PRELU_MULT_INIT_FILE({GOLD_DIR, "/quant_param_prelu_mult.hex"}),
-        .QUANT_PRELU_SHIFT_INIT_FILE({GOLD_DIR, "/quant_param_prelu_shift.hex"}),
-        .QUANT_RESIDUAL_MULT_INIT_FILE({GOLD_DIR, "/quant_param_residual_mult.hex"}),
-        .QUANT_RESIDUAL_SHIFT_INIT_FILE({GOLD_DIR, "/quant_param_residual_shift.hex"}),
-        .QUANT_RESIDUAL_ZERO_POINT_INIT_FILE({GOLD_DIR, "/quant_param_residual_zero_point.hex"})
+        .LAYER_CONFIG_PROFILE(1),
+        .QUANT_BIAS_INIT_FILE({PARAM_DIR, "/quant_param_bias.hex"}),
+        .QUANT_REQUANT_MULT_INIT_FILE({PARAM_DIR, "/quant_param_requant_mult.hex"}),
+        .QUANT_REQUANT_SHIFT_INIT_FILE({PARAM_DIR, "/quant_param_requant_shift.hex"}),
+        .QUANT_PRELU_MULT_INIT_FILE({PARAM_DIR, "/quant_param_prelu_mult.hex"}),
+        .QUANT_PRELU_SHIFT_INIT_FILE({PARAM_DIR, "/quant_param_prelu_shift.hex"}),
+        .QUANT_RESIDUAL_MULT_INIT_FILE({PARAM_DIR, "/quant_param_residual_mult.hex"}),
+        .QUANT_RESIDUAL_SHIFT_INIT_FILE({PARAM_DIR, "/quant_param_residual_shift.hex"}),
+        .QUANT_RESIDUAL_ZERO_POINT_INIT_FILE({PARAM_DIR, "/quant_param_residual_zero_point.hex"})
     ) dut (
         .aclk(clk),
         .aresetn(rst_n),
@@ -176,9 +178,9 @@ module tb_top_quantface_conv1x1_closed_loop;
         @(posedge clk);
 
         if (fail_cnt != 0) begin
-            $fatal(1, "[TB] top QuantFace conv1x1 closed-loop FAILED fail=%0d", fail_cnt);
+            $fatal(1, "[TB] top conv1x1 + requant FAILED fail=%0d", fail_cnt);
         end
-        $display("[TB] top QuantFace conv1x1 closed-loop PASSED");
+        $display("[TB] top conv1x1 + requant PASSED");
         $finish;
     end
 

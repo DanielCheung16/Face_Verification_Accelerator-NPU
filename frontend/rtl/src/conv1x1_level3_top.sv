@@ -1,4 +1,3 @@
-import quantface_conv1x1_params_pkg::*;
 import layer_defs_pkg::*;
 
 module conv1x1_level3_top #(
@@ -21,7 +20,6 @@ module conv1x1_level3_top #(
     parameter int AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH),
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
     parameter int PARAM_ADDR_W = 16,
-    parameter bit USE_INTERNAL_QUANT_PARAMS = 1'b0,
     parameter int LAYER_IDX_W = 4,
 
     localparam int GB_LANES = GB_DATA_W / DATA_W,
@@ -210,8 +208,8 @@ module conv1x1_level3_top #(
     assign m_tiles_w = (GB_ADDR_W'(m_size_i) + GB_ADDR_W'(ROW - 1)) / GB_ADDR_W'(ROW);
     assign row_base_w = tile_r_r * DIM_W'(ROW);
     assign col_base_w = tile_c_r * DIM_W'(COL);
-    assign param_load_needed_w = !USE_INTERNAL_QUANT_PARAMS && (tile_r_r == '0);
-    assign param_ready_w = USE_INTERNAL_QUANT_PARAMS || param_tile_ready_r || param_scheduler_valid;
+    assign param_load_needed_w = (tile_r_r == '0);
+    assign param_ready_w = param_tile_ready_r || param_scheduler_valid;
 
     always_comb begin
         residual_data_w = residual_data;
@@ -473,7 +471,7 @@ module conv1x1_level3_top #(
                 mode_r <= mode_i;
                 n_tiles_r <= n_tiles_w;
                 m_tiles_r <= m_tiles_w;
-                param_tile_ready_r <= USE_INTERNAL_QUANT_PARAMS;
+                param_tile_ready_r <= 1'b0;
             end
 
             if (config_tile) begin
@@ -483,19 +481,6 @@ module conv1x1_level3_top #(
                     param_tile_ready_r <= 1'b0;
                 end
 
-                for (int c = 0; c < COL; c++) begin
-                    if (USE_INTERNAL_QUANT_PARAMS) begin
-                        post_bias[c] <= BIAS_W'(qf_bias(int'(layer_idx_r), int'(col_base_w) + c));
-                        post_multiplier[c] <= qf_multiplier(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_shift[c] <= qf_shift(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_zero_point[c] <= qf_zero_point(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_prelu_multiplier[c] <= qf_prelu_multiplier(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_prelu_shift[c] <= qf_prelu_shift(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_residual_multiplier[c] <= qf_residual_multiplier(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_residual_shift[c] <= qf_residual_shift(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_residual_zero_point[c] <= qf_residual_zero_point(int'(layer_idx_r), int'(col_base_w) + c);
-                    end
-                end
             end
 
             if (param_scheduler_valid) begin

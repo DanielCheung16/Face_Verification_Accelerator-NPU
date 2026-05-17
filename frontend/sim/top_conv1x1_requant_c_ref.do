@@ -1,5 +1,7 @@
 setenv LMC_TIMEUNIT -9
 
+exec make -C gold_models/quantface_conv1x1_c_ref dump_sram_hex
+exec gold_models/quantface_conv1x1_c_ref/dump_sram_hex gold_models/quantface_conv1x1_c_ref/out_requant requant
 exec python3 gold_models/quantface_conv1x1_c_ref/dump_quant_param_hex.py
 
 vlib work
@@ -48,9 +50,9 @@ vlog -sv -work work "../rtl/src/spatial_top.sv"
 vlog -sv +incdir+../rtl/src -work work "../rtl/src/layer_config_mem.sv"
 vlog -sv +incdir+../rtl/src -work work "../rtl/src/layer_switcher.sv"
 vlog -sv -work work "../rtl/src/top.sv"
-vlog -sv -work work "../rtl/tb/tb_top_quantface_conv1x1_closed_loop.sv"
+vlog -sv -work work "../rtl/tb/tb_top_conv1x1_requant_c_ref.sv"
 
-vsim -c -t 1ns -classdebug -voptargs=+acc +notimingchecks -L work work.tb_top_quantface_conv1x1_closed_loop -wlf tb_top_quantface_conv1x1_closed_loop.wlf
+vsim -c -t 1ns -classdebug -voptargs=+acc +notimingchecks -L work work.tb_top_conv1x1_requant_c_ref -wlf tb_top_conv1x1_requant_c_ref.wlf
 
 onfinish stop
 run -all

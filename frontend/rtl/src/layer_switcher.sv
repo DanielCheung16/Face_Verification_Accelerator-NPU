@@ -22,6 +22,7 @@ module layer_switcher #(
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
     parameter int NUM_DEV = 1,
     parameter int MAX_LAYER = 8,
+    parameter int LAYER_CONFIG_PROFILE = 0,
 
     localparam int GB_LANES = GB_DATA_W / DATA_W,
     localparam int AO_MASK_W = GB_DATA_W / DATA_W,
@@ -256,7 +257,8 @@ module layer_switcher #(
         .AO_ADDR_W(AO_ADDR_W),
         .WGT_ADDR_W(WGT_ADDR_W),
         .PARAM_ADDR_W(PARAM_ADDR_W),
-        .MAX_LAYER(MAX_LAYER)
+        .MAX_LAYER(MAX_LAYER),
+        .CONFIG_PROFILE(LAYER_CONFIG_PROFILE)
     ) u_layer_config_mem (
         .clk(clk),
         .rd_en_i(config_rd_en_w),

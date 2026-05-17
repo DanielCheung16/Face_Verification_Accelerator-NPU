@@ -18,7 +18,6 @@ module conv1x1_top #(
     parameter int AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH),
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
     parameter int PARAM_ADDR_W = 16,
-    parameter bit USE_INTERNAL_QUANT_PARAMS = 1'b0,
     parameter int LAYER_IDX_W = 4,
 
     localparam int AO_MASK_W = GB_DATA_W / DATA_W,
@@ -135,7 +134,6 @@ module conv1x1_top #(
         .AO_ADDR_W(AO_ADDR_W),
         .WGT_ADDR_W(WGT_ADDR_W),
         .PARAM_ADDR_W(PARAM_ADDR_W),
-        .USE_INTERNAL_QUANT_PARAMS(USE_INTERNAL_QUANT_PARAMS),
         .LAYER_IDX_W(LAYER_IDX_W)
     ) u_compute (
         .clk(clk),

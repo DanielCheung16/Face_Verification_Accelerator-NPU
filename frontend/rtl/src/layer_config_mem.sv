@@ -19,6 +19,7 @@ module layer_config_mem #(
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
     parameter int PARAM_ADDR_W = 16,
     parameter int MAX_LAYER  = 8,
+    parameter int CONFIG_PROFILE = 0,
 
     localparam int GB_LANES = GB_DATA_W / DATA_W,
     localparam int GB_ADDR_W = (AO_ADDR_W > WGT_ADDR_W) ? AO_ADDR_W : WGT_ADDR_W
@@ -59,9 +60,10 @@ module layer_config_mem #(
     localparam int NUM_ROM_LAYERS = 2;
     localparam int ROM_ADDR_W = (NUM_ROM_LAYERS <= 1) ? 1 : $clog2(NUM_ROM_LAYERS);
 
-    // Current programmed slice from mobilefacenet_hw_simplified.csv:
-    // layer 0: rows 20 + 22, conv1x1 28x28 128->64, residual add quant
-    // layer 1: rows 23 + 25, conv1x1 28x28 64->128, PReLU quant
+    // CONFIG_PROFILE selects the scheduled verification/program image:
+    //   0: rows 20 + 22, conv1x1 28x28 128->64, residual add quant
+    //      rows 23 + 25, conv1x1 28x28 64->128, PReLU quant
+    //   1: layer 0 only, conv1x1 28x28 128->64, requant
     localparam int IMG_28_M = 28 * 28;
     localparam int L0_K = 128;
     localparam int L0_N = 64;
@@ -125,7 +127,7 @@ module layer_config_mem #(
         begin
             cfg = default_cfg();
             cfg.layer_valid = 1'b1;
-            cfg.layer_last = 1'b0;
+            cfg.layer_last = (CONFIG_PROFILE == 1);
             cfg.layer_type = LY_CONV1X1;
             cfg.k_size = K_SIZE_W'(L0_K);
             cfg.m_size = DIM_W'(IMG_28_M);
@@ -133,9 +135,9 @@ module layer_config_mem #(
             cfg.act_base_addr = AO_IN_BASE;
             cfg.wgt_base_addr = WGT0_BASE;
             cfg.out_base_addr = AO_OUT_BASE;
-            cfg.residual_en = 1'b1;
-            cfg.residual_base_addr = AO_RES_BASE;
-            cfg.mode = MODE_RESIDUAL;
+            cfg.residual_en = (CONFIG_PROFILE == 1) ? 1'b0 : 1'b1;
+            cfg.residual_base_addr = (CONFIG_PROFILE == 1) ? '0 : AO_RES_BASE;
+            cfg.mode = (CONFIG_PROFILE == 1) ? MODE_REQUANT : MODE_RESIDUAL;
             cfg.output_zero_point = L0_OUTPUT_ZERO_POINT;
             cfg.bias_base = L0_PARAM_BASE;
             cfg.requant_mult_base = L0_PARAM_BASE;
@@ -153,7 +155,7 @@ module layer_config_mem #(
         layer_cfg_t cfg;
         begin
             cfg = default_cfg();
-            cfg.layer_valid = 1'b1;
+            cfg.layer_valid = (CONFIG_PROFILE == 1) ? 1'b0 : 1'b1;
             cfg.layer_last = 1'b1;
             cfg.layer_type = LY_CONV1X1;
             cfg.k_size = K_SIZE_W'(L1_K);
