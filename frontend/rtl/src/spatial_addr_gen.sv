@@ -67,11 +67,13 @@ module spatial_addr_gen #(
     logic signed [ADDR_W:0] sy2;
     logic signed [ADDR_W:0] ifmap_size_s;
 
-    assign cfg_num_filter_shift_o = 4'd6 + {2'b0, num_filter_code_i};
-    assign cfg_pixel_stride_o = ADDR_W'(64) << num_filter_code_i;
+    // Global SRAM is addressed by 128-bit words. A channel tile is therefore
+    // one address step, not 16 byte-address steps.
+    assign cfg_num_filter_shift_o = 4'd2 + {2'b0, num_filter_code_i};
+    assign cfg_pixel_stride_o = ADDR_W'(4) << num_filter_code_i;
     assign ifmap_size = ADDR_W'(7) << ifmap_size_code_i;
     assign cfg_row_stride_o = ifmap_size << cfg_num_filter_shift_o;
-    assign cfg_tile_offset_o = tile_offset_i;
+    assign cfg_tile_offset_o = tile_offset_i >> 4;
     assign cfg_center_x_o = stride_i ? (out_x_i << 1) : out_x_i;
     assign cfg_center_y_o = stride_i ? (out_y_i << 1) : out_y_i;
     assign cfg_ifmap_size_code_o = ifmap_size_code_i;

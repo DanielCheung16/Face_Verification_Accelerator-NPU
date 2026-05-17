@@ -114,7 +114,7 @@ module spatial_pack_writeback #(
                         gb_ao_wr_addr_nxt = addr_cnt;
                         gb_ao_wr_data_nxt = pack_data_with_new_w;
                         gb_ao_wr_mask_nxt = pack_mask_with_new_w;
-                        addr_cnt_nxt = addr_cnt + GB_ADDR_W'(LANES);
+                        addr_cnt_nxt = addr_cnt + GB_ADDR_W'(1);
                         lane_cnt_nxt = '0;
                         pack_data_nxt = '0;
                         pack_mask_nxt = '0;

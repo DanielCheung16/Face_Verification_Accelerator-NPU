@@ -31,3 +31,4 @@ datasets/faces_eval/*.bin
 
 frontend/sim/gold_models/qface_c/generated/**
 frontend/sim/gold_models/qface_c/dump_spatial_top_dw
+frontend/sim/gold_models/qface_c/dump_system_2_2

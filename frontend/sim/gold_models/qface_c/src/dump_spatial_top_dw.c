@@ -204,7 +204,7 @@ static void dump_activation_words(const char *path, const qf_op_t *op, const int
     for (int x = 0; x < op->in_h; x++) {
         for (int y = 0; y < op->in_w; y++) {
             for (int tile = 0; tile < op->in_c; tile += LANES) {
-                int addr = AO_BASE + (x * op->in_w + y) * op->in_c + tile;
+                int addr = AO_BASE + (x * op->in_w + y) * (op->in_c / LANES) + (tile / LANES);
                 print_word(fp, addr, &act[(x * op->in_w + y) * op->in_c + tile], LANES);
             }
         }
@@ -224,7 +224,7 @@ static void dump_weight_words(const char *path, const qf_op_t *op)
     for (int pos = 0; pos < op->kh * op->kw; pos++) {
         for (int tile = 0; tile < op->out_c; tile += LANES) {
             int8_t lanes[LANES];
-            int addr = WGT_BASE + pos * op->out_c + tile;
+            int addr = WGT_BASE + pos * (op->out_c / LANES) + (tile / LANES);
             for (int lane = 0; lane < LANES; lane++) {
                 int ch = tile + lane;
                 lanes[lane] = w[ch * op->kh * op->kw + pos];
@@ -250,7 +250,7 @@ static void dump_expected_words(const char *path, const qf_op_t *op, const int8_
             for (int tile = 0; tile < op->out_c; tile += LANES) {
                 int8_t lanes[LANES];
                 int elem = (x * out_w + y) * op->out_c + tile;
-                int addr = OUT_BASE + elem;
+                int addr = OUT_BASE + elem / LANES;
                 for (int lane = 0; lane < LANES; lane++) {
                     lanes[lane] = dw_quant_value(op, act, x, y, tile + lane);
                 }

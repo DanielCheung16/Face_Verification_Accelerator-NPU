@@ -4,7 +4,7 @@ LDFLAGS ?= -lm
 
 MODEL_OBJS := build/qface_model.o build/qface_params.o
 
-all: qface_compare dump_spatial_top_dw
+all: qface_compare dump_spatial_top_dw dump_system_2_2
 
 generated/qface_params.h generated/qface_params.c:
 	python gen_qface_c.py
@@ -24,10 +24,13 @@ qface_compare: src/main_compare.c include/qface_model.h $(MODEL_OBJS)
 dump_spatial_top_dw: src/dump_spatial_top_dw.c include/qface_model.h generated/qface_params.h generated/qface_params.c
 	$(CC) $(CFLAGS) -o $@ src/dump_spatial_top_dw.c generated/qface_params.c $(LDFLAGS)
 
+dump_system_2_2: src/dump_system_2_2.c include/qface_model.h generated/qface_params.h generated/qface_params.c
+	$(CC) $(CFLAGS) -o $@ src/dump_system_2_2.c generated/qface_params.c $(LDFLAGS)
+
 run: qface_compare
 	./qface_compare
 
 clean:
-	rm -rf build qface_compare dump_spatial_top_dw
+	rm -rf build qface_compare dump_spatial_top_dw dump_system_2_2
 
 .PHONY: all run clean

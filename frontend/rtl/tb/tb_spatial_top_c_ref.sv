@@ -304,9 +304,9 @@ module tb_spatial_top_c_ref;
 
     always @(posedge clk) begin
         if (rst_n && gb_ao_wr_valid_o) begin
-            check(gb_ao_wr_addr_o == GB_ADDR_W'(OUT_BASE + write_cnt * LANES),
+            check(gb_ao_wr_addr_o == GB_ADDR_W'(OUT_BASE + write_cnt),
                   $sformatf("addr mismatch word=%0d expected=0x%0h got=0x%0h",
-                            write_cnt, OUT_BASE + write_cnt * LANES, gb_ao_wr_addr_o));
+                            write_cnt, OUT_BASE + write_cnt, gb_ao_wr_addr_o));
             check(gb_ao_wr_mask_o == {MASK_W{1'b1}},
                   $sformatf("mask mismatch word=%0d got=0x%0h", write_cnt, gb_ao_wr_mask_o));
             check(gb_ao_wr_data_o == exp_mem[gb_ao_wr_addr_o],

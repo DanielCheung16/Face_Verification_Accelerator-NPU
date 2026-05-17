@@ -193,7 +193,7 @@ module tb_top_dwconv3x3_prelu_c_ref;
         logic [GB_DATA_W-1:0] exp;
         begin
             for (int word = 0; word < OUTPUT_WORDS; word++) begin
-                addr = OUT_BASE + word * LANES;
+                addr = OUT_BASE + word;
                 got = dut.u_ao_gb.GEN_SDP.u_sram.mem[addr];
                 exp = expected[addr];
                 check(got === exp,
