@@ -273,4 +273,46 @@ spatial_top
   └─ spatial_pack_writeback
 ```
 4. 需要是可综合设计。涉及到rom/ram的部分，一定是要按照能综合成memory的写法（要考虑接口大小，深度，读取数量）
-5. 宽bit大扇出的全局控制信号，考虑到net delay问题。如果不影响steady status，那么可以考虑加本地reg做间隔。输出在运行的情况下经历reg输出。
+5. 宽bit大扇出的全局控制信号，考虑到net delay问题。如果不影响steady status，那么可以考虑加本地reg做间隔。输出在允许的情况下经历reg输出。
+
+## 系统级验证方案
+```
+prelu_plus_activation_quant
+  = PReLU + requant
+
+activation_quant_or_residual_add_quant
+  = requant
+  or residual + requant
+```
+
+软件层面应该把quantize的部分融合到其上层。记住`mobilefacenet_hw_simplified.csv`是你对于层级了解的关键文件。我们应该依次进行如下验证：
+因为我们之前通过过conv1x1的，但改了一些模块，所以现在先重新验证一下。
+1. conv1x1 + requant
+
+2. conv1x1 + （PReLU + requant）
+
+3. conv1x1 + （residual + requant）
+   这是最该补的，因为它验证 conv1x1 residual path、residual SRAM read、param scheduler 对齐
+
+4. conv1x1 有两层放在一起。比如cvs:conv1x1 + conv1x1 + prelu_plus_activation_quant。然后验证conv1x1 + （residual +     requant再conv1x1 + （PReLU + requant）
+
+开始dwconv的部分
+dwconv3x3好像不需要支持residual
+1. dwconv3x3 + PReLU + requant
+   刚刚做过 spatial_top，但还不是完整 top；之后可以升级到 top 单层验证
+
+2. 可以开做dwconv3x3 和conv1x1的联合验证了：
+   第一个：conv1x1 + (conv1x1 + prelu_plus_activation_quant) + (dwconv3x3 + prelu_plus_activation_quant) + (conv1x1 + activation_quant_or_residual_add_quant)
+   第二个：（conv1x1 + activation_quant_or_residual_add_quant）+ （conv1x1 + prelu_plus_activation_quant）+ （dwconv3x3 + prelu_plus_activation_quant） + （conv1x1 + activation_quant_or_residual_add_quant）
+
+3. 验证stride=2 的dwconv3x3： （dwconv3x3 + prelu_plus_activation_quant）
+
+4. 验证stride=2 的dwconv3x3与紧接着的下层conv1x1 （dwconv3x3 + prelu_plus_activation_quant）+ （conv1x1 + requant0）
+
+4. conv3x3 + postprocess
+   等 conv3x3 compute controller 完成后补
+
+## 一直遵守的设计与验证手则
+1. 需要是可综合设计。涉及到rom/ram的部分，一定是要按照能综合成memory的写法（要考虑接口大小，深度，读取数量）
+2. 宽bit大扇出的全局控制信号，考虑到net delay问题。如果不影响steady status，那么可以考虑加本地reg做间隔。输出在允许的情况下经历reg输出。
+3. 注意你C model的可配置性（可选layers），我不希望你每次都要重新写很多C code。不要去动之前做过精确性检查的那个最重要整个系统的golden c。
