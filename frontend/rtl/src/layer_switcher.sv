@@ -97,6 +97,7 @@ module layer_switcher #(
 );
     localparam int DEV_IDX_W = (NUM_DEV <= 1) ? 1 : $clog2(NUM_DEV);
     localparam logic [DEV_IDX_W-1:0] CONV1X1_DEV = '0;
+    localparam logic [DEV_IDX_W-1:0] SPATIAL_DEV = (NUM_DEV > 1) ? DEV_IDX_W'(1) : '0;
 
     typedef enum logic [2:0] {
         IDLE,
@@ -293,8 +294,9 @@ module layer_switcher #(
     // layer_config_mem decodes layer_cnt_r into layer_type_w and the per-layer
     // configuration. This block only converts the opcode into the hardware
     // device index that should receive start_o and own the shared GB connection.
-    // At this stage only conv1x1 exists, so every active layer maps to
-    // CONV1X1_DEV.
+    // Current device slots:
+    //   LY_CONV1X1    -> CONV1X1_DEV
+    //   LY_DWCONV3X3  -> SPATIAL_DEV
     // -------------------------------------------------------------------------
     always_comb begin
         active_dev_valid_w = 1'b0;
@@ -304,6 +306,13 @@ module layer_switcher #(
             LY_CONV1X1: begin
                 active_dev_valid_w = 1'b1;
                 active_dev_idx_w   = CONV1X1_DEV;
+            end
+
+            LY_DWCONV3X3: begin
+                if (NUM_DEV > 1) begin
+                    active_dev_valid_w = 1'b1;
+                    active_dev_idx_w   = SPATIAL_DEV;
+                end
             end
 
             default: ;

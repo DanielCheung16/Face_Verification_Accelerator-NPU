@@ -18,6 +18,9 @@ module tb_quant_param_mem;
     logic [SHIFT_W-1:0] requant_shift_o;
     logic signed [MULT_W-1:0] prelu_multiplier_o;
     logic [SHIFT_W-1:0] prelu_shift_o;
+    logic signed [MULT_W-1:0] residual_multiplier_o;
+    logic [SHIFT_W-1:0] residual_shift_o;
+    logic signed [BIAS_W-1:0] residual_zero_point_o;
 
     int fail_cnt;
 
@@ -39,7 +42,13 @@ module tb_quant_param_mem;
         .INIT_PRELU_MULT_0(32'sd33),
         .INIT_PRELU_MULT_1(-32'sd44),
         .INIT_PRELU_SHIFT_0(6'd5),
-        .INIT_PRELU_SHIFT_1(6'd6)
+        .INIT_PRELU_SHIFT_1(6'd6),
+        .INIT_RESIDUAL_MULT_0(32'sd55),
+        .INIT_RESIDUAL_MULT_1(-32'sd66),
+        .INIT_RESIDUAL_SHIFT_0(6'd7),
+        .INIT_RESIDUAL_SHIFT_1(6'd8),
+        .INIT_RESIDUAL_ZERO_POINT_0(-64'sd9),
+        .INIT_RESIDUAL_ZERO_POINT_1(64'sd10)
     ) u_dut (
         .clk(clk),
         .rst_n(rst_n),
@@ -50,7 +59,10 @@ module tb_quant_param_mem;
         .requant_multiplier_o(requant_multiplier_o),
         .requant_shift_o(requant_shift_o),
         .prelu_multiplier_o(prelu_multiplier_o),
-        .prelu_shift_o(prelu_shift_o)
+        .prelu_shift_o(prelu_shift_o),
+        .residual_multiplier_o(residual_multiplier_o),
+        .residual_shift_o(residual_shift_o),
+        .residual_zero_point_o(residual_zero_point_o)
     );
 
     task automatic check(input bit cond, input string msg);
@@ -94,6 +106,9 @@ module tb_quant_param_mem;
         check(requant_shift_o === 6'd3, "addr0 requant shift");
         check(prelu_multiplier_o === 32'sd33, "addr0 prelu mult");
         check(prelu_shift_o === 6'd5, "addr0 prelu shift");
+        check(residual_multiplier_o === 32'sd55, "addr0 residual mult");
+        check(residual_shift_o === 6'd7, "addr0 residual shift");
+        check(residual_zero_point_o === -64'sd9, "addr0 residual zero-point");
         drop_read_en();
 
         request_addr(1);
@@ -105,6 +120,9 @@ module tb_quant_param_mem;
         check(requant_shift_o === 6'd4, "addr1 requant shift");
         check(prelu_multiplier_o === -32'sd44, "addr1 prelu mult");
         check(prelu_shift_o === 6'd6, "addr1 prelu shift");
+        check(residual_multiplier_o === -32'sd66, "addr1 residual mult");
+        check(residual_shift_o === 6'd8, "addr1 residual shift");
+        check(residual_zero_point_o === 64'sd10, "addr1 residual zero-point");
         drop_read_en();
 
         request_addr(8);
@@ -116,6 +134,9 @@ module tb_quant_param_mem;
         check(requant_shift_o === '0, "addr8 default requant shift");
         check(prelu_multiplier_o === '0, "addr8 default prelu mult");
         check(prelu_shift_o === '0, "addr8 default prelu shift");
+        check(residual_multiplier_o === '0, "addr8 default residual mult");
+        check(residual_shift_o === '0, "addr8 default residual shift");
+        check(residual_zero_point_o === '0, "addr8 default residual zero-point");
         drop_read_en();
 
         @(posedge clk);

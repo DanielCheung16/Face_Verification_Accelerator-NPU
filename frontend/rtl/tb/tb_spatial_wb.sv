@@ -2,6 +2,7 @@
 
 module tb_spatial_wb;
     parameter int ACC_W = 32;
+    parameter int BIAS_W = 64;
     parameter int DATA_W = 8;
     parameter int GB_DATA_W = 128;
     parameter int GB_ADDR_W = 16;
@@ -23,6 +24,10 @@ module tb_spatial_wb;
     logic [2:0] post_mode_i;
     logic residual_en_i;
     logic signed [ACC_W-1:0] residual_i;
+    logic signed [BIAS_W-1:0] bias_i;
+    logic signed [31:0] residual_multiplier_i;
+    logic [5:0] residual_shift_i;
+    logic signed [BIAS_W-1:0] residual_zero_point_i;
     logic signed [31:0] requant_multiplier_i;
     logic [5:0] requant_shift_i;
     logic signed [ACC_W-1:0] output_zero_point_i;
@@ -43,6 +48,7 @@ module tb_spatial_wb;
 
     spatial_wb #(
         .ACC_W(ACC_W),
+        .BIAS_W(BIAS_W),
         .DATA_W(DATA_W),
         .GB_DATA_W(GB_DATA_W),
         .GB_ADDR_W(GB_ADDR_W),
@@ -58,6 +64,10 @@ module tb_spatial_wb;
         .post_mode_i(post_mode_i),
         .residual_en_i(residual_en_i),
         .residual_i(residual_i),
+        .bias_i(bias_i),
+        .residual_multiplier_i(residual_multiplier_i),
+        .residual_shift_i(residual_shift_i),
+        .residual_zero_point_i(residual_zero_point_i),
         .requant_multiplier_i(requant_multiplier_i),
         .requant_shift_i(requant_shift_i),
         .output_zero_point_i(output_zero_point_i),
@@ -140,6 +150,10 @@ module tb_spatial_wb;
         post_mode_i = 3'd0; // bypass saturate
         residual_en_i = 1'b0;
         residual_i = '0;
+        bias_i = '0;
+        residual_multiplier_i = 32'sd1;
+        residual_shift_i = 6'd0;
+        residual_zero_point_i = '0;
         requant_multiplier_i = 32'sd1;
         requant_shift_i = 6'd0;
         output_zero_point_i = '0;

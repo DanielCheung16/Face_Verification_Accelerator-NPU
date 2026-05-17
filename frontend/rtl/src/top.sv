@@ -19,8 +19,12 @@ module top #(
     parameter bit WGT_TRUE_DUAL_PORT = 1'b0,
     parameter int AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH),
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
-    parameter int NUM_DEV = 1,
+    parameter int NUM_DEV = 2,
     parameter int MAX_LAYER = 8,
+    parameter int PARAM_DEPTH = 9792,
+    parameter int PARAM_ADDR_W = (PARAM_DEPTH <= 1) ? 1 : $clog2(PARAM_DEPTH),
+    parameter int SPATIAL_ACT_DEPTH = 1,
+    parameter int SPATIAL_WGT_DEPTH = 32,
     parameter bit USE_INTERNAL_QUANT_PARAMS = 1'b0,
 
     localparam int AO_MASK_W = GB_DATA_W / DATA_W,
@@ -57,6 +61,11 @@ module top #(
     output logic [GB_DATA_W-1:0]     host_wgt_rd_data_o
 );
     localparam int CONV1X1_DEV = 0;
+    localparam int SPATIAL_DEV = 1;
+    localparam int SPATIAL_ELEM_CNT_W = 32;
+    localparam int SPATIAL_WGT_BYTE_DEPTH = (GB_DATA_W / DATA_W) * SPATIAL_WGT_DEPTH;
+    localparam int SPATIAL_WGT_RD_ADDR_W = (SPATIAL_WGT_BYTE_DEPTH <= 1) ? 1 : $clog2(SPATIAL_WGT_BYTE_DEPTH);
+    localparam int SPATIAL_FILTER_CNT_W = SPATIAL_WGT_RD_ADDR_W + 1;
 
     logic accelerator_active_w;
 
@@ -75,6 +84,20 @@ module top #(
     logic [MAX_LAYER-1:0]  layer_idx;
 
     logic [1:0]                    mode;
+    logic [2:0]                    ifmap_size_code;
+    logic [1:0]                    num_filter_code;
+    logic                          stride;
+    logic                          pad;
+    logic signed [OUT_W-1:0]       output_zero_point;
+    logic [PARAM_ADDR_W-1:0]       bias_base;
+    logic [PARAM_ADDR_W-1:0]       requant_mult_base;
+    logic [PARAM_ADDR_W-1:0]       requant_shift_base;
+    logic [PARAM_ADDR_W-1:0]       prelu_mult_base;
+    logic [PARAM_ADDR_W-1:0]       prelu_shift_base;
+    logic [PARAM_ADDR_W-1:0]       residual_mult_base;
+    logic [PARAM_ADDR_W-1:0]       residual_shift_base;
+    logic [PARAM_ADDR_W-1:0]       residual_zero_point_base;
+
     logic signed [BIAS_W-1:0]      bias [COL];
     logic signed [MULT_W-1:0]      multiplier [COL];
     logic [SHIFT_W-1:0]            shift [COL];
@@ -137,6 +160,23 @@ module top #(
     logic [GB_ADDR_W-1:0]     sw_wgt_rd_addr;
     logic [GB_DATA_W-1:0]     sw_wgt_rd_data;
 
+    logic                     quant_param_rd_en;
+    logic [PARAM_ADDR_W-1:0]  quant_param_rd_addr;
+    logic                     quant_param_rd_valid;
+    logic signed [BIAS_W-1:0] quant_param_bias;
+    logic signed [MULT_W-1:0] quant_param_requant_multiplier;
+    logic [SHIFT_W-1:0]       quant_param_requant_shift;
+    logic signed [MULT_W-1:0] quant_param_prelu_multiplier;
+    logic [SHIFT_W-1:0]       quant_param_prelu_shift;
+    logic signed [MULT_W-1:0] quant_param_residual_multiplier;
+    logic [SHIFT_W-1:0]       quant_param_residual_shift;
+    logic signed [BIAS_W-1:0] quant_param_residual_zero_point;
+
+    logic [SPATIAL_ELEM_CNT_W-1:0] spatial_output_elements;
+    logic [SPATIAL_FILTER_CNT_W-1:0] spatial_current_num_filter;
+    logic signed [ACC_W-1:0] spatial_residual_stub;
+    logic signed [ACC_W-1:0] spatial_output_zero_point;
+
     logic                     ao_rd_en;
     logic [AO_ADDR_W-1:0]     ao_rd_addr;
     logic [GB_DATA_W-1:0]     ao_rd_data;
@@ -146,6 +186,18 @@ module top #(
     logic [AO_MASK_W-1:0]     ao_wr_mask;
 
     assign accelerator_active_w = sys_start && !sys_done;
+    assign spatial_output_elements = SPATIAL_ELEM_CNT_W'(m_size) * SPATIAL_ELEM_CNT_W'(n_size);
+    assign spatial_current_num_filter = SPATIAL_FILTER_CNT_W'(n_size);
+    assign spatial_residual_stub = '0;
+    assign spatial_output_zero_point = ACC_W'($signed(output_zero_point));
+
+`ifndef SYNTHESIS
+    initial begin
+        if (NUM_DEV < 2) begin
+            $fatal(1, "top requires NUM_DEV >= 2 for conv1x1 and spatial device slots");
+        end
+    end
+`endif
 
     assign ao_rd_en   = accelerator_active_w ? sw_act_rd_valid : host_ao_rd_en_i;
     assign ao_rd_addr = accelerator_active_w ? sw_act_rd_addr[AO_ADDR_W-1:0] : host_ao_addr_i;
@@ -201,6 +253,30 @@ module top #(
         .acc_rd_data_o(sw_wgt_rd_data)
     );
 
+    // Global per-channel postprocess parameter memory. Layer tops schedule
+    // channel reads using the base addresses from layer_switcher/layer_config_mem.
+    quant_param_mem #(
+        .PARAM_DEPTH(PARAM_DEPTH),
+        .PARAM_ADDR_W(PARAM_ADDR_W),
+        .BIAS_W(BIAS_W),
+        .MULT_W(MULT_W),
+        .SHIFT_W(SHIFT_W)
+    ) u_quant_param_mem (
+        .clk(aclk),
+        .rst_n(aresetn),
+        .rd_en_i(quant_param_rd_en),
+        .rd_addr_i(quant_param_rd_addr),
+        .rd_valid_o(quant_param_rd_valid),
+        .bias_o(quant_param_bias),
+        .requant_multiplier_o(quant_param_requant_multiplier),
+        .requant_shift_o(quant_param_requant_shift),
+        .prelu_multiplier_o(quant_param_prelu_multiplier),
+        .prelu_shift_o(quant_param_prelu_shift),
+        .residual_multiplier_o(quant_param_residual_multiplier),
+        .residual_shift_o(quant_param_residual_shift),
+        .residual_zero_point_o(quant_param_residual_zero_point)
+    );
+
     layer_switcher #(
         .ROW(ROW),
         .COL(COL),
@@ -221,7 +297,8 @@ module top #(
         .AO_ADDR_W(AO_ADDR_W),
         .WGT_ADDR_W(WGT_ADDR_W),
         .NUM_DEV(NUM_DEV),
-        .MAX_LAYER(MAX_LAYER)
+        .MAX_LAYER(MAX_LAYER),
+        .PARAM_ADDR_W(PARAM_ADDR_W)
     ) u_layer_switcher (
         .clk(aclk),
         .rst_n(aresetn),
@@ -240,15 +317,19 @@ module top #(
         .residual_base_addr_o(residual_base_addr),
         .layer_idx_o(layer_idx),
         .mode_o(mode),
-        .bias_o(bias),
-        .multiplier_o(multiplier),
-        .shift_o(shift),
-        .zero_point_o(zero_point),
-        .prelu_multiplier_o(prelu_multiplier),
-        .prelu_shift_o(prelu_shift),
-        .residual_multiplier_o(residual_multiplier),
-        .residual_shift_o(residual_shift),
-        .residual_zero_point_o(residual_zero_point),
+        .ifmap_size_code_o(ifmap_size_code),
+        .num_filter_code_o(num_filter_code),
+        .stride_o(stride),
+        .pad_o(pad),
+        .output_zero_point_o(output_zero_point),
+        .bias_base_o(bias_base),
+        .requant_mult_base_o(requant_mult_base),
+        .requant_shift_base_o(requant_shift_base),
+        .prelu_mult_base_o(prelu_mult_base),
+        .prelu_shift_base_o(prelu_shift_base),
+        .residual_mult_base_o(residual_mult_base),
+        .residual_shift_base_o(residual_shift_base),
+        .residual_zero_point_base_o(residual_zero_point_base),
         .dev_act_rd_valid_i(dev_act_rd_valid),
         .dev_act_rd_addr_i(dev_act_rd_addr),
         .dev_act_rd_data_o(dev_act_rd_data),
@@ -272,6 +353,23 @@ module top #(
         .final_valid_o(final_valid_o),
         .final_vec_o(final_vec_o)
     );
+
+    // Conv1x1 still owns its legacy tile postprocess interface. Until the
+    // conv1x1_param_scheduler is added, top-level conv1x1 regressions should
+    // use USE_INTERNAL_QUANT_PARAMS=1; otherwise these defaults are harmless.
+    always_comb begin
+        for (int c = 0; c < COL; c++) begin
+            bias[c] = '0;
+            multiplier[c] = MULT_W'(1);
+            shift[c] = '0;
+            zero_point[c] = '0;
+            prelu_multiplier[c] = MULT_W'(1);
+            prelu_shift[c] = '0;
+            residual_multiplier[c] = MULT_W'(1);
+            residual_shift[c] = '0;
+            residual_zero_point[c] = '0;
+        end
+    end
 
     conv1x1_level3_top #(
         .ROW(ROW),
@@ -352,6 +450,73 @@ module top #(
         .gb_wgt_rd_data_i(dev_wgt_rd_data[CONV1X1_DEV])
     );
 
+    // Spatial 3x3 device slot. It receives metadata/base addresses from the
+    // switcher and schedules per-channel postprocess parameters from
+    // quant_param_mem internally.
+    spatial_top #(
+        .GB_ADDR_W(GB_ADDR_W),
+        .GB_DATA_W(GB_DATA_W),
+        .DATA_W(DATA_W),
+        .OUT_W(OUT_W),
+        .ACC_W(ACC_W),
+        .ACT_DEPTH(SPATIAL_ACT_DEPTH),
+        .WGT_DEPTH(SPATIAL_WGT_DEPTH),
+        .ELEM_CNT_W(SPATIAL_ELEM_CNT_W),
+        .BIAS_W(BIAS_W),
+        .MUL_W(MULT_W),
+        .SHIFT_W(SHIFT_W),
+        .PARAM_ADDR_W(PARAM_ADDR_W)
+    ) u_spatial_dev (
+        .clk(aclk),
+        .rst_n(aresetn),
+        .run_en_i(1'b1),
+        .start_i(dev_start[SPATIAL_DEV]),
+        .act_base_addr_i(act_base_addr),
+        .wgt_base_addr_i(wgt_base_addr),
+        .out_base_addr_i(out_base_addr),
+        .output_elements_i(spatial_output_elements),
+        .bias_base_i(bias_base),
+        .requant_mult_base_i(requant_mult_base),
+        .requant_shift_base_i(requant_shift_base),
+        .prelu_mult_base_i(prelu_mult_base),
+        .prelu_shift_base_i(prelu_shift_base),
+        .residual_mult_base_i(residual_mult_base),
+        .residual_shift_base_i(residual_shift_base),
+        .residual_zero_point_base_i(residual_zero_point_base),
+        .num_filter_code_i(num_filter_code),
+        .ifmap_size_code_i(ifmap_size_code),
+        .stride_i(stride),
+        .pad_i(pad),
+        .current_num_filter_i(spatial_current_num_filter),
+        .post_mode_i({1'b0, mode}),
+        .residual_en_i(residual_en),
+        .residual_i(spatial_residual_stub),
+        .output_zero_point_i(spatial_output_zero_point),
+        .quant_param_rd_en_o(quant_param_rd_en),
+        .quant_param_rd_addr_o(quant_param_rd_addr),
+        .quant_param_rd_valid_i(quant_param_rd_valid),
+        .quant_param_bias_i(quant_param_bias),
+        .quant_param_requant_multiplier_i(quant_param_requant_multiplier),
+        .quant_param_requant_shift_i(quant_param_requant_shift),
+        .quant_param_prelu_multiplier_i(quant_param_prelu_multiplier),
+        .quant_param_prelu_shift_i(quant_param_prelu_shift),
+        .quant_param_residual_multiplier_i(quant_param_residual_multiplier),
+        .quant_param_residual_shift_i(quant_param_residual_shift),
+        .quant_param_residual_zero_point_i(quant_param_residual_zero_point),
+        .gb_act_rd_en_o(dev_act_rd_valid[SPATIAL_DEV]),
+        .gb_act_rd_addr_o(dev_act_rd_addr[SPATIAL_DEV]),
+        .gb_act_rd_data_i(dev_act_rd_data[SPATIAL_DEV]),
+        .gb_wgt_rd_en_o(dev_wgt_rd_valid[SPATIAL_DEV]),
+        .gb_wgt_rd_addr_o(dev_wgt_rd_addr[SPATIAL_DEV]),
+        .gb_wgt_rd_data_i(dev_wgt_rd_data[SPATIAL_DEV]),
+        .gb_ao_wr_valid_o(dev_ao_wr_valid[SPATIAL_DEV]),
+        .gb_ao_wr_addr_o(dev_ao_wr_addr[SPATIAL_DEV]),
+        .gb_ao_wr_data_o(dev_ao_wr_data[SPATIAL_DEV]),
+        .gb_ao_wr_mask_o(dev_ao_wr_mask[SPATIAL_DEV]),
+        .busy_o(dev_busy[SPATIAL_DEV]),
+        .done_o(dev_done[SPATIAL_DEV])
+    );
+
     conv1x1_output_postprocess #(
         .ROW(ROW),
         .COL(COL),
@@ -429,7 +594,7 @@ module top #(
     generate
         if (NUM_DEV > 1) begin : GEN_UNUSED_DEVICES
             for (genvar d = 0; d < NUM_DEV; d++) begin : GEN_DEV_TIEOFF
-                if (d != CONV1X1_DEV) begin : GEN_UNUSED
+                if ((d != CONV1X1_DEV) && (d != SPATIAL_DEV)) begin : GEN_UNUSED
                     assign dev_busy[d] = 1'b0;
                     assign dev_done[d] = 1'b0;
                     assign dev_act_rd_valid[d] = 1'b0;

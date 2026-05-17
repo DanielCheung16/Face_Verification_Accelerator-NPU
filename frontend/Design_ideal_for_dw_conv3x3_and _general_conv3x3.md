@@ -273,3 +273,4 @@ spatial_top
   └─ spatial_pack_writeback
 ```
 4. 需要是可综合设计。涉及到rom/ram的部分，一定是要按照能综合成memory的写法（要考虑接口大小，深度，读取数量）
+5. 宽bit大扇出的全局控制信号，考虑到net delay问题。如果不影响steady status，那么可以考虑加本地reg做间隔。输出在运行的情况下经历reg输出。

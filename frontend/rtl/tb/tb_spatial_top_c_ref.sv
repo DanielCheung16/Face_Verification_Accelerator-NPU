@@ -17,6 +17,8 @@ module tb_spatial_top_c_ref;
     localparam int OUTPUTS = OUT_SIZE * OUT_SIZE * C;
     localparam int OUTPUT_WORDS = OUTPUTS / LANES;
     localparam int MEM_DEPTH = 600000;
+    localparam int PARAM_DEPTH = 128;
+    localparam int PARAM_ADDR_W = 16;
     localparam int ACT_BASE = 0;
     localparam int WGT_BASE = 0;
     localparam int OUT_BASE = 300000;
@@ -41,11 +43,18 @@ module tb_spatial_top_c_ref;
     logic [2:0] post_mode_i;
     logic residual_en_i;
     logic signed [ACC_W-1:0] residual_i;
-    logic signed [31:0] requant_multiplier_i;
-    logic [5:0] requant_shift_i;
     logic signed [ACC_W-1:0] output_zero_point_i;
-    logic signed [31:0] prelu_multiplier_i;
-    logic [5:0] prelu_shift_i;
+    logic quant_param_rd_en_o;
+    logic [PARAM_ADDR_W-1:0] quant_param_rd_addr_o;
+    logic quant_param_rd_valid_i;
+    logic signed [63:0] quant_param_bias_i;
+    logic signed [31:0] quant_param_requant_multiplier_i;
+    logic [5:0] quant_param_requant_shift_i;
+    logic signed [31:0] quant_param_prelu_multiplier_i;
+    logic [5:0] quant_param_prelu_shift_i;
+    logic signed [31:0] quant_param_residual_multiplier_i;
+    logic [5:0] quant_param_residual_shift_i;
+    logic signed [63:0] quant_param_residual_zero_point_i;
 
     logic gb_act_rd_en_o;
     logic [GB_ADDR_W-1:0] gb_act_rd_addr_o;
@@ -76,7 +85,8 @@ module tb_spatial_top_c_ref;
         .ACC_W(ACC_W),
         .ACT_DEPTH(ACT_DEPTH),
         .WGT_DEPTH(WGT_DEPTH),
-        .ELEM_CNT_W(ELEM_CNT_W)
+        .ELEM_CNT_W(ELEM_CNT_W),
+        .PARAM_ADDR_W(PARAM_ADDR_W)
     ) u_dut (
         .clk(clk),
         .rst_n(rst_n),
@@ -86,6 +96,14 @@ module tb_spatial_top_c_ref;
         .wgt_base_addr_i(wgt_base_addr_i),
         .out_base_addr_i(out_base_addr_i),
         .output_elements_i(output_elements_i),
+        .bias_base_i(16'd0),
+        .requant_mult_base_i(16'd0),
+        .requant_shift_base_i(16'd0),
+        .prelu_mult_base_i(16'd0),
+        .prelu_shift_base_i(16'd0),
+        .residual_mult_base_i(16'd0),
+        .residual_shift_base_i(16'd0),
+        .residual_zero_point_base_i(16'd0),
         .num_filter_code_i(num_filter_code_i),
         .ifmap_size_code_i(ifmap_size_code_i),
         .stride_i(stride_i),
@@ -94,11 +112,18 @@ module tb_spatial_top_c_ref;
         .post_mode_i(post_mode_i),
         .residual_en_i(residual_en_i),
         .residual_i(residual_i),
-        .requant_multiplier_i(requant_multiplier_i),
-        .requant_shift_i(requant_shift_i),
         .output_zero_point_i(output_zero_point_i),
-        .prelu_multiplier_i(prelu_multiplier_i),
-        .prelu_shift_i(prelu_shift_i),
+        .quant_param_rd_en_o(quant_param_rd_en_o),
+        .quant_param_rd_addr_o(quant_param_rd_addr_o),
+        .quant_param_rd_valid_i(quant_param_rd_valid_i),
+        .quant_param_bias_i(quant_param_bias_i),
+        .quant_param_requant_multiplier_i(quant_param_requant_multiplier_i),
+        .quant_param_requant_shift_i(quant_param_requant_shift_i),
+        .quant_param_prelu_multiplier_i(quant_param_prelu_multiplier_i),
+        .quant_param_prelu_shift_i(quant_param_prelu_shift_i),
+        .quant_param_residual_multiplier_i(quant_param_residual_multiplier_i),
+        .quant_param_residual_shift_i(quant_param_residual_shift_i),
+        .quant_param_residual_zero_point_i(quant_param_residual_zero_point_i),
         .gb_act_rd_en_o(gb_act_rd_en_o),
         .gb_act_rd_addr_o(gb_act_rd_addr_o),
         .gb_act_rd_data_i(gb_act_rd_data_i),
@@ -111,6 +136,27 @@ module tb_spatial_top_c_ref;
         .gb_ao_wr_mask_o(gb_ao_wr_mask_o),
         .busy_o(busy_o),
         .done_o(done_o)
+    );
+
+    // Small parameter memory used by this bring-up TB. Bypass mode only needs
+    // rd_valid and zero bias, but using quant_param_mem keeps the formal path.
+    quant_param_mem #(
+        .PARAM_DEPTH(PARAM_DEPTH),
+        .PARAM_ADDR_W(PARAM_ADDR_W)
+    ) u_quant_param_mem (
+        .clk(clk),
+        .rst_n(rst_n),
+        .rd_en_i(quant_param_rd_en_o),
+        .rd_addr_i(quant_param_rd_addr_o),
+        .rd_valid_o(quant_param_rd_valid_i),
+        .bias_o(quant_param_bias_i),
+        .requant_multiplier_o(quant_param_requant_multiplier_i),
+        .requant_shift_o(quant_param_requant_shift_i),
+        .prelu_multiplier_o(quant_param_prelu_multiplier_i),
+        .prelu_shift_o(quant_param_prelu_shift_i),
+        .residual_multiplier_o(quant_param_residual_multiplier_i),
+        .residual_shift_o(quant_param_residual_shift_i),
+        .residual_zero_point_o(quant_param_residual_zero_point_i)
     );
 
     task automatic check(input bit cond, input string msg);
@@ -166,11 +212,7 @@ module tb_spatial_top_c_ref;
         post_mode_i = 3'd0;             // Current spatial_top C-ref path: bypass saturate.
         residual_en_i = 1'b0;
         residual_i = '0;
-        requant_multiplier_i = 32'sd1;
-        requant_shift_i = 6'd0;
         output_zero_point_i = '0;
-        prelu_multiplier_i = 32'sd1;
-        prelu_shift_i = 6'd0;
 
         for (int addr = 0; addr < MEM_DEPTH; addr++) begin
             ao_mem[addr] = '0;

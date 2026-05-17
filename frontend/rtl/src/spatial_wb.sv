@@ -5,6 +5,7 @@
 //   next stage:    activation/output global buffer write port
 module spatial_wb #(
     parameter int ACC_W = 32,
+    parameter int BIAS_W = 64,
     parameter int DATA_W = 8,
     parameter int GB_DATA_W = 128,
     parameter int GB_ADDR_W = 20,
@@ -31,6 +32,10 @@ module spatial_wb #(
     input  logic [MODE_W-1:0]       post_mode_i,
     input  logic                    residual_en_i,
     input  logic signed [ACC_W-1:0] residual_i,
+    input  logic signed [BIAS_W-1:0] bias_i,
+    input  logic signed [MUL_W-1:0] residual_multiplier_i,
+    input  logic [SHIFT_W-1:0]      residual_shift_i,
+    input  logic signed [BIAS_W-1:0] residual_zero_point_i,
     input  logic signed [MUL_W-1:0] requant_multiplier_i,
     input  logic [SHIFT_W-1:0]      requant_shift_i,
     input  logic signed [ACC_W-1:0] output_zero_point_i,
@@ -49,37 +54,16 @@ module spatial_wb #(
     logic signed [DATA_W-1:0] processed_data;
     logic processed_valid;
     logic pack_busy;
-    logic [MODE_W-1:0] post_mode_r;
-    logic residual_en_r;
-    logic signed [MUL_W-1:0] requant_multiplier_r;
-    logic [SHIFT_W-1:0] requant_shift_r;
-    logic signed [ACC_W-1:0] output_zero_point_r;
-    logic signed [MUL_W-1:0] prelu_multiplier_r;
-    logic [SHIFT_W-1:0] prelu_shift_r;
     logic [GB_ADDR_W-1:0] out_base_addr_r;
     logic [ELEM_CNT_W-1:0] output_elements_r;
     logic pack_start_r;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            post_mode_r <= '0;
-            residual_en_r <= 1'b0;
-            requant_multiplier_r <= '0;
-            requant_shift_r <= '0;
-            output_zero_point_r <= '0;
-            prelu_multiplier_r <= '0;
-            prelu_shift_r <= '0;
             out_base_addr_r <= '0;
             output_elements_r <= '0;
             pack_start_r <= 1'b0;
         end else if (start_i) begin
-            post_mode_r <= post_mode_i;
-            residual_en_r <= residual_en_i;
-            requant_multiplier_r <= requant_multiplier_i;
-            requant_shift_r <= requant_shift_i;
-            output_zero_point_r <= output_zero_point_i;
-            prelu_multiplier_r <= prelu_multiplier_i;
-            prelu_shift_r <= prelu_shift_i;
             out_base_addr_r <= out_base_addr_i;
             output_elements_r <= output_elements_i;
             pack_start_r <= 1'b1;
@@ -90,6 +74,7 @@ module spatial_wb #(
 
     small_output_process #(
         .ACC_W(ACC_W),
+        .BIAS_W(BIAS_W),
         .DATA_W(DATA_W),
         .MUL_W(MUL_W),
         .SHIFT_W(SHIFT_W)
@@ -98,14 +83,18 @@ module spatial_wb #(
         .rst_n(rst_n),
         .psum_i(psum_i),
         .valid_i(valid_i),
-        .mode_i(post_mode_r),
-        .residual_en_i(residual_en_r),
+        .mode_i(post_mode_i),
+        .residual_en_i(residual_en_i),
         .residual_i(residual_i),
-        .requant_multiplier_i(requant_multiplier_r),
-        .requant_shift_i(requant_shift_r),
-        .output_zero_point_i(output_zero_point_r),
-        .prelu_multiplier_i(prelu_multiplier_r),
-        .prelu_shift_i(prelu_shift_r),
+        .bias_i(bias_i),
+        .residual_multiplier_i(residual_multiplier_i),
+        .residual_shift_i(residual_shift_i),
+        .residual_zero_point_i(residual_zero_point_i),
+        .requant_multiplier_i(requant_multiplier_i),
+        .requant_shift_i(requant_shift_i),
+        .output_zero_point_i(output_zero_point_i),
+        .prelu_multiplier_i(prelu_multiplier_i),
+        .prelu_shift_i(prelu_shift_i),
         .data_o(processed_data),
         .valid_o(processed_valid)
     );
