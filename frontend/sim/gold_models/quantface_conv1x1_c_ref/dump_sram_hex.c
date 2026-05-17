@@ -23,6 +23,27 @@ typedef struct {
     uint64_t hi;
 } qf_word128_t;
 
+typedef enum {
+    PROFILE_TWO_LAYER,
+    PROFILE_REQUANT,
+    PROFILE_PRELU,
+    PROFILE_RESIDUAL
+} qf_dump_profile_t;
+
+static qf_dump_profile_t parse_profile(const char *profile)
+{
+    if (strcmp(profile, "requant") == 0) {
+        return PROFILE_REQUANT;
+    }
+    if (strcmp(profile, "prelu") == 0) {
+        return PROFILE_PRELU;
+    }
+    if (strcmp(profile, "residual") == 0) {
+        return PROFILE_RESIDUAL;
+    }
+    return PROFILE_TWO_LAYER;
+}
+
 static int64_t round_shift_i64(int64_t value, int shift)
 {
     if (shift == 0) {
@@ -97,9 +118,9 @@ static const int32_t *layer_residual_zp(int layer)
     return layer == 0 ? qf_residual_zero_point_l0 : qf_residual_zero_point_l1;
 }
 
-static void run_layer(int layer, const int8_t *input, int8_t *output)
+static void run_layer_with_mode(int layer, int force_mode, const int8_t *input, int8_t *output)
 {
-    const qf_layer_cfg_t cfg = qf_layers[layer];
+    qf_layer_cfg_t cfg = qf_layers[layer];
     const int8_t *weight = layer_weight(layer);
     const int8_t *residual = layer_residual(layer);
     const int64_t *bias = layer_bias(layer);
@@ -111,6 +132,10 @@ static void run_layer(int layer, const int8_t *input, int8_t *output)
     const int32_t *res_mult = layer_residual_mult(layer);
     const int *res_shift = layer_residual_shift(layer);
     const int32_t *res_zp = layer_residual_zp(layer);
+
+    if (force_mode >= 0) {
+        cfg.mode = force_mode;
+    }
 
     for (int m = 0; m < cfg.m; m++) {
         for (int n = 0; n < cfg.n; n++) {
@@ -134,6 +159,11 @@ static void run_layer(int layer, const int8_t *input, int8_t *output)
                                              (int64_t)zero_point[n]);
         }
     }
+}
+
+static void run_layer(int layer, const int8_t *input, int8_t *output)
+{
+    run_layer_with_mode(layer, -1, input, output);
 }
 
 static void set_lane(qf_word128_t *word, int lane, int8_t value)
@@ -214,6 +244,8 @@ static void make_path(char *dst, size_t dst_size, const char *dir, const char *n
 int main(int argc, char **argv)
 {
     const char *out_dir = argc > 1 ? argv[1] : "out";
+    const char *profile = argc > 2 ? argv[2] : "two_layer";
+    const qf_dump_profile_t dump_profile = parse_profile(profile);
     qf_word128_t *ao_mem = calloc(QF_AO_DEPTH, sizeof(qf_word128_t));
     qf_word128_t *wgt_mem = calloc(QF_WGT_DEPTH, sizeof(qf_word128_t));
     qf_word128_t *golden_mem = calloc(QF_AO_DEPTH, sizeof(qf_word128_t));
@@ -232,14 +264,41 @@ int main(int argc, char **argv)
         buf0[i] = qf_input_l0[i];
     }
 
-    pack_activation(ao_mem, QF_AO_IN_BASE, qf_input_l0, QF_L0_M, QF_L0_K);
-    pack_activation(ao_mem, QF_AO_RES_BASE, qf_residual_l0, QF_L0_M, QF_L0_N);
-    pack_weight(wgt_mem, QF_WGT0_BASE, qf_weight_l0, QF_L0_K, QF_L0_N);
-    pack_weight(wgt_mem, QF_WGT1_BASE, qf_weight_l1, QF_L1_K, QF_L1_N);
+    switch (dump_profile) {
+    case PROFILE_REQUANT:
+        pack_activation(ao_mem, QF_AO_IN_BASE, qf_input_l0, QF_L0_M, QF_L0_K);
+        pack_weight(wgt_mem, QF_WGT0_BASE, qf_weight_l0, QF_L0_K, QF_L0_N);
+        run_layer_with_mode(0, QF_MODE_REQUANT, buf0, buf1);
+        pack_activation(golden_mem, QF_AO_OUT_BASE, buf1, QF_L0_M, QF_L0_N);
+        break;
 
-    run_layer(0, buf0, buf1);
-    run_layer(1, buf1, buf0);
-    pack_activation(golden_mem, QF_AO_IN_BASE, buf0, QF_L1_M, QF_L1_N);
+    case PROFILE_PRELU:
+        run_layer(0, buf0, buf1);
+        pack_activation(ao_mem, QF_AO_IN_BASE, buf1, QF_L1_M, QF_L1_K);
+        pack_weight(wgt_mem, QF_WGT0_BASE, qf_weight_l1, QF_L1_K, QF_L1_N);
+        run_layer(1, buf1, buf0);
+        pack_activation(golden_mem, QF_AO_OUT_BASE, buf0, QF_L1_M, QF_L1_N);
+        break;
+
+    case PROFILE_RESIDUAL:
+        pack_activation(ao_mem, QF_AO_IN_BASE, qf_input_l0, QF_L0_M, QF_L0_K);
+        pack_activation(ao_mem, QF_AO_RES_BASE, qf_residual_l0, QF_L0_M, QF_L0_N);
+        pack_weight(wgt_mem, QF_WGT0_BASE, qf_weight_l0, QF_L0_K, QF_L0_N);
+        run_layer(0, buf0, buf1);
+        pack_activation(golden_mem, QF_AO_OUT_BASE, buf1, QF_L0_M, QF_L0_N);
+        break;
+
+    case PROFILE_TWO_LAYER:
+    default:
+        pack_activation(ao_mem, QF_AO_IN_BASE, qf_input_l0, QF_L0_M, QF_L0_K);
+        pack_activation(ao_mem, QF_AO_RES_BASE, qf_residual_l0, QF_L0_M, QF_L0_N);
+        pack_weight(wgt_mem, QF_WGT0_BASE, qf_weight_l0, QF_L0_K, QF_L0_N);
+        pack_weight(wgt_mem, QF_WGT1_BASE, qf_weight_l1, QF_L1_K, QF_L1_N);
+        run_layer(0, buf0, buf1);
+        run_layer(1, buf1, buf0);
+        pack_activation(golden_mem, QF_AO_IN_BASE, buf0, QF_L1_M, QF_L1_N);
+        break;
+    }
 
     rc |= ensure_dir(out_dir);
     if (rc != 0) {
@@ -254,10 +313,20 @@ int main(int argc, char **argv)
     rc |= write_hex(path, golden_mem, QF_AO_DEPTH);
 
     if (rc == 0) {
-        printf("Wrote C-generated SRAM hex images to %s\n", out_dir);
-        printf("  ao_init: QF input @%d, residual @%d\n", QF_AO_IN_BASE, QF_AO_RES_BASE);
-        printf("  wgt_init: layer0 @%d, layer1 @%d\n", QF_WGT0_BASE, QF_WGT1_BASE);
-        printf("  golden: final output @%d\n", QF_AO_IN_BASE);
+        printf("Wrote C-generated SRAM hex images to %s (profile=%s)\n", out_dir, profile);
+        if (dump_profile == PROFILE_TWO_LAYER) {
+            printf("  ao_init: QF input @%d, residual @%d\n", QF_AO_IN_BASE, QF_AO_RES_BASE);
+            printf("  wgt_init: layer0 @%d, layer1 @%d\n", QF_WGT0_BASE, QF_WGT1_BASE);
+            printf("  golden: final output @%d\n", QF_AO_IN_BASE);
+        } else if (dump_profile == PROFILE_RESIDUAL) {
+            printf("  ao_init: selected layer input @%d, residual @%d\n", QF_AO_IN_BASE, QF_AO_RES_BASE);
+            printf("  wgt_init: selected layer weight @%d\n", QF_WGT0_BASE);
+            printf("  golden: selected layer output @%d\n", QF_AO_OUT_BASE);
+        } else {
+            printf("  ao_init: selected layer input @%d\n", QF_AO_IN_BASE);
+            printf("  wgt_init: selected layer weight @%d\n", QF_WGT0_BASE);
+            printf("  golden: selected layer output @%d\n", QF_AO_OUT_BASE);
+        }
     }
 
 done:

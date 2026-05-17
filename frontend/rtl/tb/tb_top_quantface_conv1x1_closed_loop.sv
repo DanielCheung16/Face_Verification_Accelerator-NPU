@@ -62,7 +62,14 @@ module tb_top_quantface_conv1x1_closed_loop;
         .WGT_DEPTH(WGT_DEPTH),
         .AO_TRUE_DUAL_PORT(1'b0),
         .WGT_TRUE_DUAL_PORT(1'b0),
-        .USE_INTERNAL_QUANT_PARAMS(1'b1)
+        .QUANT_BIAS_INIT_FILE({GOLD_DIR, "/quant_param_bias.hex"}),
+        .QUANT_REQUANT_MULT_INIT_FILE({GOLD_DIR, "/quant_param_requant_mult.hex"}),
+        .QUANT_REQUANT_SHIFT_INIT_FILE({GOLD_DIR, "/quant_param_requant_shift.hex"}),
+        .QUANT_PRELU_MULT_INIT_FILE({GOLD_DIR, "/quant_param_prelu_mult.hex"}),
+        .QUANT_PRELU_SHIFT_INIT_FILE({GOLD_DIR, "/quant_param_prelu_shift.hex"}),
+        .QUANT_RESIDUAL_MULT_INIT_FILE({GOLD_DIR, "/quant_param_residual_mult.hex"}),
+        .QUANT_RESIDUAL_SHIFT_INIT_FILE({GOLD_DIR, "/quant_param_residual_shift.hex"}),
+        .QUANT_RESIDUAL_ZERO_POINT_INIT_FILE({GOLD_DIR, "/quant_param_residual_zero_point.hex"})
     ) dut (
         .aclk(clk),
         .aresetn(rst_n),

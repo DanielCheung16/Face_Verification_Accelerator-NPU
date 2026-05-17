@@ -124,7 +124,6 @@ module synth_conv1x1_level3_wrapper #(
         .WGT_DEPTH(WGT_DEPTH),
         .AO_ADDR_W(AO_ADDR_W),
         .WGT_ADDR_W(WGT_ADDR_W),
-        .USE_INTERNAL_QUANT_PARAMS(1'b0),
         .LAYER_IDX_W(LAYER_IDX_W)
     ) u_dut (
         .clk(clk),

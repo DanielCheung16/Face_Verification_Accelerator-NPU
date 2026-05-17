@@ -1,4 +1,3 @@
-import quantface_conv1x1_params_pkg::*;
 import layer_defs_pkg::*;
 
 module conv1x1_level3_top #(
@@ -20,7 +19,7 @@ module conv1x1_level3_top #(
     parameter int WGT_DEPTH = 8192,
     parameter int AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH),
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
-    parameter bit USE_INTERNAL_QUANT_PARAMS = 1'b0,
+    parameter int PARAM_ADDR_W = 16,
     parameter int LAYER_IDX_W = 4,
 
     localparam int GB_LANES = GB_DATA_W / DATA_W,
@@ -50,6 +49,10 @@ module conv1x1_level3_top #(
     input  logic [GB_ADDR_W-1:0] residual_base_addr_i,
 
     input  logic [1:0] mode_i,
+    input  logic signed [OUT_W-1:0] output_zero_point_i,
+    input  logic [PARAM_ADDR_W-1:0] common_param_base_i,
+    input  logic [PARAM_ADDR_W-1:0] prelu_param_base_i,
+    input  logic [PARAM_ADDR_W-1:0] residual_param_base_i,
     input  logic signed [BIAS_W-1:0] bias_i       [COL],
     input  logic signed [MULT_W-1:0] multiplier_i [COL],
     input  logic [SHIFT_W-1:0]       shift_i      [COL],
@@ -97,7 +100,28 @@ module conv1x1_level3_top #(
     // Shared weight global buffer read interface.
     output logic                     gb_wgt_rd_valid_o,
     output logic [GB_ADDR_W-1:0]     gb_wgt_rd_addr_o,
-    input  logic [GB_DATA_W-1:0]     gb_wgt_rd_data_i
+    input  logic [GB_DATA_W-1:0]     gb_wgt_rd_data_i,
+
+    // Global quant_param_mem read interface. A new output-channel tile loads
+    // COL per-channel parameters once; M tiles under the same N tile reuse
+    // the local registers.
+    output logic                       quant_common_rd_en_o,
+    output logic [PARAM_ADDR_W-1:0]    quant_common_rd_addr_o,
+    input  logic                       quant_common_rd_valid_i,
+    output logic                       quant_prelu_rd_en_o,
+    output logic [PARAM_ADDR_W-1:0]    quant_prelu_rd_addr_o,
+    input  logic                       quant_prelu_rd_valid_i,
+    output logic                       quant_residual_rd_en_o,
+    output logic [PARAM_ADDR_W-1:0]    quant_residual_rd_addr_o,
+    input  logic                       quant_residual_rd_valid_i,
+    input  logic signed [BIAS_W-1:0]   quant_param_bias_i,
+    input  logic signed [MULT_W-1:0]   quant_param_requant_multiplier_i,
+    input  logic [SHIFT_W-1:0]         quant_param_requant_shift_i,
+    input  logic signed [MULT_W-1:0]   quant_param_prelu_multiplier_i,
+    input  logic [SHIFT_W-1:0]         quant_param_prelu_shift_i,
+    input  logic signed [MULT_W-1:0]   quant_param_residual_multiplier_i,
+    input  logic [SHIFT_W-1:0]         quant_param_residual_shift_i,
+    input  logic signed [BIAS_W-1:0]   quant_param_residual_zero_point_i
 );
     logic [DIM_W-1:0] tile_r_r;
     logic [DIM_W-1:0] tile_c_r;
@@ -133,6 +157,12 @@ module conv1x1_level3_top #(
     logic residual_clear;
     logic residual_capture_en;
     logic [WB_ADDR_W-1:0] residual_capture_row;
+    logic param_load_start;
+    logic param_load_needed_w;
+    logic param_tile_ready_r;
+    logic param_ready_w;
+    logic param_scheduler_busy;
+    logic param_scheduler_valid;
 
     logic [DIM_W-1:0] row_base_w;
     logic [DIM_W-1:0] col_base_w;
@@ -161,6 +191,15 @@ module conv1x1_level3_top #(
     logic signed [MULT_W-1:0] post_residual_multiplier [COL];
     logic [SHIFT_W-1:0] post_residual_shift [COL];
     logic signed [ACC_W-1:0] post_residual_zero_point [COL];
+    logic signed [BIAS_W-1:0] param_bias [COL];
+    logic signed [MULT_W-1:0] param_multiplier [COL];
+    logic [SHIFT_W-1:0] param_shift [COL];
+    logic signed [OUT_W-1:0] param_zero_point [COL];
+    logic signed [MULT_W-1:0] param_prelu_multiplier [COL];
+    logic [SHIFT_W-1:0] param_prelu_shift [COL];
+    logic signed [MULT_W-1:0] param_residual_multiplier [COL];
+    logic [SHIFT_W-1:0] param_residual_shift [COL];
+    logic signed [ACC_W-1:0] param_residual_zero_point [COL];
 
     logic [GB_ADDR_W-1:0] n_tiles_w;
     logic [GB_ADDR_W-1:0] m_tiles_w;
@@ -169,6 +208,8 @@ module conv1x1_level3_top #(
     assign m_tiles_w = (GB_ADDR_W'(m_size_i) + GB_ADDR_W'(ROW - 1)) / GB_ADDR_W'(ROW);
     assign row_base_w = tile_r_r * DIM_W'(ROW);
     assign col_base_w = tile_c_r * DIM_W'(COL);
+    assign param_load_needed_w = (tile_r_r == '0);
+    assign param_ready_w = param_tile_ready_r || param_scheduler_valid;
 
     always_comb begin
         residual_data_w = residual_data;
@@ -247,6 +288,8 @@ module conv1x1_level3_top #(
         .config_tile_o(config_tile),
         .preload_done_i(preload_done),
         .compute_done_i(compute_done),
+        .param_load_needed_i(param_load_needed_w),
+        .param_ready_i(param_ready_w),
         .post_tile_valid_i(post_valid_tile_i),
         .wb_done_i(wb_done_i),
         .residual_en_i(residual_en_r),
@@ -260,6 +303,7 @@ module conv1x1_level3_top #(
         .tile_c_o(tile_c_r),
         .preload_start_o(preload_start),
         .compute_start_o(compute_start),
+        .param_load_start_o(param_load_start),
         .post_start_o(post_start),
         .wb_capture_en_o(wb_capture_en),
         .residual_clear_o(residual_clear),
@@ -267,6 +311,55 @@ module conv1x1_level3_top #(
         .residual_rd_addr_o(residual_rd_addr),
         .residual_capture_en_o(residual_capture_en),
         .residual_capture_row_o(residual_capture_row)
+    );
+
+    conv1x1_param_scheduler #(
+        .COL(COL),
+        .BIAS_W(BIAS_W),
+        .OUT_W(OUT_W),
+        .MULT_W(MULT_W),
+        .SHIFT_W(SHIFT_W),
+        .PARAM_ADDR_W(PARAM_ADDR_W),
+        .DIM_W(DIM_W),
+        .ACC_W(ACC_W)
+    ) u_param_scheduler (
+        .clk(clk),
+        .rst_n(rst_n),
+        .start_i(param_load_start),
+        .busy_o(param_scheduler_busy),
+        .params_valid_o(param_scheduler_valid),
+        .col_base_i(col_base_w),
+        .post_mode_i(postprocess_mode_t'(mode_r)),
+        .output_zero_point_i(output_zero_point_i),
+        .common_param_base_i(common_param_base_i),
+        .prelu_param_base_i(prelu_param_base_i),
+        .residual_param_base_i(residual_param_base_i),
+        .common_rd_en_o(quant_common_rd_en_o),
+        .common_rd_addr_o(quant_common_rd_addr_o),
+        .common_rd_valid_i(quant_common_rd_valid_i),
+        .prelu_rd_en_o(quant_prelu_rd_en_o),
+        .prelu_rd_addr_o(quant_prelu_rd_addr_o),
+        .prelu_rd_valid_i(quant_prelu_rd_valid_i),
+        .residual_rd_en_o(quant_residual_rd_en_o),
+        .residual_rd_addr_o(quant_residual_rd_addr_o),
+        .residual_rd_valid_i(quant_residual_rd_valid_i),
+        .param_bias_i(quant_param_bias_i),
+        .param_requant_multiplier_i(quant_param_requant_multiplier_i),
+        .param_requant_shift_i(quant_param_requant_shift_i),
+        .param_prelu_multiplier_i(quant_param_prelu_multiplier_i),
+        .param_prelu_shift_i(quant_param_prelu_shift_i),
+        .param_residual_multiplier_i(quant_param_residual_multiplier_i),
+        .param_residual_shift_i(quant_param_residual_shift_i),
+        .param_residual_zero_point_i(quant_param_residual_zero_point_i),
+        .bias_o(param_bias),
+        .multiplier_o(param_multiplier),
+        .shift_o(param_shift),
+        .zero_point_o(param_zero_point),
+        .prelu_multiplier_o(param_prelu_multiplier),
+        .prelu_shift_o(param_prelu_shift),
+        .residual_multiplier_o(param_residual_multiplier),
+        .residual_shift_o(param_residual_shift),
+        .residual_zero_point_o(param_residual_zero_point)
     );
 
     gemm_preload #(
@@ -345,6 +438,7 @@ module conv1x1_level3_top #(
             m_tiles_r <= '0;
             row_base_r <= '0;
             col_base_r <= '0;
+            param_tile_ready_r <= 1'b0;
             for (int c = 0; c < COL; c++) begin
                 post_bias[c] <= '0;
                 post_multiplier[c] <= '0;
@@ -377,34 +471,30 @@ module conv1x1_level3_top #(
                 mode_r <= mode_i;
                 n_tiles_r <= n_tiles_w;
                 m_tiles_r <= m_tiles_w;
+                param_tile_ready_r <= 1'b0;
             end
 
             if (config_tile) begin
                 row_base_r <= row_base_w;
                 col_base_r <= col_base_w;
+                if (param_load_needed_w) begin
+                    param_tile_ready_r <= 1'b0;
+                end
 
+            end
+
+            if (param_scheduler_valid) begin
+                param_tile_ready_r <= 1'b1;
                 for (int c = 0; c < COL; c++) begin
-                    if (USE_INTERNAL_QUANT_PARAMS) begin
-                        post_bias[c] <= BIAS_W'(qf_bias(int'(layer_idx_r), int'(col_base_w) + c));
-                        post_multiplier[c] <= qf_multiplier(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_shift[c] <= qf_shift(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_zero_point[c] <= qf_zero_point(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_prelu_multiplier[c] <= qf_prelu_multiplier(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_prelu_shift[c] <= qf_prelu_shift(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_residual_multiplier[c] <= qf_residual_multiplier(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_residual_shift[c] <= qf_residual_shift(int'(layer_idx_r), int'(col_base_w) + c);
-                        post_residual_zero_point[c] <= qf_residual_zero_point(int'(layer_idx_r), int'(col_base_w) + c);
-                    end else begin
-                        post_bias[c] <= bias_i[c];
-                        post_multiplier[c] <= multiplier_i[c];
-                        post_shift[c] <= shift_i[c];
-                        post_zero_point[c] <= zero_point_i[c];
-                        post_prelu_multiplier[c] <= prelu_multiplier_i[c];
-                        post_prelu_shift[c] <= prelu_shift_i[c];
-                        post_residual_multiplier[c] <= residual_multiplier_i[c];
-                        post_residual_shift[c] <= residual_shift_i[c];
-                        post_residual_zero_point[c] <= residual_zero_point_i[c];
-                    end
+                    post_bias[c] <= param_bias[c];
+                    post_multiplier[c] <= param_multiplier[c];
+                    post_shift[c] <= param_shift[c];
+                    post_zero_point[c] <= param_zero_point[c];
+                    post_prelu_multiplier[c] <= param_prelu_multiplier[c];
+                    post_prelu_shift[c] <= param_prelu_shift[c];
+                    post_residual_multiplier[c] <= param_residual_multiplier[c];
+                    post_residual_shift[c] <= param_residual_shift[c];
+                    post_residual_zero_point[c] <= param_residual_zero_point[c];
                 end
             end
         end

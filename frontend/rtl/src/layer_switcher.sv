@@ -14,6 +14,7 @@ module layer_switcher #(
     parameter int SHIFT_W   = 6,
     parameter int BUF_NUM   = 2,
     parameter int DIM_W     = 16,
+    parameter int PARAM_ADDR_W = 16,
     parameter int GB_DATA_W = 128,
     parameter int AO_DEPTH  = 8192,
     parameter int WGT_DEPTH = 8192,
@@ -21,6 +22,7 @@ module layer_switcher #(
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
     parameter int NUM_DEV = 1,
     parameter int MAX_LAYER = 8,
+    parameter int LAYER_CONFIG_PROFILE = 0,
 
     localparam int GB_LANES = GB_DATA_W / DATA_W,
     localparam int AO_MASK_W = GB_DATA_W / DATA_W,
@@ -53,15 +55,19 @@ module layer_switcher #(
     output logic [MAX_LAYER-1:0]  layer_idx_o,
 
     output logic [1:0]                    mode_o,
-    output logic signed [BIAS_W-1:0]      bias_o       [COL],
-    output logic signed [MULT_W-1:0]      multiplier_o [COL],
-    output logic [SHIFT_W-1:0]            shift_o      [COL],
-    output logic signed [OUT_W-1:0]       zero_point_o [COL],
-    output logic signed [MULT_W-1:0]      prelu_multiplier_o [COL],
-    output logic [SHIFT_W-1:0]            prelu_shift_o      [COL],
-    output logic signed [MULT_W-1:0]      residual_multiplier_o [COL],
-    output logic [SHIFT_W-1:0]            residual_shift_o      [COL],
-    output logic signed [ACC_W-1:0]       residual_zero_point_o [COL],
+    output logic [2:0]                    ifmap_size_code_o,
+    output logic [1:0]                    num_filter_code_o,
+    output logic                          stride_o,
+    output logic                          pad_o,
+    output logic signed [OUT_W-1:0]       output_zero_point_o,
+    output logic [PARAM_ADDR_W-1:0]       bias_base_o,
+    output logic [PARAM_ADDR_W-1:0]       requant_mult_base_o,
+    output logic [PARAM_ADDR_W-1:0]       requant_shift_base_o,
+    output logic [PARAM_ADDR_W-1:0]       prelu_mult_base_o,
+    output logic [PARAM_ADDR_W-1:0]       prelu_shift_base_o,
+    output logic [PARAM_ADDR_W-1:0]       residual_mult_base_o,
+    output logic [PARAM_ADDR_W-1:0]       residual_shift_base_o,
+    output logic [PARAM_ADDR_W-1:0]       residual_zero_point_base_o,
 
     input  wire logic                     dev_act_rd_valid_i [NUM_DEV],
     input  wire logic [GB_ADDR_W-1:0]     dev_act_rd_addr_i  [NUM_DEV],
@@ -92,9 +98,11 @@ module layer_switcher #(
 );
     localparam int DEV_IDX_W = (NUM_DEV <= 1) ? 1 : $clog2(NUM_DEV);
     localparam logic [DEV_IDX_W-1:0] CONV1X1_DEV = '0;
+    localparam logic [DEV_IDX_W-1:0] SPATIAL_DEV = (NUM_DEV > 1) ? DEV_IDX_W'(1) : '0;
 
-    typedef enum logic [1:0] {
+    typedef enum logic [2:0] {
         IDLE,
+        FETCH_CONFIG,
         DISPATCH,
         WAIT_DEV,
         DONE
@@ -110,6 +118,8 @@ module layer_switcher #(
     logic layer_valid_w;
     logic layer_last_w;
     logic active_done_w;
+    logic config_rd_en_w;
+    logic [MAX_LAYER-1:0] config_rd_idx_w;
 
     assign active_done_w = active_dev_valid_w && seen_busy_r && done_i[active_dev_idx_w];
     assign layer_idx_o = layer_cnt_r;
@@ -160,13 +170,27 @@ module layer_switcher #(
         state_nxt     = state;
         layer_cnt_w = layer_cnt_r;
         seen_busy_w = seen_busy_r;
+        config_rd_en_w = 1'b0;
+        config_rd_idx_w = layer_cnt_r;
 
         case (state)
             IDLE: begin
                 layer_cnt_w = '0;
                 seen_busy_w = 1'b0;
                 if (sys_start) begin
+                    config_rd_en_w = 1'b1;
+                    config_rd_idx_w = '0;
+                    state_nxt = FETCH_CONFIG;
+                end
+            end
+
+            FETCH_CONFIG: begin
+                // layer_config_mem has a registered one-cycle ROM read latency.
+                // The memory row requested in the previous cycle is now available.
+                if (layer_valid_w && active_dev_valid_w) begin
                     state_nxt = DISPATCH;
+                end else begin
+                    state_nxt = DONE;
                 end
             end
 
@@ -192,7 +216,9 @@ module layer_switcher #(
                         state_nxt = DONE;
                     end else begin
                         layer_cnt_w = layer_cnt_r + MAX_LAYER'(1);
-                        state_nxt = DISPATCH;
+                        config_rd_en_w = 1'b1;
+                        config_rd_idx_w = layer_cnt_r + MAX_LAYER'(1);
+                        state_nxt = FETCH_CONFIG;
                     end
                 end
             end
@@ -219,26 +245,24 @@ module layer_switcher #(
     //      device. The conv1x1 and its following postprocess are treated as one
     //      logical scheduled layer
     // -------------------------------------------------------------------------
-    layer_config_rom #(
-        .ROW(ROW),
-        .COL(COL),
+    layer_config_mem #(
         .K_MAX(K_MAX),
         .K_ADDR_W(K_ADDR_W),
         .DATA_W(DATA_W),
-        .ACC_W(ACC_W),
-        .BIAS_W(BIAS_W),
         .OUT_W(OUT_W),
-        .MULT_W(MULT_W),
-        .SHIFT_W(SHIFT_W),
         .DIM_W(DIM_W),
         .GB_DATA_W(GB_DATA_W),
         .AO_DEPTH(AO_DEPTH),
         .WGT_DEPTH(WGT_DEPTH),
         .AO_ADDR_W(AO_ADDR_W),
         .WGT_ADDR_W(WGT_ADDR_W),
-        .MAX_LAYER(MAX_LAYER)
-    ) u_layer_config_rom (
-        .layer_cnt_i(layer_cnt_r),
+        .PARAM_ADDR_W(PARAM_ADDR_W),
+        .MAX_LAYER(MAX_LAYER),
+        .CONFIG_PROFILE(LAYER_CONFIG_PROFILE)
+    ) u_layer_config_mem (
+        .clk(clk),
+        .rd_en_i(config_rd_en_w),
+        .layer_cnt_i(config_rd_idx_w),
         .layer_valid_o(layer_valid_w),
         .layer_last_o(layer_last_w),
         .layer_type_o(layer_type_w),
@@ -250,26 +274,31 @@ module layer_switcher #(
         .out_base_addr_o(out_base_addr_o),
         .residual_en_o(residual_en_o),
         .residual_base_addr_o(residual_base_addr_o),
+        .ifmap_size_code_o(ifmap_size_code_o),
+        .num_filter_code_o(num_filter_code_o),
+        .stride_o(stride_o),
+        .pad_o(pad_o),
         .mode_o(mode_o),
-        .bias_o(bias_o),
-        .multiplier_o(multiplier_o),
-        .shift_o(shift_o),
-        .zero_point_o(zero_point_o),
-        .prelu_multiplier_o(prelu_multiplier_o),
-        .prelu_shift_o(prelu_shift_o),
-        .residual_multiplier_o(residual_multiplier_o),
-        .residual_shift_o(residual_shift_o),
-        .residual_zero_point_o(residual_zero_point_o)
+        .output_zero_point_o(output_zero_point_o),
+        .bias_base_o(bias_base_o),
+        .requant_mult_base_o(requant_mult_base_o),
+        .requant_shift_base_o(requant_shift_base_o),
+        .prelu_mult_base_o(prelu_mult_base_o),
+        .prelu_shift_base_o(prelu_shift_base_o),
+        .residual_mult_base_o(residual_mult_base_o),
+        .residual_shift_base_o(residual_shift_base_o),
+        .residual_zero_point_base_o(residual_zero_point_base_o)
     );
 
     // -------------------------------------------------------------------------
     // Device decode
     //
-    // layer_config_rom decodes layer_cnt_r into layer_type_w and the per-layer
+    // layer_config_mem decodes layer_cnt_r into layer_type_w and the per-layer
     // configuration. This block only converts the opcode into the hardware
     // device index that should receive start_o and own the shared GB connection.
-    // At this stage only conv1x1 exists, so every active layer maps to
-    // CONV1X1_DEV.
+    // Current device slots:
+    //   LY_CONV1X1    -> CONV1X1_DEV
+    //   LY_DWCONV3X3  -> SPATIAL_DEV
     // -------------------------------------------------------------------------
     always_comb begin
         active_dev_valid_w = 1'b0;
@@ -279,6 +308,13 @@ module layer_switcher #(
             LY_CONV1X1: begin
                 active_dev_valid_w = 1'b1;
                 active_dev_idx_w   = CONV1X1_DEV;
+            end
+
+            LY_DWCONV3X3: begin
+                if (NUM_DEV > 1) begin
+                    active_dev_valid_w = 1'b1;
+                    active_dev_idx_w   = SPATIAL_DEV;
+                end
             end
 
             default: ;

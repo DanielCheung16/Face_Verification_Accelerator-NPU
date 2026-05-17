@@ -19,9 +19,26 @@ module top #(
     parameter bit WGT_TRUE_DUAL_PORT = 1'b0,
     parameter int AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH),
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
-    parameter int NUM_DEV = 1,
+    parameter int NUM_DEV = 2,
     parameter int MAX_LAYER = 8,
-    parameter bit USE_INTERNAL_QUANT_PARAMS = 1'b0,
+    parameter int COMMON_PARAM_DEPTH = 9792,
+    parameter int PRELU_PARAM_DEPTH = 7552,
+    parameter int RESIDUAL_PARAM_DEPTH = 1280,
+    parameter int LAYER_CONFIG_PROFILE = 0,
+    parameter int PARAM_DEPTH = (COMMON_PARAM_DEPTH > PRELU_PARAM_DEPTH) ?
+                                ((COMMON_PARAM_DEPTH > RESIDUAL_PARAM_DEPTH) ? COMMON_PARAM_DEPTH : RESIDUAL_PARAM_DEPTH) :
+                                ((PRELU_PARAM_DEPTH > RESIDUAL_PARAM_DEPTH) ? PRELU_PARAM_DEPTH : RESIDUAL_PARAM_DEPTH),
+    parameter int PARAM_ADDR_W = (PARAM_DEPTH <= 1) ? 1 : $clog2(PARAM_DEPTH),
+    parameter int SPATIAL_ACT_DEPTH = 1,
+    parameter int SPATIAL_WGT_DEPTH = 32,
+    parameter string QUANT_BIAS_INIT_FILE = "",
+    parameter string QUANT_REQUANT_MULT_INIT_FILE = "",
+    parameter string QUANT_REQUANT_SHIFT_INIT_FILE = "",
+    parameter string QUANT_PRELU_MULT_INIT_FILE = "",
+    parameter string QUANT_PRELU_SHIFT_INIT_FILE = "",
+    parameter string QUANT_RESIDUAL_MULT_INIT_FILE = "",
+    parameter string QUANT_RESIDUAL_SHIFT_INIT_FILE = "",
+    parameter string QUANT_RESIDUAL_ZERO_POINT_INIT_FILE = "",
 
     localparam int AO_MASK_W = GB_DATA_W / DATA_W,
     localparam int WGT_MASK_W = GB_DATA_W / DATA_W,
@@ -57,6 +74,11 @@ module top #(
     output logic [GB_DATA_W-1:0]     host_wgt_rd_data_o
 );
     localparam int CONV1X1_DEV = 0;
+    localparam int SPATIAL_DEV = 1;
+    localparam int SPATIAL_ELEM_CNT_W = 32;
+    localparam int SPATIAL_WGT_BYTE_DEPTH = (GB_DATA_W / DATA_W) * SPATIAL_WGT_DEPTH;
+    localparam int SPATIAL_WGT_RD_ADDR_W = (SPATIAL_WGT_BYTE_DEPTH <= 1) ? 1 : $clog2(SPATIAL_WGT_BYTE_DEPTH);
+    localparam int SPATIAL_FILTER_CNT_W = SPATIAL_WGT_RD_ADDR_W + 1;
 
     logic accelerator_active_w;
 
@@ -75,6 +97,20 @@ module top #(
     logic [MAX_LAYER-1:0]  layer_idx;
 
     logic [1:0]                    mode;
+    logic [2:0]                    ifmap_size_code;
+    logic [1:0]                    num_filter_code;
+    logic                          stride;
+    logic                          pad;
+    logic signed [OUT_W-1:0]       output_zero_point;
+    logic [PARAM_ADDR_W-1:0]       bias_base;
+    logic [PARAM_ADDR_W-1:0]       requant_mult_base;
+    logic [PARAM_ADDR_W-1:0]       requant_shift_base;
+    logic [PARAM_ADDR_W-1:0]       prelu_mult_base;
+    logic [PARAM_ADDR_W-1:0]       prelu_shift_base;
+    logic [PARAM_ADDR_W-1:0]       residual_mult_base;
+    logic [PARAM_ADDR_W-1:0]       residual_shift_base;
+    logic [PARAM_ADDR_W-1:0]       residual_zero_point_base;
+
     logic signed [BIAS_W-1:0]      bias [COL];
     logic signed [MULT_W-1:0]      multiplier [COL];
     logic [SHIFT_W-1:0]            shift [COL];
@@ -84,36 +120,6 @@ module top #(
     logic signed [MULT_W-1:0]      residual_multiplier [COL];
     logic [SHIFT_W-1:0]            residual_shift [COL];
     logic signed [ACC_W-1:0]       residual_zero_point [COL];
-
-    logic                       conv_post_valid_tile;
-    logic                       post_valid_tile;
-    logic [DIM_W-1:0]           conv_post_row_base;
-    logic [DIM_W-1:0]           conv_post_col_base;
-    logic [DIM_W-1:0]           conv_post_m_size;
-    logic [DIM_W-1:0]           conv_post_n_size;
-    logic [1:0]                 conv_post_mode;
-    logic                       conv_post_valid [ROW][COL];
-    logic signed [ACC_W-1:0]    conv_post_acc [ROW][COL];
-    logic signed [ACC_W-1:0]    conv_post_residual [ROW][COL];
-    logic signed [BIAS_W-1:0]   conv_post_bias [COL];
-    logic signed [MULT_W-1:0]   conv_post_multiplier [COL];
-    logic [SHIFT_W-1:0]         conv_post_shift [COL];
-    logic signed [OUT_W-1:0]    conv_post_zero_point [COL];
-    logic signed [MULT_W-1:0]   conv_post_prelu_multiplier [COL];
-    logic [SHIFT_W-1:0]         conv_post_prelu_shift [COL];
-    logic signed [MULT_W-1:0]   conv_post_residual_multiplier [COL];
-    logic [SHIFT_W-1:0]         conv_post_residual_shift [COL];
-    logic signed [ACC_W-1:0]    conv_post_residual_zero_point [COL];
-    logic                       conv_wb_capture_en;
-    logic                       conv_wb_done;
-    logic [DIM_W-1:0]           conv_wb_m_size;
-    logic [DIM_W-1:0]           conv_wb_n_size;
-    logic [GB_ADDR_W-1:0]       conv_wb_out_base_addr;
-
-    logic                       post_valid [ROW][COL];
-    logic signed [OUT_W-1:0]    post_data [ROW][COL];
-    logic [WB_ADDR_W-1:0]       conv_wb_rd_addr;
-    logic [GB_DATA_W-1:0]       conv_wb_data;
 
     logic                     dev_act_rd_valid [NUM_DEV];
     logic [GB_ADDR_W-1:0]     dev_act_rd_addr  [NUM_DEV];
@@ -137,6 +143,46 @@ module top #(
     logic [GB_ADDR_W-1:0]     sw_wgt_rd_addr;
     logic [GB_DATA_W-1:0]     sw_wgt_rd_data;
 
+    logic                     quant_common_rd_en;
+    logic [PARAM_ADDR_W-1:0]  quant_common_rd_addr;
+    logic                     quant_common_rd_valid;
+    logic                     quant_prelu_rd_en;
+    logic [PARAM_ADDR_W-1:0]  quant_prelu_rd_addr;
+    logic                     quant_prelu_rd_valid;
+    logic                     quant_residual_rd_en;
+    logic [PARAM_ADDR_W-1:0]  quant_residual_rd_addr;
+    logic                     quant_residual_rd_valid;
+    logic signed [BIAS_W-1:0] quant_param_bias;
+    logic signed [MULT_W-1:0] quant_param_requant_multiplier;
+    logic [SHIFT_W-1:0]       quant_param_requant_shift;
+    logic signed [MULT_W-1:0] quant_param_prelu_multiplier;
+    logic [SHIFT_W-1:0]       quant_param_prelu_shift;
+    logic signed [MULT_W-1:0] quant_param_residual_multiplier;
+    logic [SHIFT_W-1:0]       quant_param_residual_shift;
+    logic signed [BIAS_W-1:0] quant_param_residual_zero_point;
+
+    logic                     conv_quant_common_rd_en;
+    logic [PARAM_ADDR_W-1:0]  conv_quant_common_rd_addr;
+    logic                     conv_quant_prelu_rd_en;
+    logic [PARAM_ADDR_W-1:0]  conv_quant_prelu_rd_addr;
+    logic                     conv_quant_residual_rd_en;
+    logic [PARAM_ADDR_W-1:0]  conv_quant_residual_rd_addr;
+
+    logic                     spatial_quant_common_rd_en;
+    logic [PARAM_ADDR_W-1:0]  spatial_quant_common_rd_addr;
+    logic                     spatial_quant_prelu_rd_en;
+    logic [PARAM_ADDR_W-1:0]  spatial_quant_prelu_rd_addr;
+    logic                     spatial_quant_residual_rd_en;
+    logic [PARAM_ADDR_W-1:0]  spatial_quant_residual_rd_addr;
+    logic                     conv_quant_active_w;
+    logic                     spatial_quant_active_w;
+
+    logic [SPATIAL_ELEM_CNT_W-1:0] spatial_output_elements;
+    logic [SPATIAL_FILTER_CNT_W-1:0] spatial_current_num_filter;
+    logic signed [ACC_W-1:0] spatial_residual_stub;
+    logic signed [ACC_W-1:0] spatial_output_zero_point;
+    logic [2:0] spatial_post_mode;
+
     logic                     ao_rd_en;
     logic [AO_ADDR_W-1:0]     ao_rd_addr;
     logic [GB_DATA_W-1:0]     ao_rd_data;
@@ -146,6 +192,67 @@ module top #(
     logic [AO_MASK_W-1:0]     ao_wr_mask;
 
     assign accelerator_active_w = sys_start && !sys_done;
+    assign spatial_output_elements = SPATIAL_ELEM_CNT_W'(m_size) * SPATIAL_ELEM_CNT_W'(n_size);
+    assign spatial_current_num_filter = SPATIAL_FILTER_CNT_W'(n_size);
+    assign spatial_residual_stub = '0;
+    assign spatial_output_zero_point = ACC_W'($signed(output_zero_point));
+    assign conv_quant_active_w = dev_start[CONV1X1_DEV] || dev_busy[CONV1X1_DEV];
+    assign spatial_quant_active_w = dev_start[SPATIAL_DEV] || dev_busy[SPATIAL_DEV];
+
+    // layer_config_mem uses the compact postprocess enum shared with conv1x1.
+    // The spatial stream postprocess reserves 3'd1/2/3 for requant/PReLU/residual
+    // modes, so decode it locally at the spatial boundary.
+    always_comb begin
+        unique case (mode)
+            2'd0: spatial_post_mode = 3'd1; // MODE_REQUANT
+            2'd1: spatial_post_mode = 3'd2; // MODE_PRELU_REQUANT
+            2'd2: spatial_post_mode = 3'd3; // MODE_RESIDUAL_REQUANT
+            default: spatial_post_mode = 3'd0;
+        endcase
+    end
+
+    // quant_param_mem is shared globally. The switcher only starts one device
+    // at a time, so this decode gives the active device ownership of all banks.
+    always_comb begin
+        quant_common_rd_en = 1'b0;
+        quant_common_rd_addr = '0;
+        quant_prelu_rd_en = 1'b0;
+        quant_prelu_rd_addr = '0;
+        quant_residual_rd_en = 1'b0;
+        quant_residual_rd_addr = '0;
+
+        unique case (1'b1)
+            conv_quant_active_w: begin
+                quant_common_rd_en = conv_quant_common_rd_en;
+                quant_common_rd_addr = conv_quant_common_rd_addr;
+                quant_prelu_rd_en = conv_quant_prelu_rd_en;
+                quant_prelu_rd_addr = conv_quant_prelu_rd_addr;
+                quant_residual_rd_en = conv_quant_residual_rd_en;
+                quant_residual_rd_addr = conv_quant_residual_rd_addr;
+            end
+
+            spatial_quant_active_w: begin
+                quant_common_rd_en = spatial_quant_common_rd_en;
+                quant_common_rd_addr = spatial_quant_common_rd_addr;
+                quant_prelu_rd_en = spatial_quant_prelu_rd_en;
+                quant_prelu_rd_addr = spatial_quant_prelu_rd_addr;
+                quant_residual_rd_en = spatial_quant_residual_rd_en;
+                quant_residual_rd_addr = spatial_quant_residual_rd_addr;
+            end
+
+            default: begin
+                // No active layer owns quant_param_mem.
+            end
+        endcase
+    end
+
+`ifndef SYNTHESIS
+    initial begin
+        if (NUM_DEV < 2) begin
+            $fatal(1, "top requires NUM_DEV >= 2 for conv1x1 and spatial device slots");
+        end
+    end
+`endif
 
     assign ao_rd_en   = accelerator_active_w ? sw_act_rd_valid : host_ao_rd_en_i;
     assign ao_rd_addr = accelerator_active_w ? sw_act_rd_addr[AO_ADDR_W-1:0] : host_ao_addr_i;
@@ -201,6 +308,48 @@ module top #(
         .acc_rd_data_o(sw_wgt_rd_data)
     );
 
+    // Global per-channel postprocess parameter memory. Layer tops schedule
+    // channel reads using the base addresses from layer_switcher/layer_config_mem.
+    quant_param_mem #(
+        .COMMON_PARAM_DEPTH(COMMON_PARAM_DEPTH),
+        .PRELU_PARAM_DEPTH(PRELU_PARAM_DEPTH),
+        .RESIDUAL_PARAM_DEPTH(RESIDUAL_PARAM_DEPTH),
+        .COMMON_PARAM_ADDR_W(PARAM_ADDR_W),
+        .PRELU_PARAM_ADDR_W(PARAM_ADDR_W),
+        .RESIDUAL_PARAM_ADDR_W(PARAM_ADDR_W),
+        .BIAS_W(BIAS_W),
+        .MULT_W(MULT_W),
+        .SHIFT_W(SHIFT_W),
+        .BIAS_INIT_FILE(QUANT_BIAS_INIT_FILE),
+        .REQUANT_MULT_INIT_FILE(QUANT_REQUANT_MULT_INIT_FILE),
+        .REQUANT_SHIFT_INIT_FILE(QUANT_REQUANT_SHIFT_INIT_FILE),
+        .PRELU_MULT_INIT_FILE(QUANT_PRELU_MULT_INIT_FILE),
+        .PRELU_SHIFT_INIT_FILE(QUANT_PRELU_SHIFT_INIT_FILE),
+        .RESIDUAL_MULT_INIT_FILE(QUANT_RESIDUAL_MULT_INIT_FILE),
+        .RESIDUAL_SHIFT_INIT_FILE(QUANT_RESIDUAL_SHIFT_INIT_FILE),
+        .RESIDUAL_ZERO_POINT_INIT_FILE(QUANT_RESIDUAL_ZERO_POINT_INIT_FILE)
+    ) u_quant_param_mem (
+        .clk(aclk),
+        .rst_n(aresetn),
+        .common_rd_en_i(quant_common_rd_en),
+        .common_rd_addr_i(quant_common_rd_addr),
+        .prelu_rd_en_i(quant_prelu_rd_en),
+        .prelu_rd_addr_i(quant_prelu_rd_addr),
+        .residual_rd_en_i(quant_residual_rd_en),
+        .residual_rd_addr_i(quant_residual_rd_addr),
+        .common_rd_valid_o(quant_common_rd_valid),
+        .prelu_rd_valid_o(quant_prelu_rd_valid),
+        .residual_rd_valid_o(quant_residual_rd_valid),
+        .bias_o(quant_param_bias),
+        .requant_multiplier_o(quant_param_requant_multiplier),
+        .requant_shift_o(quant_param_requant_shift),
+        .prelu_multiplier_o(quant_param_prelu_multiplier),
+        .prelu_shift_o(quant_param_prelu_shift),
+        .residual_multiplier_o(quant_param_residual_multiplier),
+        .residual_shift_o(quant_param_residual_shift),
+        .residual_zero_point_o(quant_param_residual_zero_point)
+    );
+
     layer_switcher #(
         .ROW(ROW),
         .COL(COL),
@@ -221,7 +370,9 @@ module top #(
         .AO_ADDR_W(AO_ADDR_W),
         .WGT_ADDR_W(WGT_ADDR_W),
         .NUM_DEV(NUM_DEV),
-        .MAX_LAYER(MAX_LAYER)
+        .MAX_LAYER(MAX_LAYER),
+        .LAYER_CONFIG_PROFILE(LAYER_CONFIG_PROFILE),
+        .PARAM_ADDR_W(PARAM_ADDR_W)
     ) u_layer_switcher (
         .clk(aclk),
         .rst_n(aresetn),
@@ -240,15 +391,19 @@ module top #(
         .residual_base_addr_o(residual_base_addr),
         .layer_idx_o(layer_idx),
         .mode_o(mode),
-        .bias_o(bias),
-        .multiplier_o(multiplier),
-        .shift_o(shift),
-        .zero_point_o(zero_point),
-        .prelu_multiplier_o(prelu_multiplier),
-        .prelu_shift_o(prelu_shift),
-        .residual_multiplier_o(residual_multiplier),
-        .residual_shift_o(residual_shift),
-        .residual_zero_point_o(residual_zero_point),
+        .ifmap_size_code_o(ifmap_size_code),
+        .num_filter_code_o(num_filter_code),
+        .stride_o(stride),
+        .pad_o(pad),
+        .output_zero_point_o(output_zero_point),
+        .bias_base_o(bias_base),
+        .requant_mult_base_o(requant_mult_base),
+        .requant_shift_base_o(requant_shift_base),
+        .prelu_mult_base_o(prelu_mult_base),
+        .prelu_shift_base_o(prelu_shift_base),
+        .residual_mult_base_o(residual_mult_base),
+        .residual_shift_base_o(residual_shift_base),
+        .residual_zero_point_base_o(residual_zero_point_base),
         .dev_act_rd_valid_i(dev_act_rd_valid),
         .dev_act_rd_addr_i(dev_act_rd_addr),
         .dev_act_rd_data_o(dev_act_rd_data),
@@ -273,7 +428,26 @@ module top #(
         .final_vec_o(final_vec_o)
     );
 
-    conv1x1_level3_top #(
+    // Legacy scalar parameter wires are kept only to avoid a broad interface
+    // cleanup in this step. The formal conv1x1 path reads quant_param_mem
+    // through conv1x1_param_scheduler.
+    always_comb begin
+        for (int c = 0; c < COL; c++) begin
+            bias[c] = '0;
+            multiplier[c] = MULT_W'(1);
+            shift[c] = '0;
+            zero_point[c] = '0;
+            prelu_multiplier[c] = MULT_W'(1);
+            prelu_shift[c] = '0;
+            residual_multiplier[c] = MULT_W'(1);
+            residual_shift[c] = '0;
+            residual_zero_point[c] = '0;
+        end
+    end
+
+    // Conv1x1 device slot. The device internally keeps the compute block and
+    // conv1x1-specific writeback path together, matching the spatial_top shape.
+    conv1x1_top #(
         .ROW(ROW),
         .COL(COL),
         .K_MAX(K_MAX),
@@ -292,7 +466,7 @@ module top #(
         .WGT_DEPTH(WGT_DEPTH),
         .AO_ADDR_W(AO_ADDR_W),
         .WGT_ADDR_W(WGT_ADDR_W),
-        .USE_INTERNAL_QUANT_PARAMS(USE_INTERNAL_QUANT_PARAMS),
+        .PARAM_ADDR_W(PARAM_ADDR_W),
         .LAYER_IDX_W(MAX_LAYER)
     ) u_conv1x1_dev (
         .clk(aclk),
@@ -311,6 +485,10 @@ module top #(
         .residual_en_i(residual_en),
         .residual_base_addr_i(residual_base_addr),
         .mode_i(mode),
+        .output_zero_point_i(output_zero_point),
+        .common_param_base_i(bias_base),
+        .prelu_param_base_i(prelu_mult_base),
+        .residual_param_base_i(residual_mult_base),
         .bias_i(bias),
         .multiplier_i(multiplier),
         .shift_i(shift),
@@ -320,116 +498,112 @@ module top #(
         .residual_multiplier_i(residual_multiplier),
         .residual_shift_i(residual_shift),
         .residual_zero_point_i(residual_zero_point),
-        .post_valid_tile_o(conv_post_valid_tile),
-        .post_valid_tile_i(post_valid_tile),
-        .post_row_base_o(conv_post_row_base),
-        .post_col_base_o(conv_post_col_base),
-        .post_m_size_o(conv_post_m_size),
-        .post_n_size_o(conv_post_n_size),
-        .post_mode_o(conv_post_mode),
-        .post_valid_o(conv_post_valid),
-        .post_acc_o(conv_post_acc),
-        .post_residual_o(conv_post_residual),
-        .post_bias_o(conv_post_bias),
-        .post_multiplier_o(conv_post_multiplier),
-        .post_shift_o(conv_post_shift),
-        .post_zero_point_o(conv_post_zero_point),
-        .post_prelu_multiplier_o(conv_post_prelu_multiplier),
-        .post_prelu_shift_o(conv_post_prelu_shift),
-        .post_residual_multiplier_o(conv_post_residual_multiplier),
-        .post_residual_shift_o(conv_post_residual_shift),
-        .post_residual_zero_point_o(conv_post_residual_zero_point),
-        .wb_capture_en_o(conv_wb_capture_en),
-        .wb_done_i(conv_wb_done),
-        .wb_m_size_o(conv_wb_m_size),
-        .wb_n_size_o(conv_wb_n_size),
-        .wb_out_base_addr_o(conv_wb_out_base_addr),
         .gb_act_rd_valid_o(dev_act_rd_valid[CONV1X1_DEV]),
         .gb_act_rd_addr_o(dev_act_rd_addr[CONV1X1_DEV]),
         .gb_act_rd_data_i(dev_act_rd_data[CONV1X1_DEV]),
         .gb_wgt_rd_valid_o(dev_wgt_rd_valid[CONV1X1_DEV]),
         .gb_wgt_rd_addr_o(dev_wgt_rd_addr[CONV1X1_DEV]),
-        .gb_wgt_rd_data_i(dev_wgt_rd_data[CONV1X1_DEV])
+        .gb_wgt_rd_data_i(dev_wgt_rd_data[CONV1X1_DEV]),
+        .gb_ao_wr_valid_o(dev_ao_wr_valid[CONV1X1_DEV]),
+        .gb_ao_wr_addr_o(dev_ao_wr_addr[CONV1X1_DEV]),
+        .gb_ao_wr_data_o(dev_ao_wr_data[CONV1X1_DEV]),
+        .gb_ao_wr_mask_o(dev_ao_wr_mask[CONV1X1_DEV]),
+        .quant_common_rd_en_o(conv_quant_common_rd_en),
+        .quant_common_rd_addr_o(conv_quant_common_rd_addr),
+        .quant_common_rd_valid_i(quant_common_rd_valid),
+        .quant_prelu_rd_en_o(conv_quant_prelu_rd_en),
+        .quant_prelu_rd_addr_o(conv_quant_prelu_rd_addr),
+        .quant_prelu_rd_valid_i(quant_prelu_rd_valid),
+        .quant_residual_rd_en_o(conv_quant_residual_rd_en),
+        .quant_residual_rd_addr_o(conv_quant_residual_rd_addr),
+        .quant_residual_rd_valid_i(quant_residual_rd_valid),
+        .quant_param_bias_i(quant_param_bias),
+        .quant_param_requant_multiplier_i(quant_param_requant_multiplier),
+        .quant_param_requant_shift_i(quant_param_requant_shift),
+        .quant_param_prelu_multiplier_i(quant_param_prelu_multiplier),
+        .quant_param_prelu_shift_i(quant_param_prelu_shift),
+        .quant_param_residual_multiplier_i(quant_param_residual_multiplier),
+        .quant_param_residual_shift_i(quant_param_residual_shift),
+        .quant_param_residual_zero_point_i(quant_param_residual_zero_point)
     );
 
-    conv1x1_output_postprocess #(
-        .ROW(ROW),
-        .COL(COL),
-        .ACC_W(ACC_W),
-        .BIAS_W(BIAS_W),
+    // Spatial 3x3 device slot. It receives metadata/base addresses from the
+    // switcher and schedules per-channel postprocess parameters from
+    // quant_param_mem internally.
+    spatial_top #(
+        .GB_ADDR_W(GB_ADDR_W),
+        .GB_DATA_W(GB_DATA_W),
+        .DATA_W(DATA_W),
         .OUT_W(OUT_W),
-        .MULT_W(MULT_W),
+        .ACC_W(ACC_W),
+        .ACT_DEPTH(SPATIAL_ACT_DEPTH),
+        .WGT_DEPTH(SPATIAL_WGT_DEPTH),
+        .ELEM_CNT_W(SPATIAL_ELEM_CNT_W),
+        .BIAS_W(BIAS_W),
+        .MUL_W(MULT_W),
         .SHIFT_W(SHIFT_W),
-        .DIM_W(DIM_W)
-    ) u_postprocess (
+        .PARAM_ADDR_W(PARAM_ADDR_W)
+    ) u_spatial_dev (
         .clk(aclk),
         .rst_n(aresetn),
         .run_en_i(1'b1),
-        .valid_tile_i(conv_post_valid_tile),
-        .row_base_i(conv_post_row_base),
-        .col_base_i(conv_post_col_base),
-        .m_size_i(conv_post_m_size),
-        .n_size_i(conv_post_n_size),
-        .valid_i(conv_post_valid),
-        .acc_i(conv_post_acc),
-        .mode_i(conv_post_mode),
-        .bias_i(conv_post_bias),
-        .multiplier_i(conv_post_multiplier),
-        .shift_i(conv_post_shift),
-        .zero_point_i(conv_post_zero_point),
-        .prelu_multiplier_i(conv_post_prelu_multiplier),
-        .prelu_shift_i(conv_post_prelu_shift),
-        .residual_i(conv_post_residual),
-        .residual_multiplier_i(conv_post_residual_multiplier),
-        .residual_shift_i(conv_post_residual_shift),
-        .residual_zero_point_i(conv_post_residual_zero_point),
-        .valid_o(post_valid),
-        .valid_tile_o(post_valid_tile),
-        .data_o(post_data)
+        .start_i(dev_start[SPATIAL_DEV]),
+        .act_base_addr_i(act_base_addr),
+        .wgt_base_addr_i(wgt_base_addr),
+        .out_base_addr_i(out_base_addr),
+        .output_elements_i(spatial_output_elements),
+        .bias_base_i(bias_base),
+        .requant_mult_base_i(requant_mult_base),
+        .requant_shift_base_i(requant_shift_base),
+        .prelu_mult_base_i(prelu_mult_base),
+        .prelu_shift_base_i(prelu_shift_base),
+        .residual_mult_base_i(residual_mult_base),
+        .residual_shift_base_i(residual_shift_base),
+        .residual_zero_point_base_i(residual_zero_point_base),
+        .num_filter_code_i(num_filter_code),
+        .ifmap_size_code_i(ifmap_size_code),
+        .stride_i(stride),
+        .pad_i(pad),
+        .current_num_filter_i(spatial_current_num_filter),
+        .post_mode_i(spatial_post_mode),
+        .residual_en_i(residual_en),
+        .residual_i(spatial_residual_stub),
+        .output_zero_point_i(spatial_output_zero_point),
+        .quant_common_rd_en_o(spatial_quant_common_rd_en),
+        .quant_common_rd_addr_o(spatial_quant_common_rd_addr),
+        .quant_common_rd_valid_i(quant_common_rd_valid),
+        .quant_prelu_rd_en_o(spatial_quant_prelu_rd_en),
+        .quant_prelu_rd_addr_o(spatial_quant_prelu_rd_addr),
+        .quant_prelu_rd_valid_i(quant_prelu_rd_valid),
+        .quant_residual_rd_en_o(spatial_quant_residual_rd_en),
+        .quant_residual_rd_addr_o(spatial_quant_residual_rd_addr),
+        .quant_residual_rd_valid_i(quant_residual_rd_valid),
+        .quant_param_bias_i(quant_param_bias),
+        .quant_param_requant_multiplier_i(quant_param_requant_multiplier),
+        .quant_param_requant_shift_i(quant_param_requant_shift),
+        .quant_param_prelu_multiplier_i(quant_param_prelu_multiplier),
+        .quant_param_prelu_shift_i(quant_param_prelu_shift),
+        .quant_param_residual_multiplier_i(quant_param_residual_multiplier),
+        .quant_param_residual_shift_i(quant_param_residual_shift),
+        .quant_param_residual_zero_point_i(quant_param_residual_zero_point),
+        .gb_act_rd_en_o(dev_act_rd_valid[SPATIAL_DEV]),
+        .gb_act_rd_addr_o(dev_act_rd_addr[SPATIAL_DEV]),
+        .gb_act_rd_data_i(dev_act_rd_data[SPATIAL_DEV]),
+        .gb_wgt_rd_en_o(dev_wgt_rd_valid[SPATIAL_DEV]),
+        .gb_wgt_rd_addr_o(dev_wgt_rd_addr[SPATIAL_DEV]),
+        .gb_wgt_rd_data_i(dev_wgt_rd_data[SPATIAL_DEV]),
+        .gb_ao_wr_valid_o(dev_ao_wr_valid[SPATIAL_DEV]),
+        .gb_ao_wr_addr_o(dev_ao_wr_addr[SPATIAL_DEV]),
+        .gb_ao_wr_data_o(dev_ao_wr_data[SPATIAL_DEV]),
+        .gb_ao_wr_mask_o(dev_ao_wr_mask[SPATIAL_DEV]),
+        .busy_o(dev_busy[SPATIAL_DEV]),
+        .done_o(dev_done[SPATIAL_DEV])
     );
-
-    wb_buffer #(
-        .ROW(ROW),
-        .COL(COL),
-        .DATA_IN_W(OUT_W),
-        .DATA_OUT_W(GB_DATA_W)
-    ) u_wb_buffer (
-        .aclk(aclk),
-        .aresetn(aresetn),
-        .wr_en_i(conv_wb_capture_en),
-        .data_i(post_data),
-        .rd_addr_i(conv_wb_rd_addr),
-        .data_o(conv_wb_data)
-    );
-
-    wr_controller #(
-        .ROW(ROW),
-        .COL(COL),
-        .DATA_OUT_W(GB_DATA_W),
-        .DIM_W(DIM_W),
-        .GB_ADDR_W(GB_ADDR_W)
-    ) u_wr_controller (
-        .aclk(aclk),
-        .aresetn(aresetn),
-        .n_size_i(conv_wb_n_size),
-        .m_size_i(conv_wb_m_size),
-        .out_base_addr_i(conv_wb_out_base_addr),
-        .tile_process_done(conv_wb_capture_en),
-        .data_i(conv_wb_data),
-        .rd_addr_o(conv_wb_rd_addr),
-        .ao_addr_o(dev_ao_wr_addr[CONV1X1_DEV]),
-        .ao_wr_en_o(dev_ao_wr_valid[CONV1X1_DEV]),
-        .ao_data_o(dev_ao_wr_data[CONV1X1_DEV]),
-        .busy_o(),
-        .done_o(conv_wb_done)
-    );
-
-    assign dev_ao_wr_mask[CONV1X1_DEV] = {AO_MASK_W{1'b1}};
 
     generate
         if (NUM_DEV > 1) begin : GEN_UNUSED_DEVICES
             for (genvar d = 0; d < NUM_DEV; d++) begin : GEN_DEV_TIEOFF
-                if (d != CONV1X1_DEV) begin : GEN_UNUSED
+                if ((d != CONV1X1_DEV) && (d != SPATIAL_DEV)) begin : GEN_UNUSED
                     assign dev_busy[d] = 1'b0;
                     assign dev_done[d] = 1'b0;
                     assign dev_act_rd_valid[d] = 1'b0;

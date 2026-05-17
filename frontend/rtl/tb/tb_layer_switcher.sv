@@ -11,6 +11,7 @@ module tb_layer_switcher;
     parameter int MULT_W = 32;
     parameter int SHIFT_W = 6;
     parameter int DIM_W = 16;
+    parameter int PARAM_ADDR_W = 16;
     parameter int GB_DATA_W = 128;
     parameter int AO_DEPTH = 8192;
     parameter int WGT_DEPTH = 8192;
@@ -35,6 +36,8 @@ module tb_layer_switcher;
     localparam int L1_N = 128;
     localparam int AO_OUT_BASE = 1 << (GB_ADDR_W - 1);
     localparam int WGT1_BASE = L0_K * ((L0_N + GB_LANES - 1) / GB_LANES);
+    localparam int L0_PARAM_BASE = 0;
+    localparam int L1_PARAM_BASE = 64;
 
     logic clk;
     logic rst_n;
@@ -56,15 +59,19 @@ module tb_layer_switcher;
     logic [7:0] layer_idx_o;
 
     logic [1:0]                    mode_o;
-    logic signed [BIAS_W-1:0]      bias_o [COL];
-    logic signed [MULT_W-1:0]      multiplier_o [COL];
-    logic [SHIFT_W-1:0]            shift_o [COL];
-    logic signed [OUT_W-1:0]       zero_point_o [COL];
-    logic signed [MULT_W-1:0]      prelu_multiplier_o [COL];
-    logic [SHIFT_W-1:0]            prelu_shift_o [COL];
-    logic signed [MULT_W-1:0]      residual_multiplier_o [COL];
-    logic [SHIFT_W-1:0]            residual_shift_o [COL];
-    logic signed [ACC_W-1:0]       residual_zero_point_o [COL];
+    logic [2:0]                    ifmap_size_code_o;
+    logic [1:0]                    num_filter_code_o;
+    logic                          stride_o;
+    logic                          pad_o;
+    logic signed [OUT_W-1:0]       output_zero_point_o;
+    logic [PARAM_ADDR_W-1:0]       bias_base_o;
+    logic [PARAM_ADDR_W-1:0]       requant_mult_base_o;
+    logic [PARAM_ADDR_W-1:0]       requant_shift_base_o;
+    logic [PARAM_ADDR_W-1:0]       prelu_mult_base_o;
+    logic [PARAM_ADDR_W-1:0]       prelu_shift_base_o;
+    logic [PARAM_ADDR_W-1:0]       residual_mult_base_o;
+    logic [PARAM_ADDR_W-1:0]       residual_shift_base_o;
+    logic [PARAM_ADDR_W-1:0]       residual_zero_point_base_o;
 
     logic                     dev_act_rd_valid_i [NUM_DEV];
     logic [GB_ADDR_W-1:0]     dev_act_rd_addr_i [NUM_DEV];
@@ -106,6 +113,7 @@ module tb_layer_switcher;
         .MULT_W(MULT_W),
         .SHIFT_W(SHIFT_W),
         .DIM_W(DIM_W),
+        .PARAM_ADDR_W(PARAM_ADDR_W),
         .GB_DATA_W(GB_DATA_W),
         .AO_DEPTH(AO_DEPTH),
         .WGT_DEPTH(WGT_DEPTH),
@@ -128,15 +136,19 @@ module tb_layer_switcher;
         .residual_base_addr_o(residual_base_addr_o),
         .layer_idx_o(layer_idx_o),
         .mode_o(mode_o),
-        .bias_o(bias_o),
-        .multiplier_o(multiplier_o),
-        .shift_o(shift_o),
-        .zero_point_o(zero_point_o),
-        .prelu_multiplier_o(prelu_multiplier_o),
-        .prelu_shift_o(prelu_shift_o),
-        .residual_multiplier_o(residual_multiplier_o),
-        .residual_shift_o(residual_shift_o),
-        .residual_zero_point_o(residual_zero_point_o),
+        .ifmap_size_code_o(ifmap_size_code_o),
+        .num_filter_code_o(num_filter_code_o),
+        .stride_o(stride_o),
+        .pad_o(pad_o),
+        .output_zero_point_o(output_zero_point_o),
+        .bias_base_o(bias_base_o),
+        .requant_mult_base_o(requant_mult_base_o),
+        .requant_shift_base_o(requant_shift_base_o),
+        .prelu_mult_base_o(prelu_mult_base_o),
+        .prelu_shift_base_o(prelu_shift_base_o),
+        .residual_mult_base_o(residual_mult_base_o),
+        .residual_shift_base_o(residual_shift_base_o),
+        .residual_zero_point_base_o(residual_zero_point_base_o),
         .dev_act_rd_valid_i(dev_act_rd_valid_i),
         .dev_act_rd_addr_i(dev_act_rd_addr_i),
         .dev_act_rd_data_o(dev_act_rd_data_o),
@@ -195,6 +207,8 @@ module tb_layer_switcher;
         input int exp_wgt_base,
         input int exp_out_base,
         input int exp_mode,
+        input int exp_param_base,
+        input bit exp_residual_en,
         input string tag
     );
         begin
@@ -204,18 +218,18 @@ module tb_layer_switcher;
             check(act_base_addr_o === GB_ADDR_W'(exp_act_base), $sformatf("%s act_base", tag));
             check(wgt_base_addr_o === GB_ADDR_W'(exp_wgt_base), $sformatf("%s wgt_base", tag));
             check(out_base_addr_o === GB_ADDR_W'(exp_out_base), $sformatf("%s out_base", tag));
+            check(residual_en_o === exp_residual_en, $sformatf("%s residual_en", tag));
             check(mode_o === 2'(exp_mode), $sformatf("%s mode", tag));
-            for (int c = 0; c < COL; c++) begin
-                check(bias_o[c] === '0, $sformatf("%s bias[%0d]", tag, c));
-                check(multiplier_o[c] === MULT_W'(1), $sformatf("%s multiplier[%0d]", tag, c));
-                check(shift_o[c] === '0, $sformatf("%s shift[%0d]", tag, c));
-                check(zero_point_o[c] === '0, $sformatf("%s zero_point[%0d]", tag, c));
-                check(prelu_multiplier_o[c] === MULT_W'(1), $sformatf("%s prelu_multiplier[%0d]", tag, c));
-                check(prelu_shift_o[c] === '0, $sformatf("%s prelu_shift[%0d]", tag, c));
-                check(residual_multiplier_o[c] === '0, $sformatf("%s residual_multiplier[%0d]", tag, c));
-                check(residual_shift_o[c] === '0, $sformatf("%s residual_shift[%0d]", tag, c));
-                check(residual_zero_point_o[c] === '0, $sformatf("%s residual_zero_point[%0d]", tag, c));
-            end
+            check(ifmap_size_code_o === '0, $sformatf("%s ifmap_size_code", tag));
+            check(num_filter_code_o === '0, $sformatf("%s num_filter_code", tag));
+            check(stride_o === 1'b0, $sformatf("%s stride", tag));
+            check(pad_o === 1'b0, $sformatf("%s pad", tag));
+            check(output_zero_point_o === '0, $sformatf("%s output_zero_point", tag));
+            check(bias_base_o === PARAM_ADDR_W'(exp_param_base), $sformatf("%s bias_base", tag));
+            check(requant_mult_base_o === PARAM_ADDR_W'(exp_param_base), $sformatf("%s requant_mult_base", tag));
+            check(requant_shift_base_o === PARAM_ADDR_W'(exp_param_base), $sformatf("%s requant_shift_base", tag));
+            check(prelu_mult_base_o === PARAM_ADDR_W'(exp_param_base), $sformatf("%s prelu_mult_base", tag));
+            check(prelu_shift_base_o === PARAM_ADDR_W'(exp_param_base), $sformatf("%s prelu_shift_base", tag));
         end
     endtask
 
@@ -302,9 +316,13 @@ module tb_layer_switcher;
         sys_start = 1'b1;
         @(posedge clk);
         #1;
+        check(start_o[0] === 1'b0, "config fetch cycle has no start pulse");
+        @(posedge clk);
+        #1;
         check(start_o[0] === 1'b1, "layer0 start pulse");
         check(start_o[1] === 1'b0, "layer0 inactive device start");
-        expect_config(L0_K, M28, L0_N, 0, 0, AO_OUT_BASE, MODE_RESIDUAL, "layer0");
+        expect_config(L0_K, M28, L0_N, 0, 0, AO_OUT_BASE, MODE_RESIDUAL,
+                      L0_PARAM_BASE, 1'b1, "layer0");
 
         @(posedge clk);
         #1;
@@ -312,8 +330,11 @@ module tb_layer_switcher;
         expect_mux("layer0 mux");
 
         complete_active_layer();
+        @(posedge clk);
+        #1;
         check(start_o[0] === 1'b1, "layer1 start pulse");
-        expect_config(L1_K, M28, L1_N, AO_OUT_BASE, WGT1_BASE, 0, MODE_PRELU, "layer1");
+        expect_config(L1_K, M28, L1_N, AO_OUT_BASE, WGT1_BASE, 0, MODE_PRELU,
+                      L1_PARAM_BASE, 1'b0, "layer1");
 
         @(posedge clk);
         #1;
