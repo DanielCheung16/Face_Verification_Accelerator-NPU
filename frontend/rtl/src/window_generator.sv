@@ -69,6 +69,9 @@ module window_generator #(
     input  logic [ADDR_W-1:0] out_y_i,
     input  logic stride_i,
     input  logic pad_i,
+    input  logic conv_mode_i,                 // 0: DW, 1: traditional conv3x3
+    input  logic [ADDR_W-1:0] ic_offset_i,    // input-channel slice for conv3x3
+    input  logic [3:0] input_channel_words_shift_i,
     input  logic [WGT_RD_ADDR_W:0] current_num_filter_i,
 
     // Global A/O SRAM read.
@@ -126,6 +129,9 @@ module window_generator #(
         .out_y_i(out_y_i),
         .stride_i(stride_i),
         .pad_i(pad_i),
+        .conv_mode_i(conv_mode_i),
+        .ic_offset_i(ic_offset_i),
+        .input_channel_words_shift_i(input_channel_words_shift_i),
         .all_weights_loaded_i(all_weights_loaded_o),
         .gb_act_rd_en_o(gb_act_rd_en_o),
         .gb_act_rd_addr_o(gb_act_rd_addr_o),

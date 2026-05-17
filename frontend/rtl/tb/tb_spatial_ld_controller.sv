@@ -20,6 +20,9 @@ module tb_spatial_ld_controller;
     logic [ADDR_W-1:0] out_y_i;
     logic stride_i;
     logic pad_i;
+    logic conv_mode_i;
+    logic [ADDR_W-1:0] ic_offset_i;
+    logic [3:0] input_channel_words_shift_i;
     logic all_weights_loaded_i;
     logic gb_act_rd_en_o;
     logic [ADDR_W-1:0] gb_act_rd_addr_o;
@@ -40,6 +43,8 @@ module tb_spatial_ld_controller;
     int act_wr_cnt;
     int wgt_wr_cnt;
     bit saw_act_zero [NUM_POS];
+    int act_addr_seen [NUM_POS];
+    int wgt_addr_seen [NUM_POS];
 
     initial clk = 1'b0;
     always #HALF_CYCLE_TIME clk = ~clk;
@@ -60,6 +65,9 @@ module tb_spatial_ld_controller;
         .out_y_i(out_y_i),
         .stride_i(stride_i),
         .pad_i(pad_i),
+        .conv_mode_i(conv_mode_i),
+        .ic_offset_i(ic_offset_i),
+        .input_channel_words_shift_i(input_channel_words_shift_i),
         .all_weights_loaded_i(all_weights_loaded_i),
         .gb_act_rd_en_o(gb_act_rd_en_o),
         .gb_act_rd_addr_o(gb_act_rd_addr_o),
@@ -132,6 +140,9 @@ module tb_spatial_ld_controller;
         out_y_i = 16'd0;
         stride_i = 1'b0;
         pad_i = 1'b1;
+        conv_mode_i = 1'b0;
+        ic_offset_i = '0;
+        input_channel_words_shift_i = '0;
         all_weights_loaded_i = 1'b0;
 
         repeat (4) @(posedge clk);
@@ -192,6 +203,55 @@ module tb_spatial_ld_controller;
 
         check(act_wr_cnt == 9, $sformatf("expected 9 activation writes after weights loaded, got %0d", act_wr_cnt));
         check(wgt_wr_cnt == 0, $sformatf("expected 0 weight writes after all_weights_loaded_i, got %0d", wgt_wr_cnt));
+
+        @(posedge clk);
+        #1;
+        act_wr_cnt = 0;
+        wgt_wr_cnt = 0;
+        for (int pos = 0; pos < NUM_POS; pos++) begin
+            act_addr_seen[pos] = -1;
+            wgt_addr_seen[pos] = -1;
+        end
+        conv_mode_i = 1'b1;
+        act_base_addr_i = 16'd100;
+        wgt_base_addr_i = 16'd1000;
+        num_filter_code_i = 2'd0;              // 64 output channels => 4 words per kernel position.
+        ifmap_size_code_i = 3'd0;              // 7x7
+        input_channel_words_shift_i = 4'd0;    // 3 input channels fit in one 128-bit word.
+        ic_offset_i = 16'd1;
+        out_x_i = 16'd1;
+        out_y_i = 16'd1;
+        stride_i = 1'b0;
+        pad_i = 1'b0;
+        tile_offset_i = 16'd16;                // output-channel tile 1
+        all_weights_loaded_i = 1'b1;           // conv mode still reloads the current IC slice.
+
+        pulse_start();
+        while (load_done_o !== 1'b1) begin
+            @(posedge clk);
+            #1;
+            if (act_wr_en_o) begin
+                act_wr_cnt++;
+                act_addr_seen[act_wr_pos_o] = act_wr_data_o[31:0];
+            end
+            if (wgt_wr_en_o) begin
+                wgt_wr_cnt++;
+                wgt_addr_seen[wgt_wr_pos_o] = wgt_wr_data_o[31:0];
+            end
+        end
+
+        check(act_wr_cnt == 9, $sformatf("expected 9 conv activation writes, got %0d", act_wr_cnt));
+        check(wgt_wr_cnt == 9, $sformatf("expected 9 conv weight writes despite all_weights_loaded_i, got %0d", wgt_wr_cnt));
+        check(act_addr_seen[0] == 108 && act_addr_seen[1] == 109 && act_addr_seen[2] == 110,
+              $sformatf("conv activation row0 addresses mismatch: %0d %0d %0d",
+                        act_addr_seen[0], act_addr_seen[1], act_addr_seen[2]));
+        check(act_addr_seen[3] == 115 && act_addr_seen[4] == 116 && act_addr_seen[5] == 117,
+              $sformatf("conv activation row1 addresses mismatch: %0d %0d %0d",
+                        act_addr_seen[3], act_addr_seen[4], act_addr_seen[5]));
+        check(wgt_addr_seen[0] == 1037 && wgt_addr_seen[1] == 1041 && wgt_addr_seen[2] == 1045 &&
+              wgt_addr_seen[8] == 1069,
+              $sformatf("conv weight addresses mismatch: pos0=%0d pos1=%0d pos2=%0d pos8=%0d",
+                        wgt_addr_seen[0], wgt_addr_seen[1], wgt_addr_seen[2], wgt_addr_seen[8]));
 
         if (fail_cnt != 0) begin
             $fatal(1, "[TB] spatial_ld_controller FAILED fail=%0d", fail_cnt);

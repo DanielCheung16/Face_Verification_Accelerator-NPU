@@ -109,6 +109,11 @@ module spatial3x3_dev #(
         .out_y_i(out_y),
         .stride_i(stride_i),
         .pad_i(pad_i),
+        // Current DW path keeps these conv hooks idle. The later conv3x3
+        // inside-controller will drive them when it schedules IC slices.
+        .conv_mode_i(1'b0),
+        .ic_offset_i('0),
+        .input_channel_words_shift_i('0),
         .current_num_filter_i(current_num_filter_i),
         .gb_act_rd_en_o(gb_act_rd_en_o),
         .gb_act_rd_addr_o(gb_act_rd_addr_o),
