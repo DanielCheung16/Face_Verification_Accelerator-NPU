@@ -65,6 +65,7 @@ module layer_config_mem #(
     //      rows 23 + 25, conv1x1 28x28 64->128, PReLU quant
     //   1: layer 0 only, conv1x1 28x28 128->64, requant
     //   2: layer 1 only, conv1x1 28x28 64->128, PReLU + requant
+    //   3: layer 0 only, conv1x1 28x28 128->64, residual + requant
     localparam int IMG_28_M = 28 * 28;
     localparam int L0_K = 128;
     localparam int L0_N = 64;

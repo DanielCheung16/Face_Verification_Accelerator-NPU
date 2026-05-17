@@ -26,7 +26,8 @@ typedef struct {
 typedef enum {
     PROFILE_TWO_LAYER,
     PROFILE_REQUANT,
-    PROFILE_PRELU
+    PROFILE_PRELU,
+    PROFILE_RESIDUAL
 } qf_dump_profile_t;
 
 static qf_dump_profile_t parse_profile(const char *profile)
@@ -36,6 +37,9 @@ static qf_dump_profile_t parse_profile(const char *profile)
     }
     if (strcmp(profile, "prelu") == 0) {
         return PROFILE_PRELU;
+    }
+    if (strcmp(profile, "residual") == 0) {
+        return PROFILE_RESIDUAL;
     }
     return PROFILE_TWO_LAYER;
 }
@@ -276,6 +280,14 @@ int main(int argc, char **argv)
         pack_activation(golden_mem, QF_AO_OUT_BASE, buf0, QF_L1_M, QF_L1_N);
         break;
 
+    case PROFILE_RESIDUAL:
+        pack_activation(ao_mem, QF_AO_IN_BASE, qf_input_l0, QF_L0_M, QF_L0_K);
+        pack_activation(ao_mem, QF_AO_RES_BASE, qf_residual_l0, QF_L0_M, QF_L0_N);
+        pack_weight(wgt_mem, QF_WGT0_BASE, qf_weight_l0, QF_L0_K, QF_L0_N);
+        run_layer(0, buf0, buf1);
+        pack_activation(golden_mem, QF_AO_OUT_BASE, buf1, QF_L0_M, QF_L0_N);
+        break;
+
     case PROFILE_TWO_LAYER:
     default:
         pack_activation(ao_mem, QF_AO_IN_BASE, qf_input_l0, QF_L0_M, QF_L0_K);
@@ -306,6 +318,10 @@ int main(int argc, char **argv)
             printf("  ao_init: QF input @%d, residual @%d\n", QF_AO_IN_BASE, QF_AO_RES_BASE);
             printf("  wgt_init: layer0 @%d, layer1 @%d\n", QF_WGT0_BASE, QF_WGT1_BASE);
             printf("  golden: final output @%d\n", QF_AO_IN_BASE);
+        } else if (dump_profile == PROFILE_RESIDUAL) {
+            printf("  ao_init: selected layer input @%d, residual @%d\n", QF_AO_IN_BASE, QF_AO_RES_BASE);
+            printf("  wgt_init: selected layer weight @%d\n", QF_WGT0_BASE);
+            printf("  golden: selected layer output @%d\n", QF_AO_OUT_BASE);
         } else {
             printf("  ao_init: selected layer input @%d\n", QF_AO_IN_BASE);
             printf("  wgt_init: selected layer weight @%d\n", QF_WGT0_BASE);
