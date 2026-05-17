@@ -6,7 +6,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define DUMP_OP_INDEX 1
 #define AO_BASE 0
 #define WGT_BASE 0
 #define OUT_BASE 300000
@@ -280,32 +279,55 @@ static void dump_quant_params(const qf_op_t *op)
     dump_hex64("generated/spatial_top_dw_residual_zero_point.hex", zero64, 1);
 }
 
-int main(void)
+static void run_prefix_to_op(int op_idx, int8_t *cur, int8_t *nxt)
 {
-    const qf_op_t *op0 = &qf_ops[0];
-    const qf_op_t *op = &qf_ops[DUMP_OP_INDEX];
+    int8_t *base = cur;
+    memcpy(cur, qf_input, QF_INPUT_SIZE);
+    for (int i = 0; i < op_idx; i++) {
+        const qf_op_t *op = &qf_ops[i];
+        if (op->type == QF_OP_CONV) {
+            run_conv_quant(op, cur, nxt);
+            int8_t *tmp = cur;
+            cur = nxt;
+            nxt = tmp;
+        }
+    }
+    if (cur != base) {
+        const qf_op_t *op = &qf_ops[op_idx];
+        memcpy(base, cur, (size_t)op->in_h * op->in_w * op->in_c);
+    }
+}
+
+int main(int argc, char **argv)
+{
+    int op_idx = argc > 1 ? atoi(argv[1]) : 1;
+    const qf_op_t *op = &qf_ops[op_idx];
     if (!(op->type == QF_OP_CONV && op->groups == op->in_c &&
           op->out_c == op->in_c && op->kh == 3 && op->kw == 3)) {
-        fprintf(stderr, "op %d is not a supported DWConv3x3 op\n", DUMP_OP_INDEX);
+        fprintf(stderr, "op %d is not a supported DWConv3x3 op\n", op_idx);
         return 1;
     }
 
-    int8_t *op1_input = (int8_t *)calloc((size_t)op->in_h * op->in_w * op->in_c, sizeof(int8_t));
-    if (!op1_input) {
+    int8_t *buf0 = (int8_t *)calloc(QF_MAX_ACT, sizeof(int8_t));
+    int8_t *buf1 = (int8_t *)calloc(QF_MAX_ACT, sizeof(int8_t));
+    if (!buf0 || !buf1) {
+        free(buf0);
+        free(buf1);
         return 1;
     }
 
-    run_conv_quant(op0, qf_input, op1_input);
-    dump_activation_words("generated/spatial_top_dw_ao_init.txt", op, op1_input);
+    run_prefix_to_op(op_idx, buf0, buf1);
+    dump_activation_words("generated/spatial_top_dw_ao_init.txt", op, buf0);
     dump_weight_words("generated/spatial_top_dw_wgt_init.txt", op);
-    dump_expected_words("generated/spatial_top_dw_expected.txt", op, op1_input);
+    dump_expected_words("generated/spatial_top_dw_expected.txt", op, buf0);
     dump_quant_params(op);
 
     printf("dumped op=%d in=%dx%dx%d out=%dx%dx%d words=%d\n",
-           DUMP_OP_INDEX, op->in_h, op->in_w, op->in_c,
+           op_idx, op->in_h, op->in_w, op->in_c,
            op_out_h(op), op_out_w(op), op->out_c,
            op_out_h(op) * op_out_w(op) * op->out_c / LANES);
 
-    free(op1_input);
+    free(buf0);
+    free(buf1);
     return 0;
 }

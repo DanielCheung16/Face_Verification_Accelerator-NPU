@@ -1,6 +1,7 @@
 `timescale 1ns/1ps
 
 module tb_top_dwconv3x3_prelu_c_ref;
+    parameter int PROFILE = 4;
     parameter int ROW = 14;
     parameter int COL = 16;
     parameter int K_MAX = 512;
@@ -17,8 +18,8 @@ module tb_top_dwconv3x3_prelu_c_ref;
     localparam int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH);
     localparam int MASK_W = GB_DATA_W / DATA_W;
     localparam int LANES = MASK_W;
-    localparam int OUT_SIZE = 56;
-    localparam int C = 64;
+    parameter int OUT_SIZE = 56;
+    parameter int C = 64;
     localparam int OUTPUT_WORDS = (OUT_SIZE * OUT_SIZE * C) / LANES;
     localparam int OUT_BASE = 300000;
 
@@ -68,7 +69,7 @@ module tb_top_dwconv3x3_prelu_c_ref;
         .PRELU_PARAM_DEPTH(PARAM_DEPTH),
         .RESIDUAL_PARAM_DEPTH(PARAM_DEPTH),
         .SPATIAL_WGT_DEPTH(SPATIAL_WGT_DEPTH),
-        .LAYER_CONFIG_PROFILE(4),
+        .LAYER_CONFIG_PROFILE(PROFILE),
         .QUANT_BIAS_INIT_FILE({GOLD_DIR, "/spatial_top_dw_bias.hex"}),
         .QUANT_REQUANT_MULT_INIT_FILE({GOLD_DIR, "/spatial_top_dw_requant_mult.hex"}),
         .QUANT_REQUANT_SHIFT_INIT_FILE({GOLD_DIR, "/spatial_top_dw_requant_shift.hex"}),
