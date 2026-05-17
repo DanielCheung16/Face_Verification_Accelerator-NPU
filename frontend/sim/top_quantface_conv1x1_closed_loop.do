@@ -1,5 +1,7 @@
 setenv LMC_TIMEUNIT -9
 
+exec python3 gold_models/quantface_conv1x1_c_ref/dump_quant_param_hex.py
+
 vlib work
 vmap work work
 
@@ -21,6 +23,7 @@ vlog -sv -work work "../rtl/src/array_level2_top.sv"
 vlog -sv +incdir+../rtl/src -work work "../rtl/src/conv1x1_output_postprocess.sv"
 vlog -sv -work work "../rtl/src/wb_buffer.sv"
 vlog -sv -work work "../rtl/src/wr_controller.sv"
+vlog -sv -work work "../rtl/src/conv1x1_param_scheduler.sv"
 vlog -sv -work work "../rtl/src/conv1x1_inside_controller.sv"
 vlog -sv -work work "../rtl/src/conv1x1_level3_top.sv"
 vlog -sv -work work "../rtl/src/conv1x1_wb.sv"

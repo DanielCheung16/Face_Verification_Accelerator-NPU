@@ -19,6 +19,8 @@ module conv1x1_inside_controller #(
 
     input  logic preload_done_i,
     input  logic compute_done_i,
+    input  logic param_load_needed_i,
+    input  logic param_ready_i,
     input  logic post_tile_valid_i,
     input  logic wb_done_i,
 
@@ -35,6 +37,7 @@ module conv1x1_inside_controller #(
 
     output logic preload_start_o,
     output logic compute_start_o,
+    output logic param_load_start_o,
     output logic post_start_o,
     output logic wb_capture_en_o,
 
@@ -51,6 +54,8 @@ module conv1x1_inside_controller #(
         PRELOAD_WAIT,
         COMPUTE_START,
         COMPUTE_WAIT,
+        PARAM_LOAD,
+        PARAM_WAIT,
         RESIDUAL_READ,
         RESIDUAL_CAPTURE,
         POSTPROCESS_START,
@@ -86,6 +91,7 @@ module conv1x1_inside_controller #(
         config_tile_o = 1'b0;
         preload_start_o = 1'b0;
         compute_start_o = 1'b0;
+        param_load_start_o = 1'b0;
         post_start_o = 1'b0;
         wb_capture_en_o = 1'b0;
         residual_clear_o = 1'b0;
@@ -140,6 +146,34 @@ module conv1x1_inside_controller #(
             COMPUTE_WAIT: begin
                 residual_clear_o = 1'b1;
                 if (compute_done_i) begin
+                    if (param_load_needed_i) begin
+                        state_w = PARAM_LOAD;
+                    end else if (!param_ready_i) begin
+                        state_w = PARAM_WAIT;
+                    end else if (residual_en_i && (mode_i == MODE_RESIDUAL)) begin
+                        residual_row_w = '0;
+                        residual_pending_w = 1'b0;
+                        residual_pending_row_w = '0;
+                        state_w = RESIDUAL_READ;
+                    end else begin
+                        state_w = POSTPROCESS_START;
+                    end
+                end
+            end
+
+            // Load a new output-channel parameter tile only when tile_c changes.
+            // M tiles under the same tile_c reuse the local parameter registers.
+            PARAM_LOAD: begin
+                residual_clear_o = 1'b1;
+                param_load_start_o = run_en_i;
+                if (run_en_i) begin
+                    state_w = PARAM_WAIT;
+                end
+            end
+
+            PARAM_WAIT: begin
+                residual_clear_o = 1'b1;
+                if (param_ready_i) begin
                     if (residual_en_i && (mode_i == MODE_RESIDUAL)) begin
                         residual_row_w = '0;
                         residual_pending_w = 1'b0;

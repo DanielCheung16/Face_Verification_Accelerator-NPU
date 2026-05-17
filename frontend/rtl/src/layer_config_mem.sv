@@ -77,6 +77,8 @@ module layer_config_mem #(
 
     localparam logic [PARAM_ADDR_W-1:0] L0_PARAM_BASE = PARAM_ADDR_W'(0);
     localparam logic [PARAM_ADDR_W-1:0] L1_PARAM_BASE = PARAM_ADDR_W'(64);
+    localparam logic signed [OUT_W-1:0] L0_OUTPUT_ZERO_POINT = -$signed(OUT_W'(18));
+    localparam logic signed [OUT_W-1:0] L1_OUTPUT_ZERO_POINT = -$signed(OUT_W'(77));
 
     typedef struct packed {
         logic                    layer_valid;
@@ -134,6 +136,7 @@ module layer_config_mem #(
             cfg.residual_en = 1'b1;
             cfg.residual_base_addr = AO_RES_BASE;
             cfg.mode = MODE_RESIDUAL;
+            cfg.output_zero_point = L0_OUTPUT_ZERO_POINT;
             cfg.bias_base = L0_PARAM_BASE;
             cfg.requant_mult_base = L0_PARAM_BASE;
             cfg.requant_shift_base = L0_PARAM_BASE;
@@ -160,6 +163,7 @@ module layer_config_mem #(
             cfg.wgt_base_addr = WGT1_BASE;
             cfg.out_base_addr = AO_IN_BASE;
             cfg.mode = MODE_PRELU;
+            cfg.output_zero_point = L1_OUTPUT_ZERO_POINT;
             cfg.bias_base = L1_PARAM_BASE;
             cfg.requant_mult_base = L1_PARAM_BASE;
             cfg.requant_shift_base = L1_PARAM_BASE;

@@ -31,6 +31,14 @@ module top #(
     parameter int SPATIAL_ACT_DEPTH = 1,
     parameter int SPATIAL_WGT_DEPTH = 32,
     parameter bit USE_INTERNAL_QUANT_PARAMS = 1'b0,
+    parameter string QUANT_BIAS_INIT_FILE = "",
+    parameter string QUANT_REQUANT_MULT_INIT_FILE = "",
+    parameter string QUANT_REQUANT_SHIFT_INIT_FILE = "",
+    parameter string QUANT_PRELU_MULT_INIT_FILE = "",
+    parameter string QUANT_PRELU_SHIFT_INIT_FILE = "",
+    parameter string QUANT_RESIDUAL_MULT_INIT_FILE = "",
+    parameter string QUANT_RESIDUAL_SHIFT_INIT_FILE = "",
+    parameter string QUANT_RESIDUAL_ZERO_POINT_INIT_FILE = "",
 
     localparam int AO_MASK_W = GB_DATA_W / DATA_W,
     localparam int WGT_MASK_W = GB_DATA_W / DATA_W,
@@ -153,6 +161,21 @@ module top #(
     logic [SHIFT_W-1:0]       quant_param_residual_shift;
     logic signed [BIAS_W-1:0] quant_param_residual_zero_point;
 
+    logic                     conv_quant_common_rd_en;
+    logic [PARAM_ADDR_W-1:0]  conv_quant_common_rd_addr;
+    logic                     conv_quant_prelu_rd_en;
+    logic [PARAM_ADDR_W-1:0]  conv_quant_prelu_rd_addr;
+    logic                     conv_quant_residual_rd_en;
+    logic [PARAM_ADDR_W-1:0]  conv_quant_residual_rd_addr;
+
+    logic                     spatial_quant_common_rd_en;
+    logic [PARAM_ADDR_W-1:0]  spatial_quant_common_rd_addr;
+    logic                     spatial_quant_prelu_rd_en;
+    logic [PARAM_ADDR_W-1:0]  spatial_quant_prelu_rd_addr;
+    logic                     spatial_quant_residual_rd_en;
+    logic [PARAM_ADDR_W-1:0]  spatial_quant_residual_rd_addr;
+    logic                     conv_quant_active_w;
+
     logic [SPATIAL_ELEM_CNT_W-1:0] spatial_output_elements;
     logic [SPATIAL_FILTER_CNT_W-1:0] spatial_current_num_filter;
     logic signed [ACC_W-1:0] spatial_residual_stub;
@@ -171,6 +194,19 @@ module top #(
     assign spatial_current_num_filter = SPATIAL_FILTER_CNT_W'(n_size);
     assign spatial_residual_stub = '0;
     assign spatial_output_zero_point = ACC_W'($signed(output_zero_point));
+    assign conv_quant_active_w = dev_start[CONV1X1_DEV] || dev_busy[CONV1X1_DEV];
+    assign quant_common_rd_en = conv_quant_active_w ? conv_quant_common_rd_en :
+                                                    spatial_quant_common_rd_en;
+    assign quant_common_rd_addr = conv_quant_active_w ? conv_quant_common_rd_addr :
+                                                      spatial_quant_common_rd_addr;
+    assign quant_prelu_rd_en = conv_quant_active_w ? conv_quant_prelu_rd_en :
+                                                   spatial_quant_prelu_rd_en;
+    assign quant_prelu_rd_addr = conv_quant_active_w ? conv_quant_prelu_rd_addr :
+                                                     spatial_quant_prelu_rd_addr;
+    assign quant_residual_rd_en = conv_quant_active_w ? conv_quant_residual_rd_en :
+                                                      spatial_quant_residual_rd_en;
+    assign quant_residual_rd_addr = conv_quant_active_w ? conv_quant_residual_rd_addr :
+                                                        spatial_quant_residual_rd_addr;
 
 `ifndef SYNTHESIS
     initial begin
@@ -245,7 +281,15 @@ module top #(
         .RESIDUAL_PARAM_ADDR_W(PARAM_ADDR_W),
         .BIAS_W(BIAS_W),
         .MULT_W(MULT_W),
-        .SHIFT_W(SHIFT_W)
+        .SHIFT_W(SHIFT_W),
+        .BIAS_INIT_FILE(QUANT_BIAS_INIT_FILE),
+        .REQUANT_MULT_INIT_FILE(QUANT_REQUANT_MULT_INIT_FILE),
+        .REQUANT_SHIFT_INIT_FILE(QUANT_REQUANT_SHIFT_INIT_FILE),
+        .PRELU_MULT_INIT_FILE(QUANT_PRELU_MULT_INIT_FILE),
+        .PRELU_SHIFT_INIT_FILE(QUANT_PRELU_SHIFT_INIT_FILE),
+        .RESIDUAL_MULT_INIT_FILE(QUANT_RESIDUAL_MULT_INIT_FILE),
+        .RESIDUAL_SHIFT_INIT_FILE(QUANT_RESIDUAL_SHIFT_INIT_FILE),
+        .RESIDUAL_ZERO_POINT_INIT_FILE(QUANT_RESIDUAL_ZERO_POINT_INIT_FILE)
     ) u_quant_param_mem (
         .clk(aclk),
         .rst_n(aresetn),
@@ -383,6 +427,7 @@ module top #(
         .WGT_DEPTH(WGT_DEPTH),
         .AO_ADDR_W(AO_ADDR_W),
         .WGT_ADDR_W(WGT_ADDR_W),
+        .PARAM_ADDR_W(PARAM_ADDR_W),
         .USE_INTERNAL_QUANT_PARAMS(USE_INTERNAL_QUANT_PARAMS),
         .LAYER_IDX_W(MAX_LAYER)
     ) u_conv1x1_dev (
@@ -402,6 +447,10 @@ module top #(
         .residual_en_i(residual_en),
         .residual_base_addr_i(residual_base_addr),
         .mode_i(mode),
+        .output_zero_point_i(output_zero_point),
+        .common_param_base_i(bias_base),
+        .prelu_param_base_i(prelu_mult_base),
+        .residual_param_base_i(residual_mult_base),
         .bias_i(bias),
         .multiplier_i(multiplier),
         .shift_i(shift),
@@ -420,7 +469,24 @@ module top #(
         .gb_ao_wr_valid_o(dev_ao_wr_valid[CONV1X1_DEV]),
         .gb_ao_wr_addr_o(dev_ao_wr_addr[CONV1X1_DEV]),
         .gb_ao_wr_data_o(dev_ao_wr_data[CONV1X1_DEV]),
-        .gb_ao_wr_mask_o(dev_ao_wr_mask[CONV1X1_DEV])
+        .gb_ao_wr_mask_o(dev_ao_wr_mask[CONV1X1_DEV]),
+        .quant_common_rd_en_o(conv_quant_common_rd_en),
+        .quant_common_rd_addr_o(conv_quant_common_rd_addr),
+        .quant_common_rd_valid_i(quant_common_rd_valid),
+        .quant_prelu_rd_en_o(conv_quant_prelu_rd_en),
+        .quant_prelu_rd_addr_o(conv_quant_prelu_rd_addr),
+        .quant_prelu_rd_valid_i(quant_prelu_rd_valid),
+        .quant_residual_rd_en_o(conv_quant_residual_rd_en),
+        .quant_residual_rd_addr_o(conv_quant_residual_rd_addr),
+        .quant_residual_rd_valid_i(quant_residual_rd_valid),
+        .quant_param_bias_i(quant_param_bias),
+        .quant_param_requant_multiplier_i(quant_param_requant_multiplier),
+        .quant_param_requant_shift_i(quant_param_requant_shift),
+        .quant_param_prelu_multiplier_i(quant_param_prelu_multiplier),
+        .quant_param_prelu_shift_i(quant_param_prelu_shift),
+        .quant_param_residual_multiplier_i(quant_param_residual_multiplier),
+        .quant_param_residual_shift_i(quant_param_residual_shift),
+        .quant_param_residual_zero_point_i(quant_param_residual_zero_point)
     );
 
     // Spatial 3x3 device slot. It receives metadata/base addresses from the
@@ -465,14 +531,14 @@ module top #(
         .residual_en_i(residual_en),
         .residual_i(spatial_residual_stub),
         .output_zero_point_i(spatial_output_zero_point),
-        .quant_common_rd_en_o(quant_common_rd_en),
-        .quant_common_rd_addr_o(quant_common_rd_addr),
+        .quant_common_rd_en_o(spatial_quant_common_rd_en),
+        .quant_common_rd_addr_o(spatial_quant_common_rd_addr),
         .quant_common_rd_valid_i(quant_common_rd_valid),
-        .quant_prelu_rd_en_o(quant_prelu_rd_en),
-        .quant_prelu_rd_addr_o(quant_prelu_rd_addr),
+        .quant_prelu_rd_en_o(spatial_quant_prelu_rd_en),
+        .quant_prelu_rd_addr_o(spatial_quant_prelu_rd_addr),
         .quant_prelu_rd_valid_i(quant_prelu_rd_valid),
-        .quant_residual_rd_en_o(quant_residual_rd_en),
-        .quant_residual_rd_addr_o(quant_residual_rd_addr),
+        .quant_residual_rd_en_o(spatial_quant_residual_rd_en),
+        .quant_residual_rd_addr_o(spatial_quant_residual_rd_addr),
         .quant_residual_rd_valid_i(quant_residual_rd_valid),
         .quant_param_bias_i(quant_param_bias),
         .quant_param_requant_multiplier_i(quant_param_requant_multiplier),

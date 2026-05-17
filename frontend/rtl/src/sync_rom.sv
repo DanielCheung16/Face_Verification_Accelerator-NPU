@@ -11,6 +11,7 @@ module sync_rom #(
     parameter int DATA_W = 32,
     parameter int DEPTH  = 2,
     parameter int ADDR_W = (DEPTH <= 1) ? 1 : $clog2(DEPTH),
+    parameter string INIT_FILE = "",
 
     parameter logic [DATA_W-1:0] INIT_0 = '0,
     parameter logic [DATA_W-1:0] INIT_1 = '0,
@@ -42,6 +43,10 @@ module sync_rom #(
         if (DEPTH > 5) mem[5] = INIT_5;
         if (DEPTH > 6) mem[6] = INIT_6;
         if (DEPTH > 7) mem[7] = INIT_7;
+
+        if (INIT_FILE != "") begin
+            $readmemh(INIT_FILE, mem);
+        end
     end
 
     always_ff @(posedge clk) begin
