@@ -9,6 +9,7 @@ module small_output_process #(
     parameter int DATA_W = 8,
     parameter int MUL_W = 32,
     parameter int SHIFT_W = 6,
+    parameter int BIAS_SHIFT = 16,
 
     localparam int MODE_W = 3,
     localparam int VALUE_W = (BIAS_W > ACC_W) ? BIAS_W : ACC_W,
@@ -44,8 +45,9 @@ module small_output_process #(
     input  logic [SHIFT_W-1:0]       residual_shift_i,
     input  logic signed [BIAS_W-1:0] residual_zero_point_i,
 
-    // Requant: round_shift(value * requant_multiplier_i, requant_shift_i)
-    //          + output_zero_point_i
+    // Requant after bias/PReLU:
+    //   round_shift(value * requant_multiplier_i,
+    //               requant_shift_i + BIAS_SHIFT) + output_zero_point_i
     input  logic signed [MUL_W-1:0] requant_multiplier_i,
     input  logic [SHIFT_W-1:0]      requant_shift_i,
     input  logic signed [ACC_W-1:0] output_zero_point_i,
@@ -112,7 +114,10 @@ module small_output_process #(
 
     logic signed [VALUE_W-1:0] main_value_w;
     logic signed [VALUE_W-1:0] residual_centered_w;
+    logic [SHIFT_W-1:0] requant_total_shift_w;
+    logic quant_mode_w;
     logic signed [VALUE_W-1:0] residual_shifted_w;
+    logic signed [VALUE_W-1:0] residual_work_w;
     logic signed [VALUE_W-1:0] prelu_shifted_w;
     logic signed [VALUE_W-1:0] requant_shifted_w;
     logic signed [VALUE_W-1:0] final_value_w;
@@ -141,8 +146,16 @@ module small_output_process #(
     endfunction
 
     assign residual_active_w = residual_en_i || (mode_i == MODE_RESIDUAL_REQUANT);
-    assign main_value_w = VALUE_W'(psum_i) + VALUE_W'(bias_i);
+    assign quant_mode_w = (mode_i == MODE_REQUANT) ||
+                          (mode_i == MODE_PRELU_REQUANT) ||
+                          (mode_i == MODE_RESIDUAL_REQUANT);
+    // Match qface C model: accumulator is promoted into the QBIAS_SHIFT
+    // domain before adding folded bias. Bypass mode keeps the raw psum path for
+    // bring-up tests and raw-accumulator debug.
+    assign main_value_w = quant_mode_w ? ((VALUE_W'(psum_i) <<< BIAS_SHIFT) + VALUE_W'(bias_i)) :
+                                         VALUE_W'(psum_i);
     assign residual_centered_w = VALUE_W'(residual_i) + VALUE_W'(residual_zero_point_i);
+    assign requant_total_shift_w = requant_shift_i + SHIFT_W'(BIAS_SHIFT);
 
     // Match the C reference round_shift_i64(): (value + (1 << (shift-1))) >> shift.
     assign residual_round_offset_w = (s0_residual_shift == '0) ? '0 :
@@ -155,6 +168,11 @@ module small_output_process #(
     assign prelu_product_rounded_w = s2_prelu_product + prelu_round_offset_w;
     assign requant_product_rounded_w = s4_requant_product + requant_round_offset_w;
     assign residual_shifted_w = VALUE_W'(residual_product_rounded_w >>> s0_residual_shift);
+    assign residual_work_w = ((s0_mode == MODE_REQUANT) ||
+                              (s0_mode == MODE_PRELU_REQUANT) ||
+                              (s0_mode == MODE_RESIDUAL_REQUANT)) ?
+                             (residual_shifted_w <<< BIAS_SHIFT) :
+                             residual_shifted_w;
     assign prelu_shifted_w = VALUE_W'(prelu_product_rounded_w >>> s2_prelu_shift);
     assign requant_shifted_w = VALUE_W'(requant_product_rounded_w >>> s4_requant_shift);
     assign final_value_w = requant_shifted_w + s4_output_zero_point;
@@ -221,7 +239,7 @@ module small_output_process #(
             s0_residual_shift <= residual_shift_i;
             s0_residual_active <= residual_active_w;
             s0_mode <= mode_i;
-            s0_requant_shift <= requant_shift_i;
+            s0_requant_shift <= requant_total_shift_w;
             s0_prelu_shift <= prelu_shift_i;
             s0_output_zero_point <= VALUE_W'(output_zero_point_i);
             s0_requant_multiplier <= requant_multiplier_i;
@@ -230,7 +248,7 @@ module small_output_process #(
 
             // Stage 1: finish residual scale and add it into psum+bias.
             if (s0_residual_active) begin
-                s1_value <= s0_main_value + residual_shifted_w;
+                s1_value <= s0_main_value + residual_work_w;
             end else begin
                 s1_value <= s0_main_value;
             end

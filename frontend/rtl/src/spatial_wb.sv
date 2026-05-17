@@ -12,6 +12,7 @@ module spatial_wb #(
     parameter int ELEM_CNT_W = 32,
     parameter int MUL_W = 32,
     parameter int SHIFT_W = 6,
+    parameter int BIAS_SHIFT = 16,
 
     localparam int MASK_W = GB_DATA_W / DATA_W,
     localparam int MODE_W = 3
@@ -77,7 +78,8 @@ module spatial_wb #(
         .BIAS_W(BIAS_W),
         .DATA_W(DATA_W),
         .MUL_W(MUL_W),
-        .SHIFT_W(SHIFT_W)
+        .SHIFT_W(SHIFT_W),
+        .BIAS_SHIFT(BIAS_SHIFT)
     ) u_small_output_process (
         .clk(clk),
         .rst_n(rst_n),

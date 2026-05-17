@@ -66,16 +66,20 @@ module layer_config_mem #(
     //   1: layer 0 only, conv1x1 28x28 128->64, requant
     //   2: layer 1 only, conv1x1 28x28 64->128, PReLU + requant
     //   3: layer 0 only, conv1x1 28x28 128->64, residual + requant
+    //   4: layer 0 only, dwconv3x3 56x56x64, PReLU + requant
     localparam int IMG_28_M = 28 * 28;
+    localparam int IMG_56_M = 56 * 56;
     localparam int L0_K = 128;
     localparam int L0_N = 64;
     localparam int L1_K = 64;
     localparam int L1_N = 128;
+    localparam int DW0_N = 64;
     localparam int L0_WGT_WORDS = L0_K * ((L0_N + GB_LANES - 1) / GB_LANES);
 
     localparam logic [GB_ADDR_W-1:0] AO_IN_BASE  = '0;
     localparam logic [GB_ADDR_W-1:0] AO_OUT_BASE = {1'b1, {(GB_ADDR_W-1){1'b0}}};
     localparam logic [GB_ADDR_W-1:0] AO_RES_BASE = GB_ADDR_W'(8192);
+    localparam logic [GB_ADDR_W-1:0] SPATIAL_OUT_BASE = GB_ADDR_W'(300000);
     localparam logic [GB_ADDR_W-1:0] WGT0_BASE   = '0;
     localparam logic [GB_ADDR_W-1:0] WGT1_BASE   = GB_ADDR_W'(L0_WGT_WORDS);
 
@@ -83,6 +87,7 @@ module layer_config_mem #(
     localparam logic [PARAM_ADDR_W-1:0] L1_PARAM_BASE = PARAM_ADDR_W'(64);
     localparam logic signed [OUT_W-1:0] L0_OUTPUT_ZERO_POINT = -$signed(OUT_W'(18));
     localparam logic signed [OUT_W-1:0] L1_OUTPUT_ZERO_POINT = -$signed(OUT_W'(77));
+    localparam logic signed [OUT_W-1:0] DW0_OUTPUT_ZERO_POINT = -$signed(OUT_W'(57));
 
     typedef struct packed {
         logic                    layer_valid;
@@ -136,7 +141,24 @@ module layer_config_mem #(
             cfg.wgt_base_addr = WGT0_BASE;
             cfg.out_base_addr = AO_OUT_BASE;
 
-            if (CONFIG_PROFILE == 2) begin
+            if (CONFIG_PROFILE == 4) begin
+                cfg.layer_type = LY_DWCONV3X3;
+                cfg.k_size = '0;
+                cfg.m_size = DIM_W'(IMG_56_M);
+                cfg.n_size = DIM_W'(DW0_N);
+                cfg.out_base_addr = SPATIAL_OUT_BASE;
+                cfg.mode = MODE_PRELU;
+                cfg.output_zero_point = DW0_OUTPUT_ZERO_POINT;
+                cfg.ifmap_size_code = 3'd3; // 56x56
+                cfg.num_filter_code = 2'd0; // 64 channels
+                cfg.stride = 1'b0;          // stride 1
+                cfg.pad = 1'b1;             // same padding
+                cfg.bias_base = L0_PARAM_BASE;
+                cfg.requant_mult_base = L0_PARAM_BASE;
+                cfg.requant_shift_base = L0_PARAM_BASE;
+                cfg.prelu_mult_base = L0_PARAM_BASE;
+                cfg.prelu_shift_base = L0_PARAM_BASE;
+            end else if (CONFIG_PROFILE == 2) begin
                 cfg.k_size = K_SIZE_W'(L1_K);
                 cfg.n_size = DIM_W'(L1_N);
                 cfg.mode = MODE_PRELU;

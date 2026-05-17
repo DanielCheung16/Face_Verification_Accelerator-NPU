@@ -26,6 +26,14 @@ module tb_spatial_top_c_ref;
     localparam string AO_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_ao_init.txt";
     localparam string WGT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_wgt_init.txt";
     localparam string EXPECTED_FILE = "gold_models/qface_c/generated/spatial_top_dw_expected.txt";
+    localparam string BIAS_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_bias.hex";
+    localparam string REQUANT_MULT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_requant_mult.hex";
+    localparam string REQUANT_SHIFT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_requant_shift.hex";
+    localparam string PRELU_MULT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_prelu_mult.hex";
+    localparam string PRELU_SHIFT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_prelu_shift.hex";
+    localparam string RESIDUAL_MULT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_residual_mult.hex";
+    localparam string RESIDUAL_SHIFT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_residual_shift.hex";
+    localparam string RESIDUAL_ZERO_POINT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_residual_zero_point.hex";
 
     logic clk;
     logic rst_n;
@@ -150,15 +158,23 @@ module tb_spatial_top_c_ref;
         .done_o(done_o)
     );
 
-    // Small parameter memory used by this bring-up TB. Bypass mode only needs
-    // rd_valid and zero bias, but using quant_param_mem keeps the formal path.
+    // Parameter memory loaded from the C golden dump. The scheduler reads one
+    // channel row per spatial psum and aligns the ROM latency before postprocess.
     quant_param_mem #(
         .COMMON_PARAM_DEPTH(PARAM_DEPTH),
         .PRELU_PARAM_DEPTH(PARAM_DEPTH),
         .RESIDUAL_PARAM_DEPTH(PARAM_DEPTH),
         .COMMON_PARAM_ADDR_W(PARAM_ADDR_W),
         .PRELU_PARAM_ADDR_W(PARAM_ADDR_W),
-        .RESIDUAL_PARAM_ADDR_W(PARAM_ADDR_W)
+        .RESIDUAL_PARAM_ADDR_W(PARAM_ADDR_W),
+        .BIAS_INIT_FILE(BIAS_INIT_FILE),
+        .REQUANT_MULT_INIT_FILE(REQUANT_MULT_INIT_FILE),
+        .REQUANT_SHIFT_INIT_FILE(REQUANT_SHIFT_INIT_FILE),
+        .PRELU_MULT_INIT_FILE(PRELU_MULT_INIT_FILE),
+        .PRELU_SHIFT_INIT_FILE(PRELU_SHIFT_INIT_FILE),
+        .RESIDUAL_MULT_INIT_FILE(RESIDUAL_MULT_INIT_FILE),
+        .RESIDUAL_SHIFT_INIT_FILE(RESIDUAL_SHIFT_INIT_FILE),
+        .RESIDUAL_ZERO_POINT_INIT_FILE(RESIDUAL_ZERO_POINT_INIT_FILE)
     ) u_quant_param_mem (
         .clk(clk),
         .rst_n(rst_n),
@@ -231,10 +247,10 @@ module tb_spatial_top_c_ref;
         stride_i = 1'b0;
         pad_i = 1'b1;
         current_num_filter_i = C;
-        post_mode_i = 3'd0;             // Current spatial_top C-ref path: bypass saturate.
+        post_mode_i = 3'd2;             // qface op1: PReLU + requant.
         residual_en_i = 1'b0;
         residual_i = '0;
-        output_zero_point_i = '0;
+        output_zero_point_i = -32'sd57;
 
         for (int addr = 0; addr < MEM_DEPTH; addr++) begin
             ao_mem[addr] = '0;

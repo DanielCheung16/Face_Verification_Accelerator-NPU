@@ -5,6 +5,7 @@ module tb_small_output_process;
     parameter int BIAS_W = 64;
     parameter int DATA_W = 8;
     parameter int HALF_CYCLE_TIME = 5;
+    parameter int BIAS_SHIFT = 16;
 
     localparam logic [2:0] MODE_BYPASS = 3'd0;
     localparam logic [2:0] MODE_REQUANT = 3'd1;
@@ -62,17 +63,17 @@ module tb_small_output_process;
         .valid_o(valid_o)
     );
 
-    function automatic int signed round_shift(input longint signed value, input int shift);
+    function automatic longint signed round_shift(input longint signed value, input int shift);
         begin
             if (shift == 0) begin
-                round_shift = int'(value);
+                round_shift = value;
             end else begin
-                round_shift = int'((value + (64'sd1 <<< (shift - 1))) >>> shift);
+                round_shift = (value + (64'sd1 <<< (shift - 1))) >>> shift;
             end
         end
     endfunction
 
-    function automatic int signed sat8(input int signed value);
+    function automatic int signed sat8(input longint signed value);
         begin
             if (value > 127) begin
                 sat8 = 127;
@@ -153,15 +154,19 @@ module tb_small_output_process;
 
         drive_one(MODE_BYPASS, -200, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, -128);
         drive_one(MODE_REQUANT, 100, 0, 0, 1, 0, 0, 3, 1, -4, 1, 0,
-                  sat8(round_shift(100 * 3, 1) - 4));
+                  sat8(round_shift(((64'sd100 <<< BIAS_SHIFT) * 3), 1 + BIAS_SHIFT) - 4));
         drive_one(MODE_REQUANT, 100, 0, -20, 1, 0, 0, 3, 1, -4, 1, 0,
-                  sat8(round_shift((100 - 20) * 3, 1) - 4));
+                  sat8(round_shift((((64'sd100 <<< BIAS_SHIFT) - 20) * 3), 1 + BIAS_SHIFT) - 4));
         drive_one(MODE_PRELU_REQUANT, -100, 0, 0, 1, 0, 0, 2, 1, 1, 1, 1,
-                  sat8(round_shift(round_shift(-100 * 1, 1) * 2, 1) + 1));
+                  sat8(round_shift(round_shift(((-64'sd100 <<< BIAS_SHIFT) * 1), 1) * 2,
+                                   1 + BIAS_SHIFT) + 1));
         drive_one(MODE_RESIDUAL_REQUANT, 20, 12, 0, 1, 0, 0, 5, 2, -3, 1, 0,
-                  sat8(round_shift((20 + 12) * 5, 2) - 3));
+                  sat8(round_shift((((64'sd20 + 12) <<< BIAS_SHIFT) * 5),
+                                   2 + BIAS_SHIFT) - 3));
         drive_one(MODE_RESIDUAL_REQUANT, 20, 12, 0, 3, 1, -2, 5, 2, -3, 1, 0,
-                  sat8(round_shift((20 + round_shift((12 - 2) * 3, 1)) * 5, 2) - 3));
+                  sat8(round_shift(((64'sd20 <<< BIAS_SHIFT) +
+                                    (round_shift((64'sd12 - 2) * 3, 1) <<< BIAS_SHIFT)) * 5,
+                                   2 + BIAS_SHIFT) - 3));
 
         wait (out_cnt == 6);
         repeat (2) @(posedge clk);

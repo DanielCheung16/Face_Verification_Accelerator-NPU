@@ -181,6 +181,7 @@ module top #(
     logic [SPATIAL_FILTER_CNT_W-1:0] spatial_current_num_filter;
     logic signed [ACC_W-1:0] spatial_residual_stub;
     logic signed [ACC_W-1:0] spatial_output_zero_point;
+    logic [2:0] spatial_post_mode;
 
     logic                     ao_rd_en;
     logic [AO_ADDR_W-1:0]     ao_rd_addr;
@@ -197,6 +198,18 @@ module top #(
     assign spatial_output_zero_point = ACC_W'($signed(output_zero_point));
     assign conv_quant_active_w = dev_start[CONV1X1_DEV] || dev_busy[CONV1X1_DEV];
     assign spatial_quant_active_w = dev_start[SPATIAL_DEV] || dev_busy[SPATIAL_DEV];
+
+    // layer_config_mem uses the compact postprocess enum shared with conv1x1.
+    // The spatial stream postprocess reserves 3'd1/2/3 for requant/PReLU/residual
+    // modes, so decode it locally at the spatial boundary.
+    always_comb begin
+        unique case (mode)
+            2'd0: spatial_post_mode = 3'd1; // MODE_REQUANT
+            2'd1: spatial_post_mode = 3'd2; // MODE_PRELU_REQUANT
+            2'd2: spatial_post_mode = 3'd3; // MODE_RESIDUAL_REQUANT
+            default: spatial_post_mode = 3'd0;
+        endcase
+    end
 
     // quant_param_mem is shared globally. The switcher only starts one device
     // at a time, so this decode gives the active device ownership of all banks.
@@ -552,7 +565,7 @@ module top #(
         .stride_i(stride),
         .pad_i(pad),
         .current_num_filter_i(spatial_current_num_filter),
-        .post_mode_i({1'b0, mode}),
+        .post_mode_i(spatial_post_mode),
         .residual_en_i(residual_en),
         .residual_i(spatial_residual_stub),
         .output_zero_point_i(spatial_output_zero_point),

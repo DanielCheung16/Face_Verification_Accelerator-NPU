@@ -12,6 +12,45 @@
 #define OUT_BASE 300000
 #define LANES 16
 
+static void dump_hex64(const char *path, const int64_t *data, int count)
+{
+    FILE *fp = fopen(path, "w");
+    if (!fp) {
+        perror(path);
+        exit(1);
+    }
+    for (int i = 0; i < count; i++) {
+        fprintf(fp, "%016llx\n", (unsigned long long)(uint64_t)data[i]);
+    }
+    fclose(fp);
+}
+
+static void dump_hex32(const char *path, const int32_t *data, int count)
+{
+    FILE *fp = fopen(path, "w");
+    if (!fp) {
+        perror(path);
+        exit(1);
+    }
+    for (int i = 0; i < count; i++) {
+        fprintf(fp, "%08x\n", (unsigned int)(uint32_t)data[i]);
+    }
+    fclose(fp);
+}
+
+static void dump_hex6_from_int(const char *path, const int *data, int count)
+{
+    FILE *fp = fopen(path, "w");
+    if (!fp) {
+        perror(path);
+        exit(1);
+    }
+    for (int i = 0; i < count; i++) {
+        fprintf(fp, "%02x\n", data[i] & 0x3f);
+    }
+    fclose(fp);
+}
+
 static int64_t round_shift_i64(int64_t value, int shift)
 {
     if (shift == 0) {
@@ -135,6 +174,25 @@ static int64_t dw_raw_acc(const qf_op_t *op, const int8_t *in, int oh, int ow, i
     return acc;
 }
 
+static int8_t dw_quant_value(const qf_op_t *op, const int8_t *act, int x, int y, int ch)
+{
+    const int64_t *bias = qf_bias + op->bias_off;
+    const int32_t *mult = qf_mult + op->param_off;
+    const int32_t *prelu_mult = qf_prelu_mult + op->param_off;
+    const int *shift = qf_shift + op->param_off;
+    const int *prelu_shift = qf_prelu_shift + op->param_off;
+
+    int64_t acc = dw_raw_acc(op, act, x, y, ch);
+    int64_t work = (acc << QF_BIAS_SHIFT) + bias[ch];
+    if (op->mode == QF_MODE_PRELU && work < 0) {
+        work = round_shift_i64(work * (int64_t)prelu_mult[ch], prelu_shift[ch]);
+    }
+
+    return clamp_i8(round_shift_i64(work * (int64_t)mult[ch],
+                                    shift[ch] + QF_BIAS_SHIFT) +
+                    op->out_zero_point_add);
+}
+
 static void dump_activation_words(const char *path, const qf_op_t *op, const int8_t *act)
 {
     FILE *fp = fopen(path, "w");
@@ -194,13 +252,32 @@ static void dump_expected_words(const char *path, const qf_op_t *op, const int8_
                 int elem = (x * out_w + y) * op->out_c + tile;
                 int addr = OUT_BASE + elem;
                 for (int lane = 0; lane < LANES; lane++) {
-                    lanes[lane] = clamp_i8(dw_raw_acc(op, act, x, y, tile + lane));
+                    lanes[lane] = dw_quant_value(op, act, x, y, tile + lane);
                 }
                 print_word(fp, addr, lanes, LANES);
             }
         }
     }
     fclose(fp);
+}
+
+static void dump_quant_params(const qf_op_t *op)
+{
+    static const int64_t zero64[1] = {0};
+    static const int32_t one32[1] = {1};
+    static const int zero_shift[1] = {0};
+
+    dump_hex64("generated/spatial_top_dw_bias.hex", qf_bias + op->bias_off, op->out_c);
+    dump_hex32("generated/spatial_top_dw_requant_mult.hex", qf_mult + op->param_off, op->out_c);
+    dump_hex6_from_int("generated/spatial_top_dw_requant_shift.hex", qf_shift + op->param_off, op->out_c);
+    dump_hex32("generated/spatial_top_dw_prelu_mult.hex", qf_prelu_mult + op->param_off, op->out_c);
+    dump_hex6_from_int("generated/spatial_top_dw_prelu_shift.hex", qf_prelu_shift + op->param_off, op->out_c);
+
+    // This op is PReLU-only; keep residual banks initialized to harmless values
+    // so the formal quant_param_mem interface remains fully connected.
+    dump_hex32("generated/spatial_top_dw_residual_mult.hex", one32, 1);
+    dump_hex6_from_int("generated/spatial_top_dw_residual_shift.hex", zero_shift, 1);
+    dump_hex64("generated/spatial_top_dw_residual_zero_point.hex", zero64, 1);
 }
 
 int main(void)
@@ -222,6 +299,7 @@ int main(void)
     dump_activation_words("generated/spatial_top_dw_ao_init.txt", op, op1_input);
     dump_weight_words("generated/spatial_top_dw_wgt_init.txt", op);
     dump_expected_words("generated/spatial_top_dw_expected.txt", op, op1_input);
+    dump_quant_params(op);
 
     printf("dumped op=%d in=%dx%dx%d out=%dx%dx%d words=%d\n",
            DUMP_OP_INDEX, op->in_h, op->in_w, op->in_c,
