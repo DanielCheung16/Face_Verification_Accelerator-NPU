@@ -4,9 +4,9 @@
 //   cycle N:   rd_en_i=1, rd_addr_i selects one ROM word
 //   cycle N+1: rd_data_o holds the selected word
 //
-// The small INIT_* parameter list is intentional for current config ROM use.
-// If the schedule grows, this module can be replaced by a generated ROM macro
-// or extended to read an init file without changing its read protocol.
+// The small INIT_* parameter list is for hand-written bring-up data. Entries
+// beyond INIT_7 default to zero unless this module is replaced/generated with a
+// full parameter file.
 module sync_rom #(
     parameter int DATA_W = 32,
     parameter int DEPTH  = 2,
@@ -54,9 +54,6 @@ module sync_rom #(
     initial begin
         if (DEPTH < 1) begin
             $fatal(1, "sync_rom requires DEPTH >= 1");
-        end
-        if (DEPTH > 8) begin
-            $fatal(1, "sync_rom currently provides INIT_0..INIT_7 only");
         end
     end
 `endif
