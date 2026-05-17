@@ -390,9 +390,13 @@ static void dump_sequence(const char *dir, int profile)
         {17, -1, AO_BASE2, WGT_BASE2, AO_BASE3, 0},
         {18, 19, AO_BASE3, WGT_BASE3, AO_BASE4, AO_BASE1},
     };
-    const hw_layer_t *layers = profile == 6 ? seq1 : seq0;
-    int n_layers = 4;
-    int start_op = profile == 6 ? 13 : 4;
+    static const hw_layer_t seq2[] = {
+        {3, -1, AO_BASE0, WGT_BASE0, AO_BASE3, 0},
+        {4, -1, AO_BASE3, WGT_BASE1, AO_BASE4, 0},
+    };
+    const hw_layer_t *layers = profile == 8 ? seq2 : (profile == 6 ? seq1 : seq0);
+    int n_layers = profile == 8 ? 2 : 4;
+    int start_op = profile == 8 ? 3 : (profile == 6 ? 13 : 4);
     int save_for_input = profile == 6 ? 10 : -1;
     word128_t *ao = calloc(AO_DEPTH, sizeof(word128_t));
     word128_t *wgt = calloc(WGT_DEPTH, sizeof(word128_t));
@@ -473,8 +477,8 @@ int main(int argc, char **argv)
 {
     const char *dir = argc > 1 ? argv[1] : "generated/system_2_2_seq0";
     int profile = argc > 2 ? atoi(argv[2]) : 5;
-    if (profile != 5 && profile != 6) {
-        fprintf(stderr, "profile must be 5 or 6\n");
+    if (profile != 5 && profile != 6 && profile != 8) {
+        fprintf(stderr, "profile must be 5, 6, or 8\n");
         return 1;
     }
     dump_sequence(dir, profile);

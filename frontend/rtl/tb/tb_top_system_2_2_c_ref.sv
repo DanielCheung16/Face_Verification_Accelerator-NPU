@@ -22,9 +22,11 @@ module tb_top_system_2_2_c_ref;
     localparam int OUTPUT_WORDS = (OUT_SIZE * OUT_SIZE * OUT_C) / MASK_W;
     localparam int OUT_BASE = 40000;
 
-    localparam string GOLD_DIR = (PROFILE == 6) ?
-        "gold_models/qface_c/generated/system_2_2_seq1" :
-        "gold_models/qface_c/generated/system_2_2_seq0";
+    localparam string GOLD_DIR = (PROFILE == 8) ?
+        "gold_models/qface_c/generated/system_2_4_stride2_dw_conv1x1" :
+        ((PROFILE == 6) ?
+            "gold_models/qface_c/generated/system_2_2_seq1" :
+            "gold_models/qface_c/generated/system_2_2_seq0");
     localparam string AO_INIT_FILE = {GOLD_DIR, "/system_2_2_ao_init.hex"};
     localparam string WGT_INIT_FILE = {GOLD_DIR, "/system_2_2_wgt_init.hex"};
     localparam string EXPECTED_FILE = {GOLD_DIR, "/system_2_2_golden.hex"};
@@ -129,7 +131,7 @@ module tb_top_system_2_2_c_ref;
                 got = dut.u_ao_gb.GEN_SDP.u_sram.mem[addr];
                 exp = expected[addr];
                 check(got === exp,
-                      $sformatf("system_2_2 profile=%0d word=%0d addr=%0d expected=0x%032h got=0x%032h",
+                      $sformatf("system profile=%0d word=%0d addr=%0d expected=0x%032h got=0x%032h",
                                 PROFILE, word, addr, exp, got));
             end
         end
@@ -169,9 +171,9 @@ module tb_top_system_2_2_c_ref;
         @(posedge clk);
 
         if (fail_cnt != 0) begin
-            $fatal(1, "[TB] system verification 2.2 profile=%0d FAILED fail=%0d", PROFILE, fail_cnt);
+            $fatal(1, "[TB] system verification profile=%0d FAILED fail=%0d", PROFILE, fail_cnt);
         end
-        $display("[TB] system verification 2.2 profile=%0d PASSED words=%0d", PROFILE, OUTPUT_WORDS);
+        $display("[TB] system verification profile=%0d PASSED words=%0d", PROFILE, OUTPUT_WORDS);
         $finish;
     end
 
