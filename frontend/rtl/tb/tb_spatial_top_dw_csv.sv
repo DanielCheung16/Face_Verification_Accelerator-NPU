@@ -47,9 +47,15 @@ module tb_spatial_top_dw_csv;
     logic residual_en_i;
     logic signed [ACC_W-1:0] residual_i;
     logic signed [ACC_W-1:0] output_zero_point_i;
-    logic quant_param_rd_en_o;
-    logic [PARAM_ADDR_W-1:0] quant_param_rd_addr_o;
-    logic quant_param_rd_valid_i;
+    logic quant_common_rd_en_o;
+    logic [PARAM_ADDR_W-1:0] quant_common_rd_addr_o;
+    logic quant_common_rd_valid_i;
+    logic quant_prelu_rd_en_o;
+    logic [PARAM_ADDR_W-1:0] quant_prelu_rd_addr_o;
+    logic quant_prelu_rd_valid_i;
+    logic quant_residual_rd_en_o;
+    logic [PARAM_ADDR_W-1:0] quant_residual_rd_addr_o;
+    logic quant_residual_rd_valid_i;
     logic signed [63:0] quant_param_bias_i;
     logic signed [31:0] quant_param_requant_multiplier_i;
     logic [5:0] quant_param_requant_shift_i;
@@ -117,9 +123,15 @@ module tb_spatial_top_dw_csv;
         .residual_en_i(residual_en_i),
         .residual_i(residual_i),
         .output_zero_point_i(output_zero_point_i),
-        .quant_param_rd_en_o(quant_param_rd_en_o),
-        .quant_param_rd_addr_o(quant_param_rd_addr_o),
-        .quant_param_rd_valid_i(quant_param_rd_valid_i),
+        .quant_common_rd_en_o(quant_common_rd_en_o),
+        .quant_common_rd_addr_o(quant_common_rd_addr_o),
+        .quant_common_rd_valid_i(quant_common_rd_valid_i),
+        .quant_prelu_rd_en_o(quant_prelu_rd_en_o),
+        .quant_prelu_rd_addr_o(quant_prelu_rd_addr_o),
+        .quant_prelu_rd_valid_i(quant_prelu_rd_valid_i),
+        .quant_residual_rd_en_o(quant_residual_rd_en_o),
+        .quant_residual_rd_addr_o(quant_residual_rd_addr_o),
+        .quant_residual_rd_valid_i(quant_residual_rd_valid_i),
         .quant_param_bias_i(quant_param_bias_i),
         .quant_param_requant_multiplier_i(quant_param_requant_multiplier_i),
         .quant_param_requant_shift_i(quant_param_requant_shift_i),
@@ -145,14 +157,24 @@ module tb_spatial_top_dw_csv;
     // Keep this top-level regression on the same per-channel parameter path as
     // the formal design, even though the current check uses bypass mode.
     quant_param_mem #(
-        .PARAM_DEPTH(PARAM_DEPTH),
-        .PARAM_ADDR_W(PARAM_ADDR_W)
+        .COMMON_PARAM_DEPTH(PARAM_DEPTH),
+        .PRELU_PARAM_DEPTH(PARAM_DEPTH),
+        .RESIDUAL_PARAM_DEPTH(PARAM_DEPTH),
+        .COMMON_PARAM_ADDR_W(PARAM_ADDR_W),
+        .PRELU_PARAM_ADDR_W(PARAM_ADDR_W),
+        .RESIDUAL_PARAM_ADDR_W(PARAM_ADDR_W)
     ) u_quant_param_mem (
         .clk(clk),
         .rst_n(rst_n),
-        .rd_en_i(quant_param_rd_en_o),
-        .rd_addr_i(quant_param_rd_addr_o),
-        .rd_valid_o(quant_param_rd_valid_i),
+        .common_rd_en_i(quant_common_rd_en_o),
+        .common_rd_addr_i(quant_common_rd_addr_o),
+        .prelu_rd_en_i(quant_prelu_rd_en_o),
+        .prelu_rd_addr_i(quant_prelu_rd_addr_o),
+        .residual_rd_en_i(quant_residual_rd_en_o),
+        .residual_rd_addr_i(quant_residual_rd_addr_o),
+        .common_rd_valid_o(quant_common_rd_valid_i),
+        .prelu_rd_valid_o(quant_prelu_rd_valid_i),
+        .residual_rd_valid_o(quant_residual_rd_valid_i),
         .bias_o(quant_param_bias_i),
         .requant_multiplier_o(quant_param_requant_multiplier_i),
         .requant_shift_o(quant_param_requant_shift_i),

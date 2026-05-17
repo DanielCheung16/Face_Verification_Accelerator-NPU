@@ -60,11 +60,18 @@ module spatial_top #(
     input  logic signed [ACC_W-1:0] residual_i,
     input  logic signed [ACC_W-1:0] output_zero_point_i,
 
-    // Global quant parameter memory read. spatial_top schedules one channel
-    // parameter row for each valid psum in the HWC output stream.
-    output logic                    quant_param_rd_en_o,
-    output logic [PARAM_ADDR_W-1:0] quant_param_rd_addr_o,
-    input  logic                    quant_param_rd_valid_i,
+    // Global quant parameter memory reads. The scheduler issues one common
+    // read for every psum and only enables PReLU/residual banks when the layer
+    // mode needs them.
+    output logic                    quant_common_rd_en_o,
+    output logic [PARAM_ADDR_W-1:0] quant_common_rd_addr_o,
+    input  logic                    quant_common_rd_valid_i,
+    output logic                    quant_prelu_rd_en_o,
+    output logic [PARAM_ADDR_W-1:0] quant_prelu_rd_addr_o,
+    input  logic                    quant_prelu_rd_valid_i,
+    output logic                    quant_residual_rd_en_o,
+    output logic [PARAM_ADDR_W-1:0] quant_residual_rd_addr_o,
+    input  logic                    quant_residual_rd_valid_i,
     input  logic signed [BIAS_W-1:0] quant_param_bias_i,
     input  logic signed [MUL_W-1:0] quant_param_requant_multiplier_i,
     input  logic [SHIFT_W-1:0]      quant_param_requant_shift_i,
@@ -112,13 +119,6 @@ module spatial_top #(
     logic signed [MUL_W-1:0] post_residual_multiplier;
     logic [SHIFT_W-1:0] post_residual_shift;
     logic signed [BIAS_W-1:0] post_residual_zero_point;
-    logic [PARAM_ADDR_W-1:0] shared_param_base_w;
-
-    // quant_param_mem exposes one shared read address for all parameter ROMs.
-    // Therefore a spatial layer must program aligned bases across every
-    // per-channel parameter field.
-    assign shared_param_base_w = bias_base_i;
-
     spatial3x3_dev #(
         .ADDR_W(GB_ADDR_W),
         .WORD_W(GB_DATA_W),
@@ -166,14 +166,22 @@ module spatial_top #(
         .start_i(start_i),
         .post_mode_i(post_mode_i),
         .output_zero_point_i(output_zero_point_i[OUT_W-1:0]),
-        .param_base_i(shared_param_base_w),
+        .common_param_base_i(bias_base_i),
+        .prelu_param_base_i(prelu_mult_base_i),
+        .residual_param_base_i(residual_mult_base_i),
         .current_num_filter_i(current_num_filter_i),
         .psum_i(psum),
         .valid_i(psum_valid),
         .residual_i(residual_i),
-        .param_rd_en_o(quant_param_rd_en_o),
-        .param_rd_addr_o(quant_param_rd_addr_o),
-        .param_rd_valid_i(quant_param_rd_valid_i),
+        .common_rd_en_o(quant_common_rd_en_o),
+        .common_rd_addr_o(quant_common_rd_addr_o),
+        .common_rd_valid_i(quant_common_rd_valid_i),
+        .prelu_rd_en_o(quant_prelu_rd_en_o),
+        .prelu_rd_addr_o(quant_prelu_rd_addr_o),
+        .prelu_rd_valid_i(quant_prelu_rd_valid_i),
+        .residual_rd_en_o(quant_residual_rd_en_o),
+        .residual_rd_addr_o(quant_residual_rd_addr_o),
+        .residual_rd_valid_i(quant_residual_rd_valid_i),
         .param_bias_i(quant_param_bias_i),
         .param_requant_multiplier_i(quant_param_requant_multiplier_i),
         .param_requant_shift_i(quant_param_requant_shift_i),
@@ -248,14 +256,16 @@ module spatial_top #(
 
     always_ff @(posedge clk) begin
         if (rst_n && start_i) begin
-            if ((requant_mult_base_i !== shared_param_base_w) ||
-                (requant_shift_base_i !== shared_param_base_w) ||
-                (prelu_mult_base_i !== shared_param_base_w) ||
-                (prelu_shift_base_i !== shared_param_base_w) ||
-                (residual_mult_base_i !== shared_param_base_w) ||
-                (residual_shift_base_i !== shared_param_base_w) ||
-                (residual_zero_point_base_i !== shared_param_base_w)) begin
-                $fatal(1, "spatial_top requires aligned quant parameter bases with shared quant_param_mem address");
+            if ((requant_mult_base_i !== bias_base_i) ||
+                (requant_shift_base_i !== bias_base_i)) begin
+                $fatal(1, "spatial_top requires aligned common parameter bases");
+            end
+            if (prelu_shift_base_i !== prelu_mult_base_i) begin
+                $fatal(1, "spatial_top requires aligned PReLU parameter bases");
+            end
+            if ((residual_shift_base_i !== residual_mult_base_i) ||
+                (residual_zero_point_base_i !== residual_mult_base_i)) begin
+                $fatal(1, "spatial_top requires aligned residual parameter bases");
             end
         end
     end

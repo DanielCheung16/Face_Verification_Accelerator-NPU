@@ -15,14 +15,22 @@ module tb_spatial_param_scheduler;
     logic start_i;
     logic [2:0] post_mode_i;
     logic signed [OUT_W-1:0] output_zero_point_i;
-    logic [PARAM_ADDR_W-1:0] param_base_i;
+    logic [PARAM_ADDR_W-1:0] common_param_base_i;
+    logic [PARAM_ADDR_W-1:0] prelu_param_base_i;
+    logic [PARAM_ADDR_W-1:0] residual_param_base_i;
     logic [FILTER_CNT_W-1:0] current_num_filter_i;
     logic signed [ACC_W-1:0] psum_i;
     logic valid_i;
     logic signed [ACC_W-1:0] residual_i;
-    logic param_rd_en_o;
-    logic [PARAM_ADDR_W-1:0] param_rd_addr_o;
-    logic param_rd_valid_i;
+    logic common_rd_en_o;
+    logic [PARAM_ADDR_W-1:0] common_rd_addr_o;
+    logic common_rd_valid_i;
+    logic prelu_rd_en_o;
+    logic [PARAM_ADDR_W-1:0] prelu_rd_addr_o;
+    logic prelu_rd_valid_i;
+    logic residual_rd_en_o;
+    logic [PARAM_ADDR_W-1:0] residual_rd_addr_o;
+    logic residual_rd_valid_i;
     logic signed [BIAS_W-1:0] param_bias_i;
     logic signed [MUL_W-1:0] param_requant_multiplier_i;
     logic [SHIFT_W-1:0] param_requant_shift_i;
@@ -64,14 +72,22 @@ module tb_spatial_param_scheduler;
         .start_i(start_i),
         .post_mode_i(post_mode_i),
         .output_zero_point_i(output_zero_point_i),
-        .param_base_i(param_base_i),
+        .common_param_base_i(common_param_base_i),
+        .prelu_param_base_i(prelu_param_base_i),
+        .residual_param_base_i(residual_param_base_i),
         .current_num_filter_i(current_num_filter_i),
         .psum_i(psum_i),
         .valid_i(valid_i),
         .residual_i(residual_i),
-        .param_rd_en_o(param_rd_en_o),
-        .param_rd_addr_o(param_rd_addr_o),
-        .param_rd_valid_i(param_rd_valid_i),
+        .common_rd_en_o(common_rd_en_o),
+        .common_rd_addr_o(common_rd_addr_o),
+        .common_rd_valid_i(common_rd_valid_i),
+        .prelu_rd_en_o(prelu_rd_en_o),
+        .prelu_rd_addr_o(prelu_rd_addr_o),
+        .prelu_rd_valid_i(prelu_rd_valid_i),
+        .residual_rd_en_o(residual_rd_en_o),
+        .residual_rd_addr_o(residual_rd_addr_o),
+        .residual_rd_valid_i(residual_rd_valid_i),
         .param_bias_i(param_bias_i),
         .param_requant_multiplier_i(param_requant_multiplier_i),
         .param_requant_shift_i(param_requant_shift_i),
@@ -105,7 +121,9 @@ module tb_spatial_param_scheduler;
     // Simple one-cycle-latency parameter memory model.
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            param_rd_valid_i <= 1'b0;
+            common_rd_valid_i <= 1'b0;
+            prelu_rd_valid_i <= 1'b0;
+            residual_rd_valid_i <= 1'b0;
             param_bias_i <= '0;
             param_requant_multiplier_i <= '0;
             param_requant_shift_i <= '0;
@@ -115,15 +133,17 @@ module tb_spatial_param_scheduler;
             param_residual_shift_i <= '0;
             param_residual_zero_point_i <= '0;
         end else begin
-            param_rd_valid_i <= param_rd_en_o;
-            param_bias_i <= 64'sd3000 + param_rd_addr_o;
-            param_requant_multiplier_i <= 32'sd1000 + param_rd_addr_o;
-            param_requant_shift_i <= param_rd_addr_o[5:0];
-            param_prelu_multiplier_i <= 32'sd2000 + param_rd_addr_o;
-            param_prelu_shift_i <= param_rd_addr_o[5:0] + 6'd1;
-            param_residual_multiplier_i <= 32'sd4000 + param_rd_addr_o;
-            param_residual_shift_i <= param_rd_addr_o[5:0] + 6'd2;
-            param_residual_zero_point_i <= 64'sd5000 + param_rd_addr_o;
+            common_rd_valid_i <= common_rd_en_o;
+            prelu_rd_valid_i <= prelu_rd_en_o;
+            residual_rd_valid_i <= residual_rd_en_o;
+            param_bias_i <= 64'sd3000 + common_rd_addr_o;
+            param_requant_multiplier_i <= 32'sd1000 + common_rd_addr_o;
+            param_requant_shift_i <= common_rd_addr_o[5:0];
+            param_prelu_multiplier_i <= 32'sd2000 + prelu_rd_addr_o;
+            param_prelu_shift_i <= prelu_rd_addr_o[5:0] + 6'd1;
+            param_residual_multiplier_i <= 32'sd4000 + residual_rd_addr_o;
+            param_residual_shift_i <= residual_rd_addr_o[5:0] + 6'd2;
+            param_residual_zero_point_i <= 64'sd5000 + residual_rd_addr_o;
         end
     end
 
@@ -133,7 +153,9 @@ module tb_spatial_param_scheduler;
         start_i = 1'b0;
         post_mode_i = 3'd2;
         output_zero_point_i = -8'sd3;
-        param_base_i = 8'd20;
+        common_param_base_i = 8'd20;
+        prelu_param_base_i = 8'd40;
+        residual_param_base_i = 8'd60;
         current_num_filter_i = 4'd4;
         psum_i = '0;
         valid_i = 1'b0;
@@ -150,22 +172,25 @@ module tb_spatial_param_scheduler;
         psum_i = 32'sd10;
         residual_i = 32'sd100;
         valid_i = 1'b1;
-        #1 check(param_rd_en_o && param_rd_addr_o == 8'd20, "ch0 address mismatch");
+        #1 begin
+            check(common_rd_en_o && common_rd_addr_o == 8'd20, "ch0 common address mismatch");
+            check(prelu_rd_en_o && prelu_rd_addr_o == 8'd40, "ch0 prelu address mismatch");
+            check(!residual_rd_en_o, "PReLU mode should not read residual bank");
+        end
 
         @(posedge clk);
         #1 begin
             check(valid_o && psum_o == 32'sd10, "first psum alignment mismatch");
             check(bias_o == 64'sd3020, "first bias mismatch");
             check(requant_multiplier_o == 32'sd1020, "first requant multiplier mismatch");
-            check(prelu_multiplier_o == 32'sd2020, "first prelu multiplier mismatch");
-            check(residual_multiplier_o == 32'sd4020, "first residual multiplier mismatch");
-            check(residual_zero_point_o == 64'sd5020, "first residual zero-point mismatch");
+            check(prelu_multiplier_o == 32'sd2040, "first prelu multiplier mismatch");
         end
 
         @(negedge clk);
         psum_i = 32'sd11;
         residual_i = 32'sd101;
-        #1 check(param_rd_en_o && param_rd_addr_o == 8'd21, "ch1 address mismatch");
+        #1 check(common_rd_en_o && common_rd_addr_o == 8'd21 &&
+                 prelu_rd_en_o && prelu_rd_addr_o == 8'd41, "ch1 address mismatch");
 
         @(posedge clk);
         #1 begin
@@ -176,17 +201,17 @@ module tb_spatial_param_scheduler;
         @(negedge clk);
         psum_i = 32'sd12;
         residual_i = 32'sd102;
-        #1 check(param_rd_en_o && param_rd_addr_o == 8'd22, "ch2 address mismatch");
+        #1 check(common_rd_en_o && common_rd_addr_o == 8'd22, "ch2 common address mismatch");
 
         @(negedge clk);
         psum_i = 32'sd13;
         residual_i = 32'sd103;
-        #1 check(param_rd_en_o && param_rd_addr_o == 8'd23, "ch3 address mismatch");
+        #1 check(common_rd_en_o && common_rd_addr_o == 8'd23, "ch3 common address mismatch");
 
         @(negedge clk);
         psum_i = 32'sd14;
         residual_i = 32'sd104;
-        #1 check(param_rd_en_o && param_rd_addr_o == 8'd20, "wrapped ch0 address mismatch");
+        #1 check(common_rd_en_o && common_rd_addr_o == 8'd20, "wrapped ch0 common address mismatch");
 
         @(negedge clk);
         valid_i = 1'b0;

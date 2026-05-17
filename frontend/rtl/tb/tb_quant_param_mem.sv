@@ -10,9 +10,15 @@ module tb_quant_param_mem;
 
     logic clk;
     logic rst_n;
-    logic rd_en_i;
-    logic [PARAM_ADDR_W-1:0] rd_addr_i;
-    logic rd_valid_o;
+    logic common_rd_en_i;
+    logic [PARAM_ADDR_W-1:0] common_rd_addr_i;
+    logic prelu_rd_en_i;
+    logic [PARAM_ADDR_W-1:0] prelu_rd_addr_i;
+    logic residual_rd_en_i;
+    logic [PARAM_ADDR_W-1:0] residual_rd_addr_i;
+    logic common_rd_valid_o;
+    logic prelu_rd_valid_o;
+    logic residual_rd_valid_o;
     logic signed [BIAS_W-1:0] bias_o;
     logic signed [MULT_W-1:0] requant_multiplier_o;
     logic [SHIFT_W-1:0] requant_shift_o;
@@ -28,8 +34,12 @@ module tb_quant_param_mem;
     always #HALF_CYCLE_TIME clk = ~clk;
 
     quant_param_mem #(
-        .PARAM_DEPTH(PARAM_DEPTH),
-        .PARAM_ADDR_W(PARAM_ADDR_W),
+        .COMMON_PARAM_DEPTH(PARAM_DEPTH),
+        .PRELU_PARAM_DEPTH(PARAM_DEPTH),
+        .RESIDUAL_PARAM_DEPTH(PARAM_DEPTH),
+        .COMMON_PARAM_ADDR_W(PARAM_ADDR_W),
+        .PRELU_PARAM_ADDR_W(PARAM_ADDR_W),
+        .RESIDUAL_PARAM_ADDR_W(PARAM_ADDR_W),
         .BIAS_W(BIAS_W),
         .MULT_W(MULT_W),
         .SHIFT_W(SHIFT_W),
@@ -52,9 +62,15 @@ module tb_quant_param_mem;
     ) u_dut (
         .clk(clk),
         .rst_n(rst_n),
-        .rd_en_i(rd_en_i),
-        .rd_addr_i(rd_addr_i),
-        .rd_valid_o(rd_valid_o),
+        .common_rd_en_i(common_rd_en_i),
+        .common_rd_addr_i(common_rd_addr_i),
+        .prelu_rd_en_i(prelu_rd_en_i),
+        .prelu_rd_addr_i(prelu_rd_addr_i),
+        .residual_rd_en_i(residual_rd_en_i),
+        .residual_rd_addr_i(residual_rd_addr_i),
+        .common_rd_valid_o(common_rd_valid_o),
+        .prelu_rd_valid_o(prelu_rd_valid_o),
+        .residual_rd_valid_o(residual_rd_valid_o),
         .bias_o(bias_o),
         .requant_multiplier_o(requant_multiplier_o),
         .requant_shift_o(requant_shift_o),
@@ -75,23 +91,33 @@ module tb_quant_param_mem;
     task automatic request_addr(input int addr);
         begin
             @(negedge clk);
-            rd_addr_i = PARAM_ADDR_W'(addr);
-            rd_en_i = 1'b1;
+            common_rd_addr_i = PARAM_ADDR_W'(addr);
+            prelu_rd_addr_i = PARAM_ADDR_W'(addr);
+            residual_rd_addr_i = PARAM_ADDR_W'(addr);
+            common_rd_en_i = 1'b1;
+            prelu_rd_en_i = 1'b1;
+            residual_rd_en_i = 1'b1;
         end
     endtask
 
     task automatic drop_read_en;
         begin
             @(negedge clk);
-            rd_en_i = 1'b0;
+            common_rd_en_i = 1'b0;
+            prelu_rd_en_i = 1'b0;
+            residual_rd_en_i = 1'b0;
         end
     endtask
 
     initial begin
         fail_cnt = 0;
         rst_n = 1'b0;
-        rd_en_i = 1'b0;
-        rd_addr_i = '0;
+        common_rd_en_i = 1'b0;
+        prelu_rd_en_i = 1'b0;
+        residual_rd_en_i = 1'b0;
+        common_rd_addr_i = '0;
+        prelu_rd_addr_i = '0;
+        residual_rd_addr_i = '0;
 
         repeat (4) @(posedge clk);
         rst_n = 1'b1;
@@ -100,7 +126,9 @@ module tb_quant_param_mem;
         request_addr(0);
         @(posedge clk);
         #1;
-        check(rd_valid_o === 1'b1, "addr0 valid");
+        check(common_rd_valid_o === 1'b1, "addr0 common valid");
+        check(prelu_rd_valid_o === 1'b1, "addr0 prelu valid");
+        check(residual_rd_valid_o === 1'b1, "addr0 residual valid");
         check(bias_o === 64'sd123, "addr0 bias");
         check(requant_multiplier_o === 32'sd11, "addr0 requant mult");
         check(requant_shift_o === 6'd3, "addr0 requant shift");
@@ -114,7 +142,9 @@ module tb_quant_param_mem;
         request_addr(1);
         @(posedge clk);
         #1;
-        check(rd_valid_o === 1'b1, "addr1 valid");
+        check(common_rd_valid_o === 1'b1, "addr1 common valid");
+        check(prelu_rd_valid_o === 1'b1, "addr1 prelu valid");
+        check(residual_rd_valid_o === 1'b1, "addr1 residual valid");
         check(bias_o === -64'sd77, "addr1 bias");
         check(requant_multiplier_o === -32'sd22, "addr1 requant mult");
         check(requant_shift_o === 6'd4, "addr1 requant shift");
@@ -128,7 +158,9 @@ module tb_quant_param_mem;
         request_addr(8);
         @(posedge clk);
         #1;
-        check(rd_valid_o === 1'b1, "addr8 valid");
+        check(common_rd_valid_o === 1'b1, "addr8 common valid");
+        check(prelu_rd_valid_o === 1'b1, "addr8 prelu valid");
+        check(residual_rd_valid_o === 1'b1, "addr8 residual valid");
         check(bias_o === '0, "addr8 default bias");
         check(requant_multiplier_o === '0, "addr8 default requant mult");
         check(requant_shift_o === '0, "addr8 default requant shift");
@@ -141,7 +173,9 @@ module tb_quant_param_mem;
 
         @(posedge clk);
         #1;
-        check(rd_valid_o === 1'b0, "valid drops after rd_en");
+        check(common_rd_valid_o === 1'b0, "common valid drops after rd_en");
+        check(prelu_rd_valid_o === 1'b0, "prelu valid drops after rd_en");
+        check(residual_rd_valid_o === 1'b0, "residual valid drops after rd_en");
 
         if (fail_cnt != 0) begin
             $fatal(1, "[TB] quant_param_mem FAILED fail=%0d", fail_cnt);

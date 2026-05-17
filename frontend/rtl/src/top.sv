@@ -21,7 +21,12 @@ module top #(
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
     parameter int NUM_DEV = 2,
     parameter int MAX_LAYER = 8,
-    parameter int PARAM_DEPTH = 9792,
+    parameter int COMMON_PARAM_DEPTH = 9792,
+    parameter int PRELU_PARAM_DEPTH = 7552,
+    parameter int RESIDUAL_PARAM_DEPTH = 1280,
+    parameter int PARAM_DEPTH = (COMMON_PARAM_DEPTH > PRELU_PARAM_DEPTH) ?
+                                ((COMMON_PARAM_DEPTH > RESIDUAL_PARAM_DEPTH) ? COMMON_PARAM_DEPTH : RESIDUAL_PARAM_DEPTH) :
+                                ((PRELU_PARAM_DEPTH > RESIDUAL_PARAM_DEPTH) ? PRELU_PARAM_DEPTH : RESIDUAL_PARAM_DEPTH),
     parameter int PARAM_ADDR_W = (PARAM_DEPTH <= 1) ? 1 : $clog2(PARAM_DEPTH),
     parameter int SPATIAL_ACT_DEPTH = 1,
     parameter int SPATIAL_WGT_DEPTH = 32,
@@ -160,9 +165,15 @@ module top #(
     logic [GB_ADDR_W-1:0]     sw_wgt_rd_addr;
     logic [GB_DATA_W-1:0]     sw_wgt_rd_data;
 
-    logic                     quant_param_rd_en;
-    logic [PARAM_ADDR_W-1:0]  quant_param_rd_addr;
-    logic                     quant_param_rd_valid;
+    logic                     quant_common_rd_en;
+    logic [PARAM_ADDR_W-1:0]  quant_common_rd_addr;
+    logic                     quant_common_rd_valid;
+    logic                     quant_prelu_rd_en;
+    logic [PARAM_ADDR_W-1:0]  quant_prelu_rd_addr;
+    logic                     quant_prelu_rd_valid;
+    logic                     quant_residual_rd_en;
+    logic [PARAM_ADDR_W-1:0]  quant_residual_rd_addr;
+    logic                     quant_residual_rd_valid;
     logic signed [BIAS_W-1:0] quant_param_bias;
     logic signed [MULT_W-1:0] quant_param_requant_multiplier;
     logic [SHIFT_W-1:0]       quant_param_requant_shift;
@@ -256,17 +267,27 @@ module top #(
     // Global per-channel postprocess parameter memory. Layer tops schedule
     // channel reads using the base addresses from layer_switcher/layer_config_mem.
     quant_param_mem #(
-        .PARAM_DEPTH(PARAM_DEPTH),
-        .PARAM_ADDR_W(PARAM_ADDR_W),
+        .COMMON_PARAM_DEPTH(COMMON_PARAM_DEPTH),
+        .PRELU_PARAM_DEPTH(PRELU_PARAM_DEPTH),
+        .RESIDUAL_PARAM_DEPTH(RESIDUAL_PARAM_DEPTH),
+        .COMMON_PARAM_ADDR_W(PARAM_ADDR_W),
+        .PRELU_PARAM_ADDR_W(PARAM_ADDR_W),
+        .RESIDUAL_PARAM_ADDR_W(PARAM_ADDR_W),
         .BIAS_W(BIAS_W),
         .MULT_W(MULT_W),
         .SHIFT_W(SHIFT_W)
     ) u_quant_param_mem (
         .clk(aclk),
         .rst_n(aresetn),
-        .rd_en_i(quant_param_rd_en),
-        .rd_addr_i(quant_param_rd_addr),
-        .rd_valid_o(quant_param_rd_valid),
+        .common_rd_en_i(quant_common_rd_en),
+        .common_rd_addr_i(quant_common_rd_addr),
+        .prelu_rd_en_i(quant_prelu_rd_en),
+        .prelu_rd_addr_i(quant_prelu_rd_addr),
+        .residual_rd_en_i(quant_residual_rd_en),
+        .residual_rd_addr_i(quant_residual_rd_addr),
+        .common_rd_valid_o(quant_common_rd_valid),
+        .prelu_rd_valid_o(quant_prelu_rd_valid),
+        .residual_rd_valid_o(quant_residual_rd_valid),
         .bias_o(quant_param_bias),
         .requant_multiplier_o(quant_param_requant_multiplier),
         .requant_shift_o(quant_param_requant_shift),
@@ -492,9 +513,15 @@ module top #(
         .residual_en_i(residual_en),
         .residual_i(spatial_residual_stub),
         .output_zero_point_i(spatial_output_zero_point),
-        .quant_param_rd_en_o(quant_param_rd_en),
-        .quant_param_rd_addr_o(quant_param_rd_addr),
-        .quant_param_rd_valid_i(quant_param_rd_valid),
+        .quant_common_rd_en_o(quant_common_rd_en),
+        .quant_common_rd_addr_o(quant_common_rd_addr),
+        .quant_common_rd_valid_i(quant_common_rd_valid),
+        .quant_prelu_rd_en_o(quant_prelu_rd_en),
+        .quant_prelu_rd_addr_o(quant_prelu_rd_addr),
+        .quant_prelu_rd_valid_i(quant_prelu_rd_valid),
+        .quant_residual_rd_en_o(quant_residual_rd_en),
+        .quant_residual_rd_addr_o(quant_residual_rd_addr),
+        .quant_residual_rd_valid_i(quant_residual_rd_valid),
         .quant_param_bias_i(quant_param_bias),
         .quant_param_requant_multiplier_i(quant_param_requant_multiplier),
         .quant_param_requant_shift_i(quant_param_requant_shift),
