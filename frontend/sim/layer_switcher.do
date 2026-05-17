@@ -4,7 +4,8 @@ vlib work
 vmap work work
 
 vlog -sv -work work "../rtl/src/layer_defs_pkg.sv"
-vlog -sv +incdir+../rtl/src -work work "../rtl/src/layer_config_rom.sv"
+vlog -sv -work work "../rtl/src/sync_rom.sv"
+vlog -sv +incdir+../rtl/src -work work "../rtl/src/layer_config_mem.sv"
 vlog -sv +incdir+../rtl/src -work work "../rtl/src/layer_switcher.sv"
 vlog -sv -work work "../rtl/tb/tb_layer_switcher.sv"
 

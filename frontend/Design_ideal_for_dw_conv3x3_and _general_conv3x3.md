@@ -239,3 +239,37 @@ spatial_wb.sv:
 
 其中small_output_process这里可以做pipeline的用来提高频率。（因为是stream也就只有初始有影响）
 pack_writeback输出的回写端口最终应该与A/O buffer的要求对齐。
+
+# 整体设计
+关于post process要处理的重要问题：
+```
+我们要认真考虑综合、功能正确和时序的问题：
+1.你现在rom的宽度是多少？
+2. 但是你前面有说过：但它不应该把每个 channel 的 multiplier/bias 全部摊平成一堆端口直接输出。否则 fanout 和接口都会爆炸。现在这个结果会不会有这个问题。
+3. Per-channel 参数应该存在哪里？它应该暴露给哪一层？
+4. switcher应该包含哪些职责（主要是它负不负责 Per-channel 参数？还是这个参数完全写在另一个存储然后给到两个post process？
+```
+
+## 关于postprocess的设计手则
+在完成我们这一阶段设计前，请你记住设计守则：
+1. Switcher 管 layer 调度和 SRAM ownership；layer_config_rom 管每层 metadata；quant_param_rom 管 per-channel 参数；各 layer/postprocess 自己根据数据流调度 per-channel 参数。
+2. 调度器放在各top里面，quant_param_mem作为全局共享存储放在各top外面
+3.结构：
+```
+layer_switcher
+  ├─ layer_config_mem
+  ├─ SRAM ownership mux
+  └─ start/done scheduling
+
+conv1x1_top
+  ├─ conv1x1 compute
+  ├─ conv1x1_param_scheduler
+  └─ conv1x1_output_postprocess
+
+spatial_top
+  ├─ spatial3x3_dev
+  ├─ spatial_param_scheduler
+  ├─ small_output_process
+  └─ spatial_pack_writeback
+```
+4. 需要是可综合设计。涉及到rom/ram的部分，一定是要按照能综合成memory的写法（要考虑接口大小，深度，读取数量）
