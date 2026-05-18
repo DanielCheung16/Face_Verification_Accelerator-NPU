@@ -21,6 +21,10 @@
 #define WGT_BASE1 2000
 #define WGT_BASE2 4000
 #define WGT_BASE3 6000
+#define LINEAR_FC_PARAM_BASE 9664
+#define LINEAR_FC_REQUANT_MULT 1
+#define LINEAR_FC_REQUANT_SHIFT 8
+#define LINEAR_FC_OUTPUT_ZERO_POINT 0
 
 typedef struct {
     uint64_t lo;
@@ -191,6 +195,22 @@ static void pack_conv3x3_weight(word128_t *mem, int base, const qf_op_t *op)
     }
 }
 
+static void pack_linear_weight(word128_t *mem, int base, const qf_op_t *op)
+{
+    const int8_t *w = qf_weight + op->weight_off;
+    int tiles = op->out_c / LANES;
+    for (int ic = 0; ic < op->in_c; ic++) {
+        for (int t = 0; t < tiles; t++) {
+            word128_t word = {0, 0};
+            for (int lane = 0; lane < LANES; lane++) {
+                int oc = t * LANES + lane;
+                set_lane(&word, lane, w[oc * op->in_c + ic]);
+            }
+            mem[base + ic * tiles + t] = word;
+        }
+    }
+}
+
 static void run_residual_float(const qf_op_t *op, const int8_t *main_in, const int8_t *res_in, int8_t *out)
 {
     int total = op->in_h * op->in_w * op->in_c;
@@ -326,6 +346,21 @@ static void run_conv_hw(const qf_op_t *op, const qf_op_t *resop, const int8_t *i
     }
 }
 
+static void run_linear_hw_i8(const qf_op_t *op, const int8_t *in, int8_t *out)
+{
+    const int8_t *w = qf_weight + op->weight_off;
+    for (int oc = 0; oc < op->out_c; oc++) {
+        int64_t acc = 0;
+        for (int ic = 0; ic < op->in_c; ic++) {
+            acc += (int64_t)in[ic] * w[oc * op->in_c + ic];
+        }
+        int64_t work = acc << QF_BIAS_SHIFT;
+        out[oc] = clamp_i8(round_shift_i64(work * (int64_t)LINEAR_FC_REQUANT_MULT,
+                                          LINEAR_FC_REQUANT_SHIFT + QF_BIAS_SHIFT) +
+                           LINEAR_FC_OUTPUT_ZERO_POINT);
+    }
+}
+
 static void dump_params(const char *dir, const hw_layer_t *layers, int n_layers)
 {
     int64_t *bias = calloc(9792, sizeof(int64_t));
@@ -350,6 +385,15 @@ static void dump_params(const char *dir, const hw_layer_t *layers, int n_layers)
     }
 
     for (int li = 0; li < n_layers; li++) {
+        if (qf_ops[layers[li].conv_op].type == QF_OP_LINEAR) {
+            const qf_op_t *fc = &qf_ops[layers[li].conv_op];
+            for (int oc = 0; oc < fc->out_c; oc++) {
+                int idx = LINEAR_FC_PARAM_BASE + oc;
+                bias[idx] = 0;
+                mult[idx] = LINEAR_FC_REQUANT_MULT;
+                shift[idx] = LINEAR_FC_REQUANT_SHIFT;
+            }
+        }
         if (layers[li].residual_op >= 0) {
             const qf_op_t *conv = &qf_ops[layers[li].conv_op];
             const qf_op_t *resop = &qf_ops[layers[li].residual_op];
@@ -421,9 +465,14 @@ static void dump_sequence(const char *dir, int profile)
         {0, -1, AO_BASE0, WGT_BASE0, AO_BASE2, 0},
         {1, -1, AO_BASE2, WGT_BASE1, AO_BASE4, 0},
     };
-    const hw_layer_t *layers = profile == 10 ? seq3 : (profile == 8 ? seq2 : (profile == 6 ? seq1 : seq0));
-    int n_layers = (profile == 8 || profile == 10) ? 2 : 4;
-    int start_op = profile == 10 ? 0 : (profile == 8 ? 3 : (profile == 6 ? 13 : 4));
+    static const hw_layer_t seq4[] = {
+        {72, -1, AO_BASE0, WGT_BASE0, AO_BASE3, 0},
+        {73, -1, AO_BASE3, WGT_BASE1, AO_BASE4, 0},
+    };
+    const hw_layer_t *layers = profile == 12 ? seq4 :
+                               (profile == 10 ? seq3 : (profile == 8 ? seq2 : (profile == 6 ? seq1 : seq0)));
+    int n_layers = (profile == 8 || profile == 10 || profile == 12) ? 2 : 4;
+    int start_op = profile == 12 ? 72 : (profile == 10 ? 0 : (profile == 8 ? 3 : (profile == 6 ? 13 : 4)));
     int save_for_input = profile == 6 ? 10 : -1;
     word128_t *ao = calloc(AO_DEPTH, sizeof(word128_t));
     word128_t *wgt = calloc(WGT_DEPTH, sizeof(word128_t));
@@ -474,7 +523,8 @@ static void dump_sequence(const char *dir, int profile)
         int64_t rz[1024] = {0};
         const int8_t *res_in = NULL;
 
-        if (is_dw(op)) pack_dw_weight(wgt, layers[li].wgt_base, op);
+        if (op->type == QF_OP_LINEAR) pack_linear_weight(wgt, layers[li].wgt_base, op);
+        else if (is_dw(op)) pack_dw_weight(wgt, layers[li].wgt_base, op);
         else if (op->kh == 3 && op->kw == 3) pack_conv3x3_weight(wgt, layers[li].wgt_base, op);
         else pack_conv1x1_weight(wgt, layers[li].wgt_base, op);
 
@@ -482,15 +532,25 @@ static void dump_sequence(const char *dir, int profile)
             compute_fused_params(op, resop, fm, fs, rm, rs, rz);
             res_in = (profile == 6 && li == 0) ? seq_res0 : saved_after_l0;
         }
-        run_conv_hw(op, resop, cur, res_in, nxt, resop ? fm : NULL, resop ? fs : NULL, rm, rs, rz);
+        if (op->type == QF_OP_LINEAR) {
+            run_linear_hw_i8(op, cur, nxt);
+        } else {
+            run_conv_hw(op, resop, cur, res_in, nxt, resop ? fm : NULL, resop ? fs : NULL, rm, rs, rz);
+        }
         if (li == 0) {
-            memcpy(saved_after_l0, nxt, (size_t)op_out_h(op) * op_out_w(op) * op->out_c);
+            size_t saved_size = (op->type == QF_OP_LINEAR) ? (size_t)op->out_c :
+                                (size_t)op_out_h(op) * op_out_w(op) * op->out_c;
+            memcpy(saved_after_l0, nxt, saved_size);
         }
         int8_t *tmp = cur; cur = nxt; nxt = tmp;
     }
 
     const qf_op_t *last = &qf_ops[layers[n_layers - 1].conv_op];
-    pack_activation(gold, AO_BASE4, cur, op_out_h(last), op_out_w(last), last->out_c);
+    if (last->type == QF_OP_LINEAR) {
+        pack_activation(gold, AO_BASE4, cur, 1, 1, last->out_c);
+    } else {
+        pack_activation(gold, AO_BASE4, cur, op_out_h(last), op_out_w(last), last->out_c);
+    }
     dump_params(dir, layers, n_layers);
 
     make_path(path, sizeof(path), dir, "system_2_2_ao_init.hex"); write_mem_hex(path, ao, AO_DEPTH);
@@ -505,8 +565,8 @@ int main(int argc, char **argv)
 {
     const char *dir = argc > 1 ? argv[1] : "generated/system_2_2_seq0";
     int profile = argc > 2 ? atoi(argv[2]) : 5;
-    if (profile != 5 && profile != 6 && profile != 8 && profile != 10) {
-        fprintf(stderr, "profile must be 5, 6, 8, or 10\n");
+    if (profile != 5 && profile != 6 && profile != 8 && profile != 10 && profile != 12) {
+        fprintf(stderr, "profile must be 5, 6, 8, 10, or 12\n");
         return 1;
     }
     dump_sequence(dir, profile);

@@ -5,7 +5,8 @@ package layer_defs_pkg;
         LY_DWCONV3X3 = 3'd2,
         LY_POOL      = 3'd3,
         LY_FC        = 3'd4,
-        LY_CONV3X3   = 3'd5
+        LY_CONV3X3   = 3'd5,
+        LY_GDCONV7X7 = 3'd6
     } layer_type_t;
 
     typedef enum logic [1:0] {

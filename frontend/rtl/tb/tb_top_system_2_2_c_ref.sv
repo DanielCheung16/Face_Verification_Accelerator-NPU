@@ -17,18 +17,20 @@ module tb_top_system_2_2_c_ref;
     localparam int AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH);
     localparam int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH);
     localparam int MASK_W = GB_DATA_W / DATA_W;
-    localparam int OUT_SIZE = (PROFILE == 10) ? 56 : 28;
-    localparam int OUT_C = 64;
-    localparam int OUTPUT_WORDS = (OUT_SIZE * OUT_SIZE * OUT_C) / MASK_W;
+    localparam int OUT_SIZE = (PROFILE == 12) ? 1 : ((PROFILE == 10) ? 56 : 28);
+    localparam int OUT_C = (PROFILE == 12) ? 128 : 64;
+    localparam int OUTPUT_WORDS = (OUT_SIZE * OUT_SIZE * OUT_C + MASK_W - 1) / MASK_W;
     localparam int OUT_BASE = 40000;
 
-    localparam string GOLD_DIR = (PROFILE == 10) ?
+    localparam string GOLD_DIR = (PROFILE == 12) ?
+        "gold_models/qface_c/generated/system_4_1_gdconv7x7_fc" :
+        ((PROFILE == 10) ?
         "gold_models/qface_c/generated/system_3_2_conv3x3_dw" :
         ((PROFILE == 8) ?
         "gold_models/qface_c/generated/system_2_4_stride2_dw_conv1x1" :
         ((PROFILE == 6) ?
             "gold_models/qface_c/generated/system_2_2_seq1" :
-            "gold_models/qface_c/generated/system_2_2_seq0"));
+            "gold_models/qface_c/generated/system_2_2_seq0")));
     localparam string AO_INIT_FILE = {GOLD_DIR, "/system_2_2_ao_init.hex"};
     localparam string WGT_INIT_FILE = {GOLD_DIR, "/system_2_2_wgt_init.hex"};
     localparam string EXPECTED_FILE = {GOLD_DIR, "/system_2_2_golden.hex"};
@@ -68,6 +70,7 @@ module tb_top_system_2_2_c_ref;
         .GB_DATA_W(GB_DATA_W),
         .AO_DEPTH(AO_DEPTH),
         .WGT_DEPTH(WGT_DEPTH),
+        .NUM_DEV(3),
         .AO_TRUE_DUAL_PORT(1'b0),
         .WGT_TRUE_DUAL_PORT(1'b0),
         .COMMON_PARAM_DEPTH(PARAM_DEPTH),
