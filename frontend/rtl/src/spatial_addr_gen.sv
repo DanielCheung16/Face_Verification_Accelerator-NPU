@@ -69,9 +69,14 @@ module spatial_addr_gen #(
     logic [ADDR_W-1:0] y2_offset;
     logic [ADDR_W-1:0] three_pixel_stride;
     logic [ADDR_W-1:0] ifmap_size;
+    logic [3:0] cfg_output_words_shift;
+    logic [3:0] cfg_act_words_shift;
     logic [3:0] act_pixel_shift;
+    logic [ADDR_W-1:0] dw_act_tile_offset;
+    logic [ADDR_W-1:0] conv_act_tile_offset;
     logic [ADDR_W-1:0] act_tile_offset;
     logic [ADDR_W-1:0] ic_x9;
+    logic [ADDR_W-1:0] dw_wgt_base;
     logic [ADDR_W-1:0] conv_wgt_base;
     logic signed [ADDR_W:0] sx0;
     logic signed [ADDR_W:0] sy0;
@@ -83,10 +88,12 @@ module spatial_addr_gen #(
 
     // Global SRAM is addressed by 128-bit words. A channel tile is therefore
     // one address step, not 16 byte-address steps.
-    assign cfg_num_filter_shift_o = 4'd2 + {2'b0, num_filter_code_i};
+    assign cfg_output_words_shift = 4'd2 + {2'b0, num_filter_code_i};
+    assign cfg_act_words_shift = conv_mode_i ? input_channel_words_shift_i : cfg_output_words_shift;
+    assign cfg_num_filter_shift_o = cfg_output_words_shift;
     assign cfg_pixel_stride_o = ADDR_W'(4) << num_filter_code_i;
     assign ifmap_size = ADDR_W'(7) << ifmap_size_code_i;
-    assign cfg_row_stride_o = ifmap_size << cfg_num_filter_shift_o;
+    assign cfg_row_stride_o = ifmap_size << cfg_act_words_shift;
     assign cfg_tile_offset_o = tile_offset_i >> 4;
     assign cfg_center_x_o = stride_i ? (out_x_i << 1) : out_x_i;
     assign cfg_center_y_o = stride_i ? (out_y_i << 1) : out_y_i;
@@ -119,7 +126,9 @@ module spatial_addr_gen #(
     // input-channel word group at a time, so activation addressing uses the
     // cached input-channel word count instead of output-channel count.
     assign act_pixel_shift = conv_mode_r_i ? input_channel_words_shift_r_i : num_filter_shift_i;
-    assign act_tile_offset = conv_mode_r_i ? (ic_offset_r_i >> 4) : tile_offset_r_i;
+    assign dw_act_tile_offset = tile_offset_r_i;
+    assign conv_act_tile_offset = ic_offset_r_i >> 4;
+    assign act_tile_offset = conv_mode_r_i ? conv_act_tile_offset : dw_act_tile_offset;
     assign y0_offset = iy0 << act_pixel_shift;
     assign y1_offset = iy1 << act_pixel_shift;
     assign y2_offset = iy2 << act_pixel_shift;
@@ -153,8 +162,9 @@ module spatial_addr_gen #(
     // The ic*9 term is written as shifts/adds and then scaled by output-channel
     // tile count, avoiding a general multiplier in the load issue path.
     assign ic_x9 = (ic_offset_r_i << 3) + ic_offset_r_i;
+    assign dw_wgt_base = wgt_base_addr_i + tile_offset_r_i;
     assign conv_wgt_base = wgt_base_addr_i + (ic_x9 << num_filter_shift_i) + tile_offset_r_i;
-    assign wgt_base_selected = conv_mode_r_i ? conv_wgt_base : (wgt_base_addr_i + tile_offset_r_i);
+    assign wgt_base_selected = conv_mode_r_i ? conv_wgt_base : dw_wgt_base;
     assign wgt_row0_base = wgt_base_selected;
     assign wgt_row1_base = wgt_row0_base + three_pixel_stride;
     assign wgt_row2_base = wgt_row1_base + three_pixel_stride;
