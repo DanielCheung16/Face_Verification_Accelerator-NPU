@@ -9,10 +9,10 @@ module tb_top_system_2_2_c_ref;
     parameter int GB_DATA_W = 128;
     parameter int AO_DEPTH = 65536;
     parameter int WGT_DEPTH = (PROFILE == 13) ? 65536 : 8192;
-    parameter int SPATIAL_WGT_DEPTH = 8;
+    parameter int SPATIAL_WGT_DEPTH = (PROFILE == 13) ? 32 : 8;
     parameter int PARAM_DEPTH = 9792;
     parameter int HALF_CYCLE_TIME = 5;
-    parameter int TIMEOUT_CYCLES = 5000000;
+    parameter int TIMEOUT_CYCLES = (PROFILE == 13) ? 100000000 : 5000000;
 
     localparam int AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH);
     localparam int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH);
