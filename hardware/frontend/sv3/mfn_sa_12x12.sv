@@ -32,6 +32,9 @@ module mfn_sa_12x12 #(
     // Control
     input  logic                            clear,              // load biases
     input  logic                            enable,             // MAC cycle
+    // dw_mode=1: acc[r] += act_in[r] * wgt_in[r][0]  (DW 12-ch parallel)
+    // dw_mode=0: acc[r] += Σ_c act_in[c]*wgt_in[r][c] (PW / std-conv)
+    input  logic                            dw_mode,
 
     // Data inputs
     input  logic signed [DWIDTH-1:0]        act_in  [SA_COLS],  // 12 activations
@@ -46,14 +49,21 @@ module mfn_sa_12x12 #(
 
     always_comb begin
         for (int r = 0; r < SA_ROWS; r++) begin
-            logic signed [AWIDTH-1:0] s;
-            s = '0;
-            for (int c = 0; c < SA_COLS; c++) begin
-                logic signed [2*DWIDTH-1:0] p;
-                p = act_in[c] * wgt_in[r][c];
-                s = s + {{(AWIDTH-2*DWIDTH){p[2*DWIDTH-1]}}, p};
+            if (dw_mode) begin
+                // DW 12-ch parallel: each row uses its own activation (diagonal)
+                automatic logic signed [2*DWIDTH-1:0] p;
+                p = act_in[r] * wgt_in[r][0];
+                row_dot[r] = {{(AWIDTH-2*DWIDTH){p[2*DWIDTH-1]}}, p};
+            end else begin
+                automatic logic signed [AWIDTH-1:0] s;
+                s = '0;
+                for (int c = 0; c < SA_COLS; c++) begin
+                    automatic logic signed [2*DWIDTH-1:0] p;
+                    p = act_in[c] * wgt_in[r][c];
+                    s = s + {{(AWIDTH-2*DWIDTH){p[2*DWIDTH-1]}}, p};
+                end
+                row_dot[r] = s;
             end
-            row_dot[r] = s;
         end
     end
 

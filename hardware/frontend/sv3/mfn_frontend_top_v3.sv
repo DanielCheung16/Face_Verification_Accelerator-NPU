@@ -22,8 +22,9 @@ module mfn_frontend_top_v3 #(
     input  logic              start_inference,
     output logic              inference_done,
 
-    // Input pixel stream (one channel per cycle)
-    input  logic signed [DWIDTH-1:0] pixel_in,
+    // Input activation bus: 12 lanes — external memory returns 12 consecutive
+    // channels (c_in_out .. c_in_out+11) per cycle (opt ④).
+    input  logic signed [DWIDTH-1:0] pixel_in [SA_COLS],
 
     // External SRAM address outputs (for input activation fetch)
     output logic              reset_ptr,
@@ -81,6 +82,7 @@ module mfn_frontend_top_v3 #(
 
     // ── activation buffer ────────────────────────────────────────────────────
     logic                        act_load_en;
+    logic                        act_load_wide;
     logic [$clog2(512)-1:0]      act_load_ch;
     logic [$clog2(512)-1:0]      act_base_ch;
     logic [9:0]                  act_max_ch;
@@ -90,6 +92,7 @@ module mfn_frontend_top_v3 #(
         .clk      (clk),
         .rst_n    (rst_n),
         .load_en  (act_load_en),
+        .load_wide(act_load_wide),
         .load_ch  (act_load_ch),
         .pixel_in (pixel_in),
         .max_ch   (act_max_ch),
@@ -100,6 +103,7 @@ module mfn_frontend_top_v3 #(
     // ── 12×12 SA ─────────────────────────────────────────────────────────────
     logic                        sa_clear;
     logic                        sa_enable;
+    logic                        sa_dw_mode;
     logic signed [AWIDTH-1:0]    sa_bias_in [SA_ROWS];
     logic signed [AWIDTH-1:0]    sa_acc     [SA_ROWS];
 
@@ -109,6 +113,7 @@ module mfn_frontend_top_v3 #(
         .rst_n   (rst_n),
         .clear   (sa_clear),
         .enable  (sa_enable),
+        .dw_mode (sa_dw_mode),
         .act_in  (act_out),
         .wgt_in  (wgt_out),
         .bias_in (sa_bias_in),
@@ -144,7 +149,7 @@ module mfn_frontend_top_v3 #(
         .has_prelu   (layer_config[36]),   // per-layer flag from config
         .prelu_w     (prelu_out),
         .layer_is_res(layer_is_res_decoded),
-        .residual_in (pixel_in),
+        .residual_in (pixel_in[0]),
         .valid_out   (act_valid_out),
         .pixel_out   (act_pixel_out)
     );
@@ -177,15 +182,16 @@ module mfn_frontend_top_v3 #(
         .x_out        (x_out),
         .y_out        (y_out),
         .c_in_out     (c_in_out),
-        .pixel_in     (pixel_in),
 
         .act_load_en  (act_load_en),
+        .act_load_wide(act_load_wide),
         .act_load_ch  (act_load_ch),
         .act_base_ch  (act_base_ch),
         .act_max_ch   (act_max_ch),
 
         .sa_clear     (sa_clear),
         .sa_enable    (sa_enable),
+        .sa_dw_mode   (sa_dw_mode),
         .sa_bias_in   (sa_bias_in),
 
         .wgt_addr     (wgt_addr),

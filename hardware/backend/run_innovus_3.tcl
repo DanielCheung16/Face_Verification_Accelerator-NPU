@@ -1,29 +1,30 @@
 # ============================================================
-# Innovus P&R Script v2 — MobileFaceNet Frontend
-# Top module : mfn_frontend_top
-# Target     : 125 MHz / 8 ns (NangateOpenCellLibrary / FreePDK45)
+# Innovus P&R Script v3 — MobileFaceNet Frontend
+# Top module : mfn_frontend_top_v3
+# Target     : 83 MHz / 12 ns (NangateOpenCellLibrary / FreePDK45)
 #
-# v2 improvements over v1:
-#   1. CTS NDR (CTS_2W1S leaf + CTS_2W2S trunk w/ VSS shielding)
-#   2. create_route_type mapping for CCOpt
-#   3. timeDesign calls before each optDesign (timing visibility)
-#   4. Filler insertion AFTER post-route opt (avoids IMPOPT-310 density 100%)
-#   5. Two real OpenRAM macros (u_sram_a + u_sram_b) instead of wrapper
-#   6. SRAM LEFs patched (fix_sram_lef.py): M3/M4 OBS stripped so the
-#      M3 dout pins are routable — eliminates ~480 SRAM-pin DRC violations
+# v3 vs v2:
+#   - 12×12 output-stationary SA (was 6×1), dw_mode diagonal path
+#   - mfn_act_buf synthesized as FF array (87K cells, ~152K µm²)
+#   - mfn_controller_v3: DW-12-parallel + bias-preload + act-preload
+#   - Weight ROM (mfn_weight_rom_v3) is 0-cell black box → Innovus warns, ok
+#   - Floorplan: 1000×900 µm core (~41% stdcell util)
+#   - Same psum SRAM macros (u_sram_a + u_sram_b) as v2
+#   - Same M4 blockage fix for SRAM_B dout0 SHORTs
+#   - addFiller post-route (same fix as v2: avoids IMPOPT-310)
 # ============================================================
 
 # ── 1. Design Import ─────────────────────────────────────────
 setDesignMode -process 45
 
-set init_verilog      "../frontend/syn/mfn_frontend_top_v2_syn.v"
-set init_top_cell     "mfn_frontend_top"
+set init_verilog      "../frontend/syn/mfn_frontend_top_v3_syn.v"
+set init_top_cell     "mfn_frontend_top_v3"
 set init_lef_file     [list \
     "/vol/ece303/genus_tutorial/NangateOpenCellLibrary.lef" \
     "./sram_lef/sram_psum_a_1rw1r0w_40_512_freepdk45_fixed.lef" \
     "./sram_lef/sram_psum_b_1rw0r0w_40_512_freepdk45_fixed.lef" \
 ]
-set init_mmmc_file    "./mfn_frontend_top_v2.view"
+set init_mmmc_file    "./mfn_frontend_top_v3.view"
 set init_pwr_net      "VDD"
 set init_gnd_net      "VSS"
 
@@ -33,16 +34,18 @@ setLibraryUnit -cap 1ff
 init_design
 
 # ── 2. Floorplan ─────────────────────────────────────────────
-# SRAM_A (10,10)→(285,251) + SRAM_B (10,280)→(169,485): need h≥490
-# stdcells: ~33123 um2 → total ≈ 132000 um2
-# 560x500 core = 269400 um2 → ~49% utilization (more routing slack)
-floorPlan -s 560 500 5 5 5 5
+# Cell area (area_v3.rep, opt④ netlist): 455,340 µm²
+#   (u_act_buf 260K — FF array + 12-lane wide-write mux — dominates; u_sa 177K)
+# psum SRAM macros: SRAM_A 275.49×240.50=66,265 µm²  SRAM_B 158.995×204.86=32,571 µm²
+# 1100×1000 core = 1,100,000 µm²; available for cells = 1,100,000−98,836 = 1,001,164 µm²
+# Stdcell utilization: 455,340 / 1,001,164 ≈ 45%  (leaves routing margin)
+floorPlan -s 1100 1000 5 5 5 5
 fit
 
 # ── 2b. SRAM Macro Placement ─────────────────────────────────
-# SRAM_A (275.49 × 240.50 um): lower-left, 10 um from core edge
-# SRAM_B (158.995 × 204.86 um): stacked above SRAM_A with 30 um gap
-#   gap SRAM_A top (250.5) → SRAM_B bottom (280) = 29.5 um routing corridor
+# Same psum SRAM footprints and positions as v2 (lower-left corner of die).
+# SRAM_A (275.49 × 240.50 µm): origin (10,10)
+# SRAM_B (158.995 × 204.86 µm): origin (10,280) — 29.5 µm gap above SRAM_A top
 placeInstance u_ctrl/u_psum_mem/u_sram_a 10 10 R0
 placeInstance u_ctrl/u_psum_mem/u_sram_b 10 280 R0
 
@@ -55,33 +58,26 @@ globalNetConnect VSS -type pgpin -pin gnd -inst *
 globalNetConnect VDD -type tiehi
 globalNetConnect VSS -type tielo
 
-# ── 3b. Placement Blockage around SRAMs ──────────────────────
-# Widen corridors vs v2 attempt: 25 um right of SRAM_A, 31 um right of SRAM_B.
-# These wider channels let the router bring M3 wires alongside the macros to
-# reach the SRAM pin-access strips without having to cross macro OBS.
-#   SRAM_A: placed (10,10), footprint (10,10)-(285.5,250.5) → block (5,5)-(310,276)
-#   SRAM_B: placed (10,280), footprint (10,280)-(169,484.9) → block (5,275)-(200,495)
+# ── 3b. Placement Blockage around psum SRAMs ─────────────────
+# 25 µm right of SRAM_A, 31 µm right of SRAM_B routing corridors (same as v2).
+# Extra core width (1000 µm vs 560 µm) gives the FF-array stdcells room to spread right.
+#   SRAM_A footprint (10,10)-(285.5,250.5) → block (5,5)-(310,276)
+#   SRAM_B footprint (10,280)-(169,484.9) → block (5,275)-(200,495)
 createPlaceBlockage -type hard -box {5 5 310 276}
 createPlaceBlockage -type hard -box {5 275 200 495}
 
 # ── 3c. SRAM Routing Obstruction Note ────────────────────────
-# No createRouteBlk over the SRAM bodies.
-#
-# Earlier v2 attempts added hard M4 createRouteBlk to mirror the synthetic LEF
-# M3/M4 OBS — but the dout pins are on M3, sandwiched by the M3 OBS strips with
-# M4 fully blocked above, so no legal via3/M4 escape path existed.  NanoRoute
-# was forced through the obstructions → ~480 SHORT/SPACING DRC violations.
-#
-# Fix: fix_sram_lef.py strips the (over-conservative) M3/M4 OBS from both
-# synthetic OpenRAM LEFs (M1/M2 OBS kept).  The behavioural SRAM models have no
-# real M3/M4 internal routing, so this is safe.  With _fixed.lef the router can
-# place via3 on the M3 dout pins and route M4 over the macro normally — so no
-# routing blockage is needed here at all.
+# No createRouteBlk over the SRAM bodies.  fix_sram_lef.py strips the
+# over-conservative M3/M4 OBS from both synthetic OpenRAM LEFs (M1/M2 kept),
+# so the router can place via3 on the M3 dout pins and route M4 over the
+# macros normally.  See run_innovus_2.tcl §3c for the full rationale.
 
 # ── 4. Pin Placement ─────────────────────────────────────────
+# v3 ports differ from v2: controller outputs reset_ptr/inc_write/read_res/x_out/y_out/c_in_out
 editPin -side Left  -pin {clk rst_n start_inference pixel_in*} \
         -layer 3 -spreadType Center -spacing 0.5
-editPin -side Right -pin {inference_done valid_out sram_rd_addr* sram_wr_addr* pixel_out*} \
+editPin -side Right -pin {inference_done valid_out reset_ptr inc_write read_res \
+                           x_out* y_out* c_in_out* pixel_out*} \
         -layer 3 -spreadType Center -spacing 0.5
 
 # ── 5. Power Planning ─────────────────────────────────────────
@@ -92,13 +88,14 @@ addRing -nets {VSS VDD} -type core_rings -follow io \
         -offset  {top 0 bottom 0 left 0 right 0} \
         -center 0
 
+# Wider die → increase stripe count: set_to_set_distance 50 → ~20 pairs across 1000 µm
 addStripe -block_ring_top_layer_limit metal5 \
           -max_same_layer_jog_length 1.6 \
           -padcore_ring_bottom_layer_limit metal3 \
-          -set_to_set_distance 5 \
+          -set_to_set_distance 50 \
           -stacked_via_top_layer metal10 \
           -padcore_ring_top_layer_limit metal5 \
-          -spacing 1 -xleft_offset 300 -merge_stripes_value 0.095 \
+          -spacing 1 -xleft_offset 50 -merge_stripes_value 0.095 \
           -layer metal4 \
           -block_ring_bottom_layer_limit metal3 \
           -width 1 -nets {VSS VDD} \
@@ -119,23 +116,17 @@ setPlaceMode -timingDriven 1 -clkGateAware 1
 placeDesign
 
 # ── 7. CTS NDR Definition ────────────────────────────────────
-# [v2 NEW] Non-Default Rules for clock routing
-# FreePDK45 min widths: M1-M3=0.07µm, M4=0.14µm, M7-M8=0.4µm, M9-M10=0.8µm
-#
-# CTS_2W1S (leaf): Double-Width / Single-Spacing → M1–M4
-#   Keeps leaf distribution on lower metals; wider wire = lower resistance = less skew
+# Same NDR rules as v2 (FreePDK45 min widths unchanged).
+# CTS_2W1S (leaf): Double-Width / Single-Spacing on M1–M4
 add_ndr -name CTS_2W1S \
     -width   {metal1 0.14 metal2 0.14 metal3 0.14 metal4 0.28} \
     -spacing {metal1 0.07 metal2 0.07 metal3 0.07 metal4 0.14}
 
-# CTS_2W2S (trunk): Double-Width / Double-Spacing + VSS shield → M7–M10
-#   Wide/spaced trunk on top metals = low RC + EMI immunity
-#   VSS shield on M7 absorbs crosstalk from adjacent signal wires
+# CTS_2W2S (trunk): Double-Width / Double-Spacing + VSS shield on M7–M10
 add_ndr -name CTS_2W2S \
     -width   {metal7 0.8  metal8 0.8  metal9 1.6  metal10 1.6} \
     -spacing {metal7 0.42 metal8 0.42 metal9 0.84 metal10 0.84}
 
-# Map NDRs to leaf / trunk route types
 create_route_type -name leaf_rule \
     -non_default_rule CTS_2W1S \
     -top_preferred_layer    metal4 \
@@ -156,7 +147,6 @@ set_ccopt_property buffer_cells {CLKBUF_X1 CLKBUF_X2 CLKBUF_X3}
 set_ccopt_property use_inverters false
 
 # Mark all SRAM clock pins as stop sinks — macros have no timing data.
-# 50 fF per pin is a conservative estimate for SRAM clock input capacitance.
 set_ccopt_property -pin u_ctrl/u_psum_mem/u_sram_a/clk0 sink_type stop
 set_ccopt_property -pin u_ctrl/u_psum_mem/u_sram_a/clk0 \
     -delay_corner dc_typical capacitance_override 50
@@ -173,7 +163,6 @@ ccopt_design
 # ── 9. Post-CTS Optimization ─────────────────────────────────
 setAnalysisMode -analysisType onChipVariation
 
-# [v2 NEW] timeDesign first → gives a timing snapshot before optDesign modifies anything
 timeDesign -postCTS
 optDesign  -postCTS
 
@@ -181,14 +170,8 @@ timeDesign -postCTS -hold
 optDesign  -postCTS -hold
 
 # ── 10. Routing ──────────────────────────────────────────────
-# addFiller moved to AFTER post-route optimization (step 12b).
-# Reason: inserting filler before routing fills all sites to 100%, which
-# triggers IMPOPT-310 in optDesign -postRoute -hold and prevents hold-buffer
-# insertion by legalization. Moving filler last gives hold optimizer room to
-# place buffers; N-well continuity and M1 rails are handled by routeDesign itself.
-#
-# SRAM dout pins route cleanly now: the patched LEFs (see §3c) have no M3/M4
-# OBS, so NanoRoute places via3 on the M3 pins and escapes on M4 normally.
+# addFiller moved to AFTER post-route optimization (step 12).
+# Prevents IMPOPT-310 "density 100%" when hold optimizer needs to insert buffers.
 setNanoRouteMode -quiet -routeTopRoutingLayer 10
 routeDesign -globalDetail
 
@@ -196,50 +179,47 @@ routeDesign -globalDetail
 setExtractRCMode -engine postRoute
 extractRC
 
-# [v2 NEW] timeDesign before each optDesign
 timeDesign -postRoute
 optDesign  -postRoute
 
 timeDesign -postRoute -hold
-# holdTargetSlack=0.0: only fix genuinely-negative hold slack (not aggressive
-# chasing of hold margin) — keeps the hold-buffer count modest.
+# holdTargetSlack=0.0: only fix genuinely-negative hold slack.
+# Reduces hold-buffer insertions near SRAM that would route through M4 OBS.
 setOptMode -holdTargetSlack 0.0 -setupTargetSlack 0.0
 optDesign  -postRoute -hold
 
 # ── 12. Filler Insertion (post-route) ────────────────────────
-# Inserted here (after all optDesign passes) so hold optimization had full
-# placement headroom. N-well continuity still maintained because NanoRoute
-# connects M1 rails; filler adds physical geometry for DFM completeness.
-# [v2 moved from pre-route] Fixes IMPOPT-310 "density 100%" error.
+# Inserted here so hold optimization had full placement headroom (avoids IMPOPT-310).
 addFiller \
     -cell {FILLCELL_X32 FILLCELL_X16 FILLCELL_X8 FILLCELL_X4 FILLCELL_X2 FILLCELL_X1} \
     -prefix FILL
 
 # ── 13. Verification ─────────────────────────────────────────
-verify_drc          -report mfn_frontend_top_v2.drc.rpt
-verifyConnectivity  -type all -report mfn_frontend_top_v2.conn.rpt
-verifyProcessAntenna -reportfile mfn_frontend_top_v2.antenna.rpt
+verify_drc          -report mfn_frontend_top_v3.drc.rpt
+verifyConnectivity  -type all -report mfn_frontend_top_v3.conn.rpt
+verifyProcessAntenna -reportfile mfn_frontend_top_v3.antenna.rpt
 
 # ── 14. Reports ──────────────────────────────────────────────
-report_timing > pnr_v2_timing.rep
-report_power  > pnr_v2_power.rep
+report_timing > pnr_v3_timing.rep
+report_power  > pnr_v3_power.rep
 
 # ── 15. Save ─────────────────────────────────────────────────
-saveDesign  mfn_frontend_top_v2_final.enc
-saveNetlist mfn_frontend_top_v2_final_nophy.v
-write_sdf   mfn_frontend_top_v2_final.sdf
+saveDesign  mfn_frontend_top_v3_final.enc
+saveNetlist mfn_frontend_top_v3_final_nophy.v
+write_sdf   mfn_frontend_top_v3_final.sdf
 
 puts ""
 puts "======================================================"
-puts "  Innovus P&R v2 Finished — mfn_frontend_top"
-puts "  v2 additions: CTS NDR (2W1S leaf / 2W2S trunk+VSS),"
-puts "                timeDesign visibility, two OpenRAM macros,"
-puts "                SRAM LEFs patched (fix_sram_lef.py): M3/M4 OBS stripped"
-puts "                  so dout pins are routable -- no createRouteBlk needed,"
-puts "                addFiller post-route (avoids IMPOPT-310),"
-puts "                holdTargetSlack=0.0 (fewer FE_OFN inserts near SRAM)"
-puts "  Target: 125 MHz / 8 ns  |  Floorplan: 560x500 um"
-puts "  Reports : mfn_frontend_top_v2 drc/conn/antenna rpt"
-puts "           pnr_v2_timing.rep  pnr_v2_power.rep"
-puts "  Netlist : mfn_frontend_top_v2_final_nophy.v"
+puts "  Innovus P&R v3 Finished — mfn_frontend_top_v3"
+puts "  v3 additions:"
+puts "    12×12 output-stationary SA (dw_mode diagonal)"
+puts "    act_buf as FF array (87K cells, 152K µm²; no SRAM macro)"
+puts "    DW-12-parallel + bias-preload + act-preload controller"
+puts "    Floorplan: 1000×900 µm core (~41% stdcell util)"
+puts "    Same M4 SRAM blockage fix as v2"
+puts "    addFiller post-route (avoids IMPOPT-310)"
+puts "  Target: 83 MHz / 12 ns"
+puts "  Reports : mfn_frontend_top_v3.{drc,conn,antenna}.rpt"
+puts "            pnr_v3_timing.rep  pnr_v3_power.rep"
+puts "  Netlist : mfn_frontend_top_v3_final_nophy.v"
 puts "======================================================"

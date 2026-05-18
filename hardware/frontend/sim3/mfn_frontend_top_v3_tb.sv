@@ -28,7 +28,7 @@ module mfn_frontend_top_v3_tb;
 
     logic clk, rst_n;
     logic start_inference, inference_done;
-    logic signed [DWIDTH-1:0] pixel_in;
+    logic signed [DWIDTH-1:0] pixel_in [12];   // 12-lane activation bus (opt ④)
     logic reset_ptr, inc_write, read_res;
     logic signed [8:0] x_out, y_out;
     logic [9:0]        c_in_out;
@@ -46,12 +46,14 @@ module mfn_frontend_top_v3_tb;
     logic signed [DWIDTH-1:0] sram [0:MEM_DEPTH-1];
     integer wr_ptr = 0;
 
-    // ── Pixel read logic ─────────────────────────────────────────────────────
-    // Normal:   sram[BUF_BASE[rd_buf] + y*W*C + x*C + c_in_out]
-    // Residual: sram[BUF_BASE[res_buf] + y*W*out_ch + x*out_ch + c_in_out]
-    // OOB for normal reads → 0 (zero-padding)
+    // ── Pixel read logic — 12-lane wide read (opt ④) ─────────────────────────
+    // Returns 12 consecutive channels (c_in_out .. c_in_out+11) at one (x,y):
+    //   Normal:   sram[BUF_BASE[rd_buf]  + y*W*C     + x*C     + c_in_out + k]
+    //   Residual: sram[BUF_BASE[res_buf] + y*W*C_out + x*C_out + c_in_out + k]
+    // Lanes past the channel count (or OOB / border) return 0 — matches the
+    // act_buf zero-padding semantics.  Narrow consumers use lane 0.
     always @(posedge clk) begin
-        automatic int rd, wr, rs, W, H, C, C_out, ix, iy, addr;
+        automatic int rd, wr, rs, W, H, C, C_out, ix, iy, cbase, addr;
         rd    = int'(dut.u_ctrl.layer_rd_buf);
         wr    = int'(dut.u_ctrl.layer_wr_buf);
         rs    = 3 - rd - wr;  // residual buffer = the third one
@@ -61,22 +63,27 @@ module mfn_frontend_top_v3_tb;
         C_out = int'(dut.u_ctrl.layer_out_ch);
         ix    = int'($signed(x_out));
         iy    = int'($signed(y_out));
+        cbase = int'(c_in_out);
 
         if (read_res) begin
-            // Residual read at same (x,y) but from res_buf with out_ch channels
-            addr = BUF_BASE[rs] + iy * W * C_out + ix * C_out + int'(c_in_out);
-            if (addr >= 0 && addr < MEM_DEPTH)
-                pixel_in = sram[addr];
-            else
-                pixel_in = '0;
+            // Residual read at (x,y) from res_buf with out_ch channels
+            for (int k = 0; k < 12; k++) begin
+                addr = BUF_BASE[rs] + iy * W * C_out + ix * C_out + cbase + k;
+                if (cbase + k < C_out && addr >= 0 && addr < MEM_DEPTH)
+                    pixel_in[k] = sram[addr];
+                else
+                    pixel_in[k] = '0;
+            end
         end else if (ix < 0 || iy < 0 || ix >= W || iy >= H) begin
-            pixel_in = '0;  // zero-padding for border pixels
+            for (int k = 0; k < 12; k++) pixel_in[k] = '0;  // border zero-pad
         end else begin
-            addr = BUF_BASE[rd] + iy * W * C + ix * C + int'(c_in_out);
-            if (addr >= 0 && addr < MEM_DEPTH)
-                pixel_in = sram[addr];
-            else
-                pixel_in = '0;
+            for (int k = 0; k < 12; k++) begin
+                addr = BUF_BASE[rd] + iy * W * C + ix * C + cbase + k;
+                if (cbase + k < C && addr >= 0 && addr < MEM_DEPTH)
+                    pixel_in[k] = sram[addr];
+                else
+                    pixel_in[k] = '0;
+            end
         end
     end
 

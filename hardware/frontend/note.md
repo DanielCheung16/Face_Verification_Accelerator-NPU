@@ -1868,7 +1868,12 @@ Critical path：`u_sram_a/dout0 → u_cla_a carry chain → u_sram_a/din0` = 9.3
 
 ### 31.1 v3 架構概覽
 
-v2 使用 6×1 SA（6 output channel 平行，1 input channel/cycle），v3 改為 **12×12 Output-Stationary SA**：
+> **架構澄清**：v1 / v2 **不是 systolic array**。v1 = 單一 9-MAC 點積單元
+> （`mfn_mac_array`，9 個乘法器算一個 3×3 conv），v2 = 雙 9-MAC（2 個
+> `mfn_mac_array`，18 個乘法器，並行算 2 個 output channel）。**只有 v3 才是
+> 陣列架構。** 早期表格誤標的「4×1 / 6×1 SA」並不正確。
+
+v2 用雙 9-MAC（一 cycle 算 2 個 output channel），v3 改為 **12×12 Output-Stationary 144-MAC 陣列**：
 - **SA_ROWS = 12**：同時處理 12 個 output channels
 - **SA_COLS = 12**：每個 PE row 一次接收 12 個 input channels（一個 c_in tile）
 - 每個 MAC cycle：12 × 12 = 144 個 multiply-accumulate 同時執行
@@ -1960,11 +1965,11 @@ Layer 7（128-ch，wgt_step=135）也沒問題：最後 tile 從 c_in=126，colu
 make sim（Xcelium RTL simulation）
 ```
 
-| 版本 | 架構 | Total Cycles | @ 83 MHz | FPS |
+| 版本 | 計算單元 | Total Cycles | @ 83 MHz | FPS |
 |------|------|-------------|----------|-----|
-| v1 | 4×1 SA | 43,158,478 | 0.520 s | 1.9 fps |
-| v2 | 6×1 SA | 25,768,847 | 0.310 s | 3.2 fps |
-| **v3** | **12×12 SA** | **24,044,536** | **0.290 s** | **3.5 fps** |
+| v1 | 單一 9-MAC（9 乘法器） | 43,158,478 | 0.520 s | 1.9 fps |
+| v2 | 雙 9-MAC（18 乘法器，2 out-ch 並行） | 25,768,847 | 0.310 s | 3.2 fps |
+| **v3** | **12×12 = 144-MAC 陣列** | **24,044,536** | **0.290 s** | **3.5 fps** |
 
 v3 比 v2 減少約 **6.7%**（1,724,311 cycles），主要節省來自 PW conv 的 c_in tiling（12 channels/cycle 取代 1 channel/cycle）。
 
@@ -2065,3 +2070,114 @@ v3 RTL sim 仍使用行為模型（`mfn_psum_sram.sv`），P&R 時以 LEF/LIB �
 1. `mfn_psum_sram`：沿用 v2 的兩個 OpenRAM macro ✅
 2. `mfn_act_buf`：換成單 port SRAM macro（512×16-bit，1RW）
 3. `mfn_weight_rom_v3`：ROM 內容量大（所有層 weights，約 1.5M × 16-bit = 3 MB），最實際的方案是用 **embedded Flash 或 DRAM**，或在 tape-out 前改為從片外 SRAM 串流（現有 TB 的 pixel_in 介面即模擬此情況）
+
+---
+
+## 32. v3+ 三項 RTL 優化實測（2026-05-17）
+
+在 v3 baseline（24,044,536 cycles）之上實作三項控制器優化：
+
+- **opt①**：DW 12-channel 並行 — DW conv 用 SA 對角線模式（`dw_mode`），
+  一個 cycle 算 12 個 channel，取代逐 channel 串行
+- **opt②**：ACT_LOAD 與前一個位置的 WRITEBACK 重疊
+- **opt③**：BIAS_LOAD 併入前一個 WRITEBACK（每個 c_out tile 省 12 cycles）
+
+### 32.1 功能正確性 ✅
+`make top` + `make diff`：**全部 50 層 MATCH** — v3+ 與 v2 參考輸出完全一致，
+三項優化都沒有改變計算結果。
+
+### 32.2 效能實測
+
+| 版本 | Total Cycles | 與 v3 baseline | @ 83 MHz | FPS |
+|------|-------------|---------------|----------|-----|
+| v3 baseline（未優化） | 24,044,536 | 1.00× | 0.290 s | 3.5 |
+| **v3+（opt①②③）** | **21,539,908** | **1.116×** | **0.260 s** | **3.85** |
+| 預估值 | ~19,100,000 | 1.26× | 0.230 s | 4.3 |
+
+實際加速 **1.116×（減少 10.4%）**，比預估的 1.26× 保守。
+
+### 32.3 為什麼比預估少？
+
+Top-7 重量級 layers 佔總週期 **43.7%**：
+```
+Layer  1          : 2,467,588 cy (11.5%)  ← 最大單層，非 DW，opt① 無效
+Layer 3/6/9/12/15 : 1,130,308 cy × 5      ← DW stride 層
+Layer 2           : 1,290,256 cy
+```
+- Layer 1（標準 conv 或 PW）不受 opt① 幫助
+- DW 層雖已 12-ch 並行，但 spatial loop 大（逐像素逐 kernel position）
+  仍是主要瓶頸 — opt① 只縮短 compute，沒縮短 fetch
+- opt②③ 省的 bias_load / act_load cycles 相對整體佔比小
+
+### 32.4 瓶頸分析（opt①②③ 階段）
+
+opt①②③ 後最大瓶頸是 **activation fetch 串行** — `pixel_in` 一次只送
+1 個 16-bit 值，act_buf 一次只寫 1 個 channel。DW path 估算
+`1 bias + 108 fetch + 9 compute + 12 WB + 1`，**fetch 佔 ~82%**。
+→ 這驅動了 opt④（見 §32.6）。
+
+---
+
+## 32.6 opt④：12-channel 寬載入（2026-05-17）
+
+把 activation fetch 從「1 channel/cycle」拓寬成「12 channel/cycle」。
+
+### 實作
+| 檔案 | 變更 |
+|------|------|
+| `mfn_frontend_top_v3.sv` | top port `pixel_in` 從 1×16-bit → **12-lane 陣列** |
+| `mfn_act_buf.sv` | 新增 `load_wide` 寬寫埠：一個 cycle 寫 `act_mem[base..base+11]` |
+| `mfn_controller_v3.sv` | 新增 `act_load_wide` 輸出；PW `S_ACT_LOAD` 一次載 12 ch（`c_in_tile` 步進 12）；DW `S_DW12_FETCH` 從 12 cycle → **1 cycle** |
+| `mfn_frontend_top_v3_tb.sv` | 外部記憶體一次回傳 12 個連續 channel |
+
+std conv（layer 0）與 global DW（layer 48）的存取非連續，維持窄路徑。
+
+### 功能正確性 ✅
+`make top` + `make diff`：**全部 50 層 MATCH**。
+
+### 效能實測（最終）
+
+| 版本 | Total Cycles | 與 baseline | @ 83 MHz | @ 110 MHz |
+|------|-------------|------------|----------|-----------|
+| v3 baseline | 24,044,536 | 1.00× | 3.5 fps | 4.6 fps |
+| v3+（opt①②③） | 21,539,908 | 1.12× | 3.85 fps | 5.1 fps |
+| **v3++（opt①②③④）** | **12,281,668** | **1.96×** | **6.76 fps** | **8.96 fps** |
+
+opt④ 單項貢獻 **1.75×**（21.5M → 12.3M）。逐層效果：
+```
+Layer  1 : 2,467,588 → 870,916   (2.83×)  ← PW 寬載入
+DW 3/6/9/12/15 : 1,130,308 → 398,500 (2.84×) ← DW12 1-cycle fetch
+Layer  2 : 1,290,256 → 1,163,909
+```
+
+**現況：12,281,668 cycles → @ 83 MHz ≈ 6.76 fps（latency 148 ms）；
+@ 110 MHz ≈ 8.96 fps。**
+
+### 仍剩的瓶頸與下一步
+
+| 改法 | 預期效益 | 難度 | 說明 |
+|------|---------|------|------|
+| 提高時脈（後端） | 83→110 MHz ≈ 1.3× | 低 | 純後端，RTL 不動 → ~9 fps |
+| Ping-pong act_buf（load/compute 重疊） | 10–15% | 中 | 雙 bank，需多一份 act_buf 面積 |
+| 空間平行（多 output pixel 同時算） | 2× 以上 | **高** | 複製 PE / 重構 dataflow |
+| 模型端 INT8 量化 + channel pruning | 2× 以上 | 高 | 需模型重訓練、精度取捨 |
+
+**結論**：opt④ 把設計從 3.85 fps 推到 6.76 fps（@110 MHz ~9 fps）。
+要逼近 30 fps 仍需空間平行 + 模型壓縮多管齊下。
+
+### 32.5 目前有用 SRAM 嗎？
+
+**模擬（sim3）**：**沒有用任何 SRAM macro**。`mfn_act_buf.sv` 與
+`mfn_psum_sram.sv` 都是**行為模型**（act_buf 是 `act_mem[0:511]` 陣列，
+psum 是行為 register-file）。`sim3/Makefile` 的 `make top` 跑的是純 RTL
+功能模擬，沒有 `.lib` 時序、沒有 macro。
+
+**合成（synthesis_v3.tcl）**：
+- `psum_sram` → OpenRAM macro（black box，經 `v3_rom_stubs.sv`）
+- `act_buf` → **合成成 FF array**（87,490 cells，312,671 µm²）— 不是 SRAM macro
+- `weight_rom_v3` → black box（0 cells）
+
+`synthesis_v3.tcl` **可以直接跑**（所有引用檔案都在，netlist 已於
+05-16 產出）。但 `act_buf` 以 FF array 合成 → 面積 312,671 µm²，
+若改用 SRAM macro（已有 LEF `sram_act_buf...` 111×131.6 µm ≈ 14,609 µm²）
+可省 ~5–8× 面積。目前面積數字「正確但未最佳化」。

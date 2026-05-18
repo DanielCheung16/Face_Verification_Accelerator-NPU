@@ -1,15 +1,20 @@
 // =============================================================================
 // mfn_act_buf.sv — Activation buffer for v3 PW / standard conv
 //
-// Loads up to MAX_CH input-channel values one per cycle (from pixel_in),
-// then provides 12 values at a time to the SA.
+// Loads input-channel values into a 512-deep buffer, then provides 12 values
+// at a time to the SA.
 //
-// Usage:
-//   Phase 1 – LOAD:  load_en=1, load_ch increments externally 0..in_ch-1
-//             Each cycle: buf[load_ch] ← pixel_in
-//   Phase 2 – READ:  read_en=1, base_ch set to c_in_tile start
-//             Combinational: act_out[0..11] = buf[base_ch .. base_ch+11]
-//             Out-of-range channels return 0 (padding for last tile).
+// Load (v3+): two modes share one write strobe.
+//   load_wide=1 : 12-channel-wide write — act_mem[load_ch .. load_ch+11]
+//                 ← pixel_in[0..11].  Used by PW S_ACT_LOAD and DW S_DW12_FETCH
+//                 (fetch 12 consecutive channels at one (x,y) per cycle).
+//   load_wide=0 : narrow 1-channel write — act_mem[load_ch] ← pixel_in[0].
+//                 Used by std-conv S_ACT_LOAD, global-DW S_DW_FETCH and the
+//                 opt-② per-cycle preload (each maps to a distinct address,
+//                 so a 12-ch wide read does not apply).
+//
+// Read (unchanged): combinational, SA_COLS consecutive entries from base_ch.
+//   Out-of-range channels (idx >= max_ch or >= MAX_CH) return 0.
 //
 // MAX_CH=512 covers the widest layer (L47/L48, 512 ch).
 // =============================================================================
@@ -22,10 +27,11 @@ module mfn_act_buf #(
     input  logic                        clk,
     input  logic                        rst_n,
 
-    // Load port (one channel per cycle)
+    // Load port (1 or SA_COLS channels per cycle, see load_wide)
     input  logic                        load_en,
-    input  logic [$clog2(MAX_CH)-1:0]   load_ch,
-    input  logic signed [DWIDTH-1:0]    pixel_in,
+    input  logic                        load_wide, // 1=12-ch wide, 0=1-ch narrow
+    input  logic [$clog2(MAX_CH)-1:0]   load_ch,   // base (wide) / single (narrow)
+    input  logic signed [DWIDTH-1:0]    pixel_in [SA_COLS],
 
     // Read port (SA_COLS channels per cycle, combinational)
     input  logic [9:0]                  max_ch,    // dynamic ceiling: zero act_out[k] if base_ch+k >= max_ch
@@ -38,8 +44,17 @@ module mfn_act_buf #(
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             for (int i = 0; i < MAX_CH; i++) act_mem[i] <= '0;
-        end else if (load_en)
-            act_mem[load_ch] <= pixel_in;
+        end else if (load_en) begin
+            if (load_wide) begin
+                for (int k = 0; k < SA_COLS; k++) begin
+                    int widx;
+                    widx = int'(load_ch) + k;
+                    if (widx < MAX_CH) act_mem[widx] <= pixel_in[k];
+                end
+            end else begin
+                act_mem[load_ch] <= pixel_in[0];
+            end
+        end
     end
 
     // Read: SA_COLS consecutive entries, zero-pad if past max_ch or MAX_CH
