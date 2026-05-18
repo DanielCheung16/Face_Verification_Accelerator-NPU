@@ -1,3 +1,20 @@
+// Address generator for the 3x3 spatial local-buffer load path.
+//
+// This module only generates the 9 activation/weight SRAM word addresses and
+// padding-zero flags for one output window. Accumulation across input channels
+// is intentionally outside this module.
+//
+// DW mode:
+//   activation tile offset == output-channel tile offset
+//   weight layout          == [3x3 position][channel tile]
+//
+// Conv3x3 mode:
+//   activation tile offset == input-channel word offset
+//   weight layout          == [input channel][3x3 position][output-channel tile]
+//
+// The arithmetic is kept as explicit assign/shift/add logic. The upper load
+// controller captures the outputs before issuing SRAM reads, so this address
+// setup logic is not on the steady-state SRAM read issue path.
 module spatial_addr_gen #(
     parameter int ADDR_W = 16,
 
@@ -64,6 +81,9 @@ module spatial_addr_gen #(
     logic [ADDR_W-1:0] pixel_idx_x0;
     logic [ADDR_W-1:0] pixel_idx_x1;
     logic [ADDR_W-1:0] pixel_idx_x2;
+    logic [ADDR_W-1:0] row0_offset;
+    logic [ADDR_W-1:0] row1_offset;
+    logic [ADDR_W-1:0] row2_offset;
     logic [ADDR_W-1:0] y0_offset;
     logic [ADDR_W-1:0] y1_offset;
     logic [ADDR_W-1:0] y2_offset;
@@ -129,14 +149,17 @@ module spatial_addr_gen #(
     assign dw_act_tile_offset = tile_offset_r_i;
     assign conv_act_tile_offset = ic_offset_r_i >> 4;
     assign act_tile_offset = conv_mode_r_i ? conv_act_tile_offset : dw_act_tile_offset;
+    assign row0_offset = pixel_idx_x0 << act_pixel_shift;
+    assign row1_offset = pixel_idx_x1 << act_pixel_shift;
+    assign row2_offset = pixel_idx_x2 << act_pixel_shift;
     assign y0_offset = iy0 << act_pixel_shift;
     assign y1_offset = iy1 << act_pixel_shift;
     assign y2_offset = iy2 << act_pixel_shift;
     assign three_pixel_stride = pixel_stride_i + (pixel_stride_i << 1);
 
-    assign row0_base = act_base_addr_i + (pixel_idx_x0 << act_pixel_shift) + act_tile_offset;
-    assign row1_base = act_base_addr_i + (pixel_idx_x1 << act_pixel_shift) + act_tile_offset;
-    assign row2_base = act_base_addr_i + (pixel_idx_x2 << act_pixel_shift) + act_tile_offset;
+    assign row0_base = act_base_addr_i + row0_offset + act_tile_offset;
+    assign row1_base = act_base_addr_i + row1_offset + act_tile_offset;
+    assign row2_base = act_base_addr_i + row2_offset + act_tile_offset;
 
     assign act_addr_o[0] = row0_base + y0_offset;
     assign act_addr_o[1] = row0_base + y1_offset;
