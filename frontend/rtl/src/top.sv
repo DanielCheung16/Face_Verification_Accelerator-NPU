@@ -1,3 +1,5 @@
+import layer_defs_pkg::*;
+
 module top #(
     parameter int ROW       = 4,
     parameter int COL       = 4,
@@ -95,6 +97,7 @@ module top #(
     logic                  residual_en;
     logic [GB_ADDR_W-1:0]  residual_base_addr;
     logic [MAX_LAYER-1:0]  layer_idx;
+    layer_type_t           layer_type;
 
     logic [1:0]                    mode;
     logic [2:0]                    ifmap_size_code;
@@ -180,6 +183,9 @@ module top #(
 
     logic [SPATIAL_ELEM_CNT_W-1:0] spatial_output_elements;
     logic [SPATIAL_FILTER_CNT_W-1:0] spatial_current_num_filter;
+    logic [SPATIAL_FILTER_CNT_W-1:0] spatial_input_channel_count;
+    logic [3:0] spatial_input_channel_words_shift;
+    logic spatial_conv_mode;
     logic signed [ACC_W-1:0] spatial_residual_stub;
     logic signed [ACC_W-1:0] spatial_output_zero_point;
     logic [2:0] spatial_post_mode;
@@ -195,10 +201,28 @@ module top #(
     assign accelerator_active_w = sys_start && !sys_done;
     assign spatial_output_elements = SPATIAL_ELEM_CNT_W'(m_size) * SPATIAL_ELEM_CNT_W'(n_size);
     assign spatial_current_num_filter = SPATIAL_FILTER_CNT_W'(n_size);
+    assign spatial_input_channel_count = SPATIAL_FILTER_CNT_W'(k_size);
+    assign spatial_conv_mode = (layer_type == LY_CONV3X3);
     assign spatial_residual_stub = '0;
     assign spatial_output_zero_point = ACC_W'($signed(output_zero_point));
     assign conv_quant_active_w = dev_start[CONV1X1_DEV] || dev_busy[CONV1X1_DEV];
     assign spatial_quant_active_w = dev_start[SPATIAL_DEV] || dev_busy[SPATIAL_DEV];
+
+    always_comb begin
+        if (int'(k_size) <= 16) begin
+            spatial_input_channel_words_shift = 4'd0;
+        end else if (int'(k_size) <= 32) begin
+            spatial_input_channel_words_shift = 4'd1;
+        end else if (int'(k_size) <= 64) begin
+            spatial_input_channel_words_shift = 4'd2;
+        end else if (int'(k_size) <= 128) begin
+            spatial_input_channel_words_shift = 4'd3;
+        end else if (int'(k_size) <= 256) begin
+            spatial_input_channel_words_shift = 4'd4;
+        end else begin
+            spatial_input_channel_words_shift = 4'd5;
+        end
+    end
 
     // layer_config_mem uses the compact postprocess enum shared with conv1x1.
     // The spatial stream postprocess reserves 3'd1/2/3 for requant/PReLU/residual
@@ -391,6 +415,7 @@ module top #(
         .residual_en_o(residual_en),
         .residual_base_addr_o(residual_base_addr),
         .layer_idx_o(layer_idx),
+        .layer_type_o(layer_type),
         .mode_o(mode),
         .ifmap_size_code_o(ifmap_size_code),
         .num_filter_code_o(num_filter_code),
@@ -567,9 +592,9 @@ module top #(
         .stride_i(stride),
         .pad_i(pad),
         .pad_value_i(pad_value),
-        .conv_mode_i(1'b0),
-        .input_channel_count_i(spatial_current_num_filter),
-        .input_channel_words_shift_i(4'd0),
+        .conv_mode_i(spatial_conv_mode),
+        .input_channel_count_i(spatial_input_channel_count),
+        .input_channel_words_shift_i(spatial_input_channel_words_shift),
         .current_num_filter_i(spatial_current_num_filter),
         .post_mode_i(spatial_post_mode),
         .residual_en_i(residual_en),

@@ -125,6 +125,11 @@ module layer_config_mem #(
     localparam logic signed [OUT_W-1:0] P6_L1_OUTPUT_ZERO_POINT = -$signed(OUT_W'(86));
     localparam logic signed [OUT_W-1:0] P6_L2_OUTPUT_ZERO_POINT = -$signed(OUT_W'(108));
     localparam logic signed [OUT_W-1:0] P6_L3_OUTPUT_ZERO_POINT = -$signed(OUT_W'(13));
+    // Real-value zero padding in asymmetric int8 maps to -input_zero_point.
+    localparam logic signed [DATA_W-1:0] DW0_PAD_VALUE = -$signed(DATA_W'(31));
+    localparam logic signed [DATA_W-1:0] DW1_PAD_VALUE = -$signed(DATA_W'(87));
+    localparam logic signed [DATA_W-1:0] P5_L2_PAD_VALUE = -$signed(DATA_W'(61));
+    localparam logic signed [DATA_W-1:0] P6_L2_PAD_VALUE = -$signed(DATA_W'(86));
 
     typedef struct packed {
         logic                    layer_valid;
@@ -215,7 +220,8 @@ module layer_config_mem #(
                 cfg.residual_zero_point_base = P6_L0_PARAM_BASE;
             end else if ((CONFIG_PROFILE == 4) || (CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8)) begin
                 cfg.layer_type = LY_DWCONV3X3;
-                cfg.k_size = '0;
+                cfg.k_size = ((CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8)) ?
+                             K_SIZE_W'(DW1_N) : K_SIZE_W'(DW0_N);
                 cfg.m_size = ((CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8)) ?
                              DIM_W'(IMG_28_M) : DIM_W'(IMG_56_M);
                 cfg.n_size = ((CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8)) ?
@@ -231,6 +237,8 @@ module layer_config_mem #(
                                       2'd1 : 2'd0; // 64/128 channels
                 cfg.stride = (CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8); // stride 1/2
                 cfg.pad = 1'b1;             // same padding
+                cfg.pad_value = ((CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8)) ?
+                                DW1_PAD_VALUE : DW0_PAD_VALUE;
                 cfg.bias_base = (CONFIG_PROFILE == 8) ? P8_L0_PARAM_BASE : L0_PARAM_BASE;
                 cfg.requant_mult_base = cfg.bias_base;
                 cfg.requant_shift_base = cfg.bias_base;
@@ -351,6 +359,7 @@ module layer_config_mem #(
             cfg.num_filter_code = 2'd1; // 128 channels
             cfg.stride = 1'b0;
             cfg.pad = 1'b1;
+            cfg.pad_value = (CONFIG_PROFILE == 6) ? P6_L2_PAD_VALUE : P5_L2_PAD_VALUE;
             cfg.bias_base = (CONFIG_PROFILE == 6) ? P6_L2_PARAM_BASE : P5_L2_PARAM_BASE;
             cfg.requant_mult_base = cfg.bias_base;
             cfg.requant_shift_base = cfg.bias_base;

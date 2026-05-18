@@ -1,4 +1,5 @@
 `timescale 1ns/1ps
+import layer_defs_pkg::*;
 
 module tb_layer_switcher;
     parameter int ROW = 14;
@@ -59,6 +60,7 @@ module tb_layer_switcher;
     logic residual_en_o;
     logic [GB_ADDR_W-1:0] residual_base_addr_o;
     logic [7:0] layer_idx_o;
+    layer_type_t layer_type_o;
 
     logic [1:0]                    mode_o;
     logic [2:0]                    ifmap_size_code_o;
@@ -138,6 +140,7 @@ module tb_layer_switcher;
         .residual_en_o(residual_en_o),
         .residual_base_addr_o(residual_base_addr_o),
         .layer_idx_o(layer_idx_o),
+        .layer_type_o(layer_type_o),
         .mode_o(mode_o),
         .ifmap_size_code_o(ifmap_size_code_o),
         .num_filter_code_o(num_filter_code_o),

@@ -161,9 +161,7 @@ static int64_t dw_raw_acc(const qf_op_t *op, const int8_t *in, int oh, int ow, i
             int iw = ow * op->stride_w + kx - op->pad_w;
             int8_t in_value;
             if (ih < 0 || ih >= op->in_h || iw < 0 || iw >= op->in_w) {
-                // Match the current RTL spatial load path: padded windows are
-                // injected as int8 zero in the local activation buffer.
-                in_value = 0;
+                in_value = (int8_t)(-op->in_zero_point);
             } else {
                 in_value = in[(ih * op->in_w + iw) * op->in_c + ch];
             }

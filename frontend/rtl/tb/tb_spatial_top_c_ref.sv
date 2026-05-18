@@ -122,7 +122,7 @@ module tb_spatial_top_c_ref;
         .ifmap_size_code_i(ifmap_size_code_i),
         .stride_i(stride_i),
         .pad_i(pad_i),
-        .pad_value_i(8'sd0),
+        .pad_value_i(-8'sd31),
         .conv_mode_i(1'b0),
         .input_channel_count_i(current_num_filter_i),
         .input_channel_words_shift_i(4'd0),

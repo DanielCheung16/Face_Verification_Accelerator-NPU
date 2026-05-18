@@ -53,6 +53,7 @@ module layer_switcher #(
     output logic                  residual_en_o,
     output logic [GB_ADDR_W-1:0]  residual_base_addr_o,
     output logic [MAX_LAYER-1:0]  layer_idx_o,
+    output layer_type_t           layer_type_o,
 
     output logic [1:0]                    mode_o,
     output logic [2:0]                    ifmap_size_code_o,
@@ -124,6 +125,7 @@ module layer_switcher #(
 
     assign active_done_w = active_dev_valid_w && seen_busy_r && done_i[active_dev_idx_w];
     assign layer_idx_o = layer_cnt_r;
+    assign layer_type_o = layer_type_w;
 
 `ifndef SYNTHESIS
     initial begin
