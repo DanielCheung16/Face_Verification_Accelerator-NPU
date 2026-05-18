@@ -25,6 +25,11 @@
 #define LINEAR_FC_REQUANT_MULT 1
 #define LINEAR_FC_REQUANT_SHIFT 8
 #define LINEAR_FC_OUTPUT_ZERO_POINT 0
+#define FULL_AO_BASE0 0
+#define FULL_AO_BASE1 26000
+#define FULL_AO_RES_BASE 52000
+#define FULL_CFG_DEPTH 128
+#define FULL_LAYER_PROFILE 13
 
 typedef struct {
     uint64_t lo;
@@ -40,9 +45,61 @@ typedef struct {
     int residual_base;
 } hw_layer_t;
 
+typedef struct {
+    int layer_valid;
+    int layer_last;
+    int layer_type;
+    int k_size;
+    int m_size;
+    int n_size;
+    int act_base;
+    int wgt_base;
+    int out_base;
+    int residual_en;
+    int residual_base;
+    int ifmap_size_code;
+    int num_filter_code;
+    int stride;
+    int pad;
+    int pad_value;
+    int mode;
+    int output_zero_point;
+    int bias_base;
+    int requant_mult_base;
+    int requant_shift_base;
+    int prelu_mult_base;
+    int prelu_shift_base;
+    int residual_mult_base;
+    int residual_shift_base;
+    int residual_zero_point_base;
+} layer_cfg_dump_t;
+
 static int op_out_h(const qf_op_t *op) { return (op->in_h + 2 * op->pad_h - op->kh) / op->stride_h + 1; }
 static int op_out_w(const qf_op_t *op) { return (op->in_w + 2 * op->pad_w - op->kw) / op->stride_w + 1; }
 static int is_dw(const qf_op_t *op) { return op->groups == op->in_c && op->out_c == op->in_c; }
+
+static int ifmap_size_code(int size)
+{
+    switch (size) {
+        case 7: return 0;
+        case 14: return 1;
+        case 28: return 2;
+        case 56: return 3;
+        case 112: return 4;
+        default: return 0;
+    }
+}
+
+static int num_filter_code(int channels)
+{
+    switch (channels) {
+        case 64: return 0;
+        case 128: return 1;
+        case 256: return 2;
+        case 512: return 3;
+        default: return 0;
+    }
+}
 
 static int64_t round_shift_i64(int64_t value, int shift)
 {
@@ -105,6 +162,60 @@ static int write_mem_hex(const char *path, const word128_t *mem, int depth)
     return 0;
 }
 
+static void put_bits(uint64_t word[4], int *bit_pos, uint64_t value, int width)
+{
+    for (int i = 0; i < width; i++) {
+        if ((value >> i) & 1ULL) {
+            int pos = *bit_pos + i;
+            word[pos / 64] |= 1ULL << (pos % 64);
+        }
+    }
+    *bit_pos += width;
+}
+
+static void write_layer_config_hex(const char *path, const layer_cfg_dump_t *cfg, int count)
+{
+    FILE *fp = fopen(path, "w");
+    if (!fp) { perror(path); exit(1); }
+    for (int i = 0; i < FULL_CFG_DEPTH; i++) {
+        const layer_cfg_dump_t *c = i < count ? &cfg[i] : NULL;
+        uint64_t word[4] = {0, 0, 0, 0};
+        int bit = 0;
+        if (c) {
+            put_bits(word, &bit, (uint64_t)c->residual_zero_point_base & 0x3fffU, 14);
+            put_bits(word, &bit, (uint64_t)c->residual_shift_base & 0x3fffU, 14);
+            put_bits(word, &bit, (uint64_t)c->residual_mult_base & 0x3fffU, 14);
+            put_bits(word, &bit, (uint64_t)c->prelu_shift_base & 0x3fffU, 14);
+            put_bits(word, &bit, (uint64_t)c->prelu_mult_base & 0x3fffU, 14);
+            put_bits(word, &bit, (uint64_t)c->requant_shift_base & 0x3fffU, 14);
+            put_bits(word, &bit, (uint64_t)c->requant_mult_base & 0x3fffU, 14);
+            put_bits(word, &bit, (uint64_t)c->bias_base & 0x3fffU, 14);
+            put_bits(word, &bit, (uint64_t)(uint8_t)c->output_zero_point, 8);
+            put_bits(word, &bit, (uint64_t)c->mode & 0x3U, 2);
+            put_bits(word, &bit, (uint64_t)(uint8_t)c->pad_value, 8);
+            put_bits(word, &bit, (uint64_t)c->pad & 0x1U, 1);
+            put_bits(word, &bit, (uint64_t)c->stride & 0x1U, 1);
+            put_bits(word, &bit, (uint64_t)c->num_filter_code & 0x3U, 2);
+            put_bits(word, &bit, (uint64_t)c->ifmap_size_code & 0x7U, 3);
+            put_bits(word, &bit, (uint64_t)c->residual_base & 0xffffU, 16);
+            put_bits(word, &bit, (uint64_t)c->residual_en & 0x1U, 1);
+            put_bits(word, &bit, (uint64_t)c->out_base & 0xffffU, 16);
+            put_bits(word, &bit, (uint64_t)c->wgt_base & 0xffffU, 16);
+            put_bits(word, &bit, (uint64_t)c->act_base & 0xffffU, 16);
+            put_bits(word, &bit, (uint64_t)c->n_size & 0xffffU, 16);
+            put_bits(word, &bit, (uint64_t)c->m_size & 0xffffU, 16);
+            put_bits(word, &bit, (uint64_t)c->k_size & 0x3ffU, 10);
+            put_bits(word, &bit, (uint64_t)c->layer_type & 0x7U, 3);
+            put_bits(word, &bit, (uint64_t)c->layer_last & 0x1U, 1);
+            put_bits(word, &bit, (uint64_t)c->layer_valid & 0x1U, 1);
+        }
+        fprintf(fp, "%015llx%016llx%016llx%016llx\n",
+                (unsigned long long)(word[3] & 0x0fffffffffffffffULL), (unsigned long long)word[2],
+                (unsigned long long)word[1], (unsigned long long)word[0]);
+    }
+    fclose(fp);
+}
+
 static int ensure_dir(const char *path)
 {
     if (mkdir(path, 0775) == 0) return 0;
@@ -114,6 +225,51 @@ static int ensure_dir(const char *path)
 static void make_path(char *dst, size_t n, const char *dir, const char *name)
 {
     snprintf(dst, n, "%s/%s", dir, name);
+}
+
+static void fill_layer_cfg(layer_cfg_dump_t *cfg,
+                           const qf_op_t *op,
+                           const qf_op_t *resop,
+                           int act_base,
+                           int wgt_base,
+                           int out_base,
+                           int residual_base,
+                           int layer_last)
+{
+    memset(cfg, 0, sizeof(*cfg));
+    cfg->layer_valid = 1;
+    cfg->layer_last = layer_last;
+    cfg->k_size = op->in_c;
+    cfg->m_size = op->type == QF_OP_LINEAR ? 1 : op_out_h(op) * op_out_w(op);
+    cfg->n_size = op->out_c;
+    cfg->act_base = act_base;
+    cfg->wgt_base = wgt_base;
+    cfg->out_base = out_base;
+    cfg->residual_en = resop != NULL;
+    cfg->residual_base = resop ? residual_base : 0;
+    cfg->ifmap_size_code = op->type == QF_OP_LINEAR ? 0 : ifmap_size_code(op->in_h);
+    cfg->num_filter_code = num_filter_code(op->out_c);
+    cfg->stride = op->stride_h == 2;
+    cfg->pad = (op->pad_h != 0) || (op->pad_w != 0);
+    cfg->pad_value = -op->in_zero_point;
+    cfg->mode = resop ? 2 : (op->mode == QF_MODE_PRELU ? 1 : 0);
+    cfg->output_zero_point = resop ? -resop->out_zero_point :
+                             (op->type == QF_OP_LINEAR ? LINEAR_FC_OUTPUT_ZERO_POINT :
+                              op->out_zero_point_add);
+    cfg->bias_base = op->type == QF_OP_LINEAR ? LINEAR_FC_PARAM_BASE : op->param_off;
+    cfg->requant_mult_base = cfg->bias_base;
+    cfg->requant_shift_base = cfg->bias_base;
+    cfg->prelu_mult_base = cfg->bias_base;
+    cfg->prelu_shift_base = cfg->bias_base;
+    cfg->residual_mult_base = cfg->bias_base;
+    cfg->residual_shift_base = cfg->bias_base;
+    cfg->residual_zero_point_base = cfg->bias_base;
+
+    if (op->type == QF_OP_LINEAR) cfg->layer_type = 4;          // LY_FC
+    else if (is_dw(op) && op->kh == 7) cfg->layer_type = 6;     // LY_GDCONV7X7
+    else if (is_dw(op)) cfg->layer_type = 2;                    // LY_DWCONV3X3
+    else if (op->kh == 3 && op->kw == 3) cfg->layer_type = 5;   // LY_CONV3X3
+    else cfg->layer_type = 1;                                   // LY_CONV1X1
 }
 
 static void set_lane(word128_t *word, int lane, int8_t value)
@@ -477,6 +633,7 @@ static void dump_sequence(const char *dir, int profile)
     word128_t *ao = calloc(AO_DEPTH, sizeof(word128_t));
     word128_t *wgt = calloc(WGT_DEPTH, sizeof(word128_t));
     word128_t *gold = calloc(AO_DEPTH, sizeof(word128_t));
+    layer_cfg_dump_t cfg[FULL_CFG_DEPTH];
     int8_t *buf0 = calloc(QF_MAX_ACT, 1);
     int8_t *buf1 = calloc(QF_MAX_ACT, 1);
     int8_t *res = calloc(QF_MAX_ACT, 1);
@@ -485,6 +642,7 @@ static void dump_sequence(const char *dir, int profile)
     char path[512];
 
     (void)save_for_input;
+    memset(cfg, 0, sizeof(cfg));
     ensure_dir(dir);
     run_prefix(start_op, buf0, buf1, res, profile == 6 ? initial_res : NULL);
     // run_prefix swaps internally by local variables, so regenerate simply by
@@ -528,6 +686,9 @@ static void dump_sequence(const char *dir, int profile)
         else if (op->kh == 3 && op->kw == 3) pack_conv3x3_weight(wgt, layers[li].wgt_base, op);
         else pack_conv1x1_weight(wgt, layers[li].wgt_base, op);
 
+        fill_layer_cfg(&cfg[li], op, resop, layers[li].act_base, layers[li].wgt_base,
+                       layers[li].out_base, layers[li].residual_base, li == n_layers - 1);
+
         if (resop) {
             compute_fused_params(op, resop, fm, fs, rm, rs, rz);
             res_in = (profile == 6 && li == 0) ? seq_res0 : saved_after_l0;
@@ -553,6 +714,7 @@ static void dump_sequence(const char *dir, int profile)
     }
     dump_params(dir, layers, n_layers);
 
+    make_path(path, sizeof(path), dir, "layer_config.hex"); write_layer_config_hex(path, cfg, n_layers);
     make_path(path, sizeof(path), dir, "system_2_2_ao_init.hex"); write_mem_hex(path, ao, AO_DEPTH);
     make_path(path, sizeof(path), dir, "system_2_2_wgt_init.hex"); write_mem_hex(path, wgt, WGT_DEPTH);
     make_path(path, sizeof(path), dir, "system_2_2_golden.hex"); write_mem_hex(path, gold, AO_DEPTH);
@@ -561,12 +723,164 @@ static void dump_sequence(const char *dir, int profile)
     free(ao); free(wgt); free(gold); free(buf0); free(buf1); free(res); free(initial); free(initial_res);
 }
 
+static void dump_full_model_hw_spec(const char *dir)
+{
+    word128_t *ao = calloc(AO_DEPTH, sizeof(word128_t));
+    word128_t *wgt = calloc(65536, sizeof(word128_t));
+    word128_t *gold = calloc(AO_DEPTH, sizeof(word128_t));
+    int8_t *buf0 = calloc(QF_MAX_ACT, 1);
+    int8_t *buf1 = calloc(QF_MAX_ACT, 1);
+    int8_t *res = calloc(QF_MAX_ACT, 1);
+    int8_t *cur = buf0;
+    int8_t *nxt = buf1;
+    int cur_base = FULL_AO_BASE0;
+    int next_base = FULL_AO_BASE1;
+    int saved_res_base = 0;
+    int residual_live = 0;
+    layer_cfg_dump_t cfg[FULL_CFG_DEPTH];
+    hw_layer_t hw_layers[FULL_CFG_DEPTH];
+    int n_cfg = 0;
+    char path[512];
+
+    memset(cfg, 0, sizeof(cfg));
+    memset(hw_layers, 0, sizeof(hw_layers));
+    ensure_dir(dir);
+
+    memcpy(cur, qf_input, QF_INPUT_SIZE);
+    pack_activation(ao, cur_base, cur, 112, 112, 3);
+
+    for (int op_idx = 0; op_idx < QF_NUM_OPS; op_idx++) {
+        const qf_op_t *op = &qf_ops[op_idx];
+        if (op->type == QF_OP_SAVE_RES) {
+            size_t bytes = (size_t)op->in_h * op->in_w * op->in_c;
+            memcpy(res, cur, bytes);
+            saved_res_base = cur_base;
+            residual_live = 1;
+            continue;
+        }
+        if (op->type != QF_OP_CONV && op->type != QF_OP_LINEAR) {
+            continue;
+        }
+
+        int residual_op = -1;
+        if ((op_idx + 1) < QF_NUM_OPS && qf_ops[op_idx + 1].type == QF_OP_RES_ADD) {
+            residual_op = op_idx + 1;
+        }
+        if (op->type == QF_OP_LINEAR) {
+            next_base = AO_BASE4;
+        } else if (cur_base != FULL_AO_BASE0 && (!residual_live || saved_res_base != FULL_AO_BASE0)) {
+            next_base = FULL_AO_BASE0;
+        } else if (cur_base != FULL_AO_BASE1 && (!residual_live || saved_res_base != FULL_AO_BASE1)) {
+            next_base = FULL_AO_BASE1;
+        } else {
+            next_base = FULL_AO_RES_BASE;
+        }
+
+        if (op->type == QF_OP_LINEAR) {
+            pack_linear_weight(wgt, op->weight_off / LANES, op);
+            run_linear_hw_i8(op, cur, nxt);
+        } else {
+            int32_t fm[1024] = {0}, rm[1024] = {0};
+            int fs[1024] = {0}, rs[1024] = {0};
+            int64_t rz[1024] = {0};
+            const qf_op_t *resop = residual_op >= 0 ? &qf_ops[residual_op] : NULL;
+
+            if (is_dw(op)) pack_dw_weight(wgt, op->weight_off / LANES, op);
+            else if (op->kh == 3 && op->kw == 3) pack_conv3x3_weight(wgt, op->weight_off / LANES, op);
+            else pack_conv1x1_weight(wgt, op->weight_off / LANES, op);
+
+            if (resop) {
+                compute_fused_params(op, resop, fm, fs, rm, rs, rz);
+            }
+            run_conv_hw(op, resop, cur, resop ? res : NULL, nxt,
+                        resop ? fm : NULL, resop ? fs : NULL, rm, rs, rz);
+        }
+
+        if (n_cfg >= FULL_CFG_DEPTH) {
+            fprintf(stderr, "too many hardware layers for FULL_CFG_DEPTH=%d\n", FULL_CFG_DEPTH);
+            exit(1);
+        }
+
+        cfg[n_cfg].layer_valid = 1;
+        cfg[n_cfg].layer_last = 0;
+        cfg[n_cfg].k_size = op->in_c;
+        cfg[n_cfg].m_size = op->type == QF_OP_LINEAR ? 1 : op_out_h(op) * op_out_w(op);
+        cfg[n_cfg].n_size = op->out_c;
+        cfg[n_cfg].act_base = cur_base;
+        cfg[n_cfg].wgt_base = op->weight_off / LANES;
+        cfg[n_cfg].out_base = next_base;
+        cfg[n_cfg].residual_en = residual_op >= 0;
+        cfg[n_cfg].residual_base = residual_op >= 0 ? saved_res_base : 0;
+        cfg[n_cfg].ifmap_size_code = op->type == QF_OP_LINEAR ? 0 : ifmap_size_code(op->in_h);
+        cfg[n_cfg].num_filter_code = num_filter_code(op->out_c);
+        cfg[n_cfg].stride = op->stride_h == 2;
+        cfg[n_cfg].pad = (op->pad_h != 0) || (op->pad_w != 0);
+        cfg[n_cfg].pad_value = -op->in_zero_point;
+        cfg[n_cfg].mode = residual_op >= 0 ? QF_MODE_REQUANT + 2 :
+                          (op->mode == QF_MODE_PRELU ? QF_MODE_PRELU : QF_MODE_REQUANT);
+        cfg[n_cfg].output_zero_point = residual_op >= 0 ? -qf_ops[residual_op].out_zero_point :
+                                        (op->type == QF_OP_LINEAR ? LINEAR_FC_OUTPUT_ZERO_POINT :
+                                         op->out_zero_point_add);
+        cfg[n_cfg].bias_base = op->type == QF_OP_LINEAR ? LINEAR_FC_PARAM_BASE : op->param_off;
+        cfg[n_cfg].requant_mult_base = cfg[n_cfg].bias_base;
+        cfg[n_cfg].requant_shift_base = cfg[n_cfg].bias_base;
+        cfg[n_cfg].prelu_mult_base = cfg[n_cfg].bias_base;
+        cfg[n_cfg].prelu_shift_base = cfg[n_cfg].bias_base;
+        cfg[n_cfg].residual_mult_base = cfg[n_cfg].bias_base;
+        cfg[n_cfg].residual_shift_base = cfg[n_cfg].bias_base;
+        cfg[n_cfg].residual_zero_point_base = cfg[n_cfg].bias_base;
+
+        if (op->type == QF_OP_LINEAR) cfg[n_cfg].layer_type = 4;          // LY_FC
+        else if (is_dw(op) && op->kh == 7) cfg[n_cfg].layer_type = 6;     // LY_GDCONV7X7
+        else if (is_dw(op)) cfg[n_cfg].layer_type = 2;                    // LY_DWCONV3X3
+        else if (op->kh == 3 && op->kw == 3) cfg[n_cfg].layer_type = 5;   // LY_CONV3X3
+        else cfg[n_cfg].layer_type = 1;                                   // LY_CONV1X1
+
+        hw_layers[n_cfg].conv_op = op_idx;
+        hw_layers[n_cfg].residual_op = residual_op;
+        hw_layers[n_cfg].act_base = cur_base;
+        hw_layers[n_cfg].wgt_base = cfg[n_cfg].wgt_base;
+        hw_layers[n_cfg].out_base = next_base;
+        hw_layers[n_cfg].residual_base = cfg[n_cfg].residual_base;
+        n_cfg++;
+
+        if (residual_op >= 0) {
+            residual_live = 0;
+            op_idx++;
+        }
+
+        if (op->type == QF_OP_LINEAR) {
+            pack_activation(gold, next_base, nxt, 1, 1, op->out_c);
+        }
+
+        int8_t *tmp = cur; cur = nxt; nxt = tmp;
+        cur_base = next_base;
+    }
+
+    if (n_cfg > 0) {
+        cfg[n_cfg - 1].layer_last = 1;
+    }
+
+    dump_params(dir, hw_layers, n_cfg);
+    make_path(path, sizeof(path), dir, "layer_config.hex"); write_layer_config_hex(path, cfg, n_cfg);
+    make_path(path, sizeof(path), dir, "system_2_2_ao_init.hex"); write_mem_hex(path, ao, AO_DEPTH);
+    make_path(path, sizeof(path), dir, "system_2_2_wgt_init.hex"); write_mem_hex(path, wgt, 65536);
+    make_path(path, sizeof(path), dir, "system_2_2_golden.hex"); write_mem_hex(path, gold, AO_DEPTH);
+    printf("dumped full_model_hw_spec layers=%d dir=%s final_base=%d\n", n_cfg, dir, cur_base);
+
+    free(ao); free(wgt); free(gold); free(buf0); free(buf1); free(res);
+}
+
 int main(int argc, char **argv)
 {
     const char *dir = argc > 1 ? argv[1] : "generated/system_2_2_seq0";
     int profile = argc > 2 ? atoi(argv[2]) : 5;
+    if (profile == FULL_LAYER_PROFILE) {
+        dump_full_model_hw_spec(dir);
+        return 0;
+    }
     if (profile != 5 && profile != 6 && profile != 8 && profile != 10 && profile != 12) {
-        fprintf(stderr, "profile must be 5, 6, 8, 10, or 12\n");
+        fprintf(stderr, "profile must be 5, 6, 8, 10, 12, or 13\n");
         return 1;
     }
     dump_sequence(dir, profile);

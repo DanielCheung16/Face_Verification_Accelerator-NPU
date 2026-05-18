@@ -23,6 +23,7 @@ module top #(
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
     parameter int NUM_DEV = 3,
     parameter int MAX_LAYER = 8,
+    parameter int LAYER_CONFIG_DEPTH = 128,
     parameter int COMMON_PARAM_DEPTH = 9792,
     parameter int PRELU_PARAM_DEPTH = 7552,
     parameter int RESIDUAL_PARAM_DEPTH = 1280,
@@ -41,6 +42,7 @@ module top #(
     parameter string QUANT_RESIDUAL_MULT_INIT_FILE = "",
     parameter string QUANT_RESIDUAL_SHIFT_INIT_FILE = "",
     parameter string QUANT_RESIDUAL_ZERO_POINT_INIT_FILE = "",
+    parameter string LAYER_CONFIG_INIT_FILE = "",
 
     localparam int AO_MASK_W = GB_DATA_W / DATA_W,
     localparam int WGT_MASK_W = GB_DATA_W / DATA_W,
@@ -407,7 +409,9 @@ module top #(
         .NUM_DEV(NUM_DEV),
         .MAX_LAYER(MAX_LAYER),
         .LAYER_CONFIG_PROFILE(LAYER_CONFIG_PROFILE),
-        .PARAM_ADDR_W(PARAM_ADDR_W)
+        .PARAM_ADDR_W(PARAM_ADDR_W),
+        .LAYER_CONFIG_DEPTH(LAYER_CONFIG_DEPTH),
+        .LAYER_CONFIG_INIT_FILE(LAYER_CONFIG_INIT_FILE)
     ) u_layer_switcher (
         .clk(aclk),
         .rst_n(aresetn),
