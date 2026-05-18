@@ -14,6 +14,8 @@ module spatial_rd_controller #(
 
     //system control signals
     input  logic read_start_i,           //one pulse to start local-buffer read
+    input  logic conv_mode_i,            //0: DW lane walk, 1: fixed activation lane + OC weight lanes
+    input  logic [LANE_CNT_W-1:0] ic_lane_i,
     input  logic [WGT_RD_ADDR_W:0] current_num_filter_i,
         //refers to the number of current layer's filter
         //current_num_filter = ic*oc (for traditional conv3x3)
@@ -52,6 +54,8 @@ module spatial_rd_controller #(
     logic [WGT_RD_ADDR_W-1:0] rd_addr_wgt_nxt;
 
     logic last_lane;
+    logic read_done_nxt;
+    logic filter_round_done_nxt;
     logic weight_ready;
     logic weight_ready_used, weight_ready_used_nxt;
     logic wgt_wrap;
@@ -97,13 +101,8 @@ module spatial_rd_controller #(
             rd_addr_wgt_o <= rd_addr_wgt_nxt;
 
             read_busy_o <= (state_nxt != IDLE);
-            read_done_o <= rd_en_o && (rd_addr_act_o == ACT_RD_ADDR_W'(LANES - 1));
-            if (current_num_filter_i <= {{WGT_RD_ADDR_W{1'b0}}, 1'b1}) begin
-                filter_round_done_o <= rd_en_o;
-            end else begin
-                filter_round_done_o <= rd_en_o &&
-                                       ({1'b0, rd_addr_wgt_o} == (current_num_filter_i - {{WGT_RD_ADDR_W{1'b0}}, 1'b1}));
-            end
+            read_done_o <= read_done_nxt;
+            filter_round_done_o <= filter_round_done_nxt;
         end
     end
     
@@ -115,6 +114,17 @@ module spatial_rd_controller #(
         rd_en_nxt = 1'b0;
         rd_addr_act_nxt = rd_addr_act_o;
         rd_addr_wgt_nxt = rd_addr_wgt_o;
+        read_done_nxt = rd_en_o &&
+                        (conv_mode_i ? (rd_addr_wgt_o == WGT_RD_ADDR_W'(LANES - 1)) :
+                                       (rd_addr_act_o == ACT_RD_ADDR_W'(LANES - 1)));
+        if (conv_mode_i) begin
+            filter_round_done_nxt = read_done_nxt;
+        end else if (current_num_filter_i <= {{WGT_RD_ADDR_W{1'b0}}, 1'b1}) begin
+            filter_round_done_nxt = rd_en_o;
+        end else begin
+            filter_round_done_nxt = rd_en_o &&
+                                    ({1'b0, rd_addr_wgt_o} == (current_num_filter_i - {{WGT_RD_ADDR_W{1'b0}}, 1'b1}));
+        end
 
         if (!weights_loaded_i) begin
             weight_ready_used_nxt = 1'b0;
@@ -147,8 +157,13 @@ module spatial_rd_controller #(
 
             READ_TILE: begin
                 rd_en_nxt = 1'b1;
-                rd_addr_act_nxt = ACT_RD_ADDR_W'(lane_cnt);
-                rd_addr_wgt_nxt = wgt_rd_cnt;
+                // DW reads the same channel lane from activation and weight.
+                // Conv3x3 keeps activation fixed to the selected input
+                // channel and walks 16 output-channel weight lanes.
+                rd_addr_act_nxt = conv_mode_i ? ACT_RD_ADDR_W'(ic_lane_i) :
+                                                ACT_RD_ADDR_W'(lane_cnt);
+                rd_addr_wgt_nxt = conv_mode_i ? WGT_RD_ADDR_W'(lane_cnt) :
+                                                wgt_rd_cnt;
 
                 if (wgt_wrap) begin
                     wgt_rd_cnt_nxt = '0;

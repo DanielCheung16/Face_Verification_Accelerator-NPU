@@ -65,6 +65,7 @@ module tb_spatial_ld_controller;
         .out_y_i(out_y_i),
         .stride_i(stride_i),
         .pad_i(pad_i),
+        .pad_value_i(8'sd0),
         .conv_mode_i(conv_mode_i),
         .ic_offset_i(ic_offset_i),
         .input_channel_words_shift_i(input_channel_words_shift_i),

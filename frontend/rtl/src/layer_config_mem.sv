@@ -44,6 +44,7 @@ module layer_config_mem #(
     output logic [1:0]              num_filter_code_o,
     output logic                    stride_o,
     output logic                    pad_o,
+    output logic signed [DATA_W-1:0] pad_value_o,
 
     output postprocess_mode_t       mode_o,
     output logic signed [OUT_W-1:0] output_zero_point_o,
@@ -141,6 +142,7 @@ module layer_config_mem #(
         logic [1:0]              num_filter_code;
         logic                    stride;
         logic                    pad;
+        logic signed [DATA_W-1:0] pad_value;
         postprocess_mode_t       mode;
         logic signed [OUT_W-1:0] output_zero_point;
         logic [PARAM_ADDR_W-1:0] bias_base;
@@ -432,6 +434,7 @@ module layer_config_mem #(
     assign num_filter_code_o = cfg_w.num_filter_code;
     assign stride_o = cfg_w.stride;
     assign pad_o = cfg_w.pad;
+    assign pad_value_o = cfg_w.pad_value;
     assign mode_o = cfg_w.mode;
     assign output_zero_point_o = cfg_w.output_zero_point;
     assign bias_base_o = cfg_w.bias_base;

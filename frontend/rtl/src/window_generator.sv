@@ -69,6 +69,7 @@ module window_generator #(
     input  logic [ADDR_W-1:0] out_y_i,
     input  logic stride_i,
     input  logic pad_i,
+    input  logic signed [DATA_W-1:0] pad_value_i,
     input  logic conv_mode_i,                 // 0: DW, 1: traditional conv3x3
     input  logic [ADDR_W-1:0] ic_offset_i,    // input-channel slice for conv3x3
     input  logic [3:0] input_channel_words_shift_i,
@@ -115,7 +116,8 @@ module window_generator #(
 
     spatial_ld_controller #(
         .ADDR_W(ADDR_W),
-        .WORD_W(WORD_W)
+        .WORD_W(WORD_W),
+        .DATA_W(DATA_W)
     ) u_spatial_ld_controller (
         .clk(clk),
         .rst_n(rst_n),
@@ -129,6 +131,7 @@ module window_generator #(
         .out_y_i(out_y_i),
         .stride_i(stride_i),
         .pad_i(pad_i),
+        .pad_value_i(pad_value_i),
         .conv_mode_i(conv_mode_i),
         .ic_offset_i(ic_offset_i),
         .input_channel_words_shift_i(input_channel_words_shift_i),
@@ -156,6 +159,8 @@ module window_generator #(
         .clk(clk),
         .rst_n(rst_n),
         .read_start_i(read_start_i),
+        .conv_mode_i(conv_mode_i),
+        .ic_lane_i(ic_offset_i[3:0]),
         .current_num_filter_i(current_num_filter_i),
         .window_loaded_i(window_loaded),
         .weights_loaded_i(weights_loaded),

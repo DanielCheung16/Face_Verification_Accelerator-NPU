@@ -1,6 +1,7 @@
 module spatial_ld_controller #(
     parameter int ADDR_W = 16,
     parameter int WORD_W = 128,
+    parameter int DATA_W = 8,
 
     localparam int NUM_POS = 9,
     localparam int POS_W = 4
@@ -19,6 +20,7 @@ module spatial_ld_controller #(
     input  logic [ADDR_W-1:0] out_y_i,
     input  logic stride_i,              //0: stride=1, 1: stride=2
     input  logic pad_i,                 //0: no padding, 1: 3x3 same padding
+    input  logic signed [DATA_W-1:0] pad_value_i,
     input  logic conv_mode_i,           //0: DW, 1: traditional conv3x3
     input  logic [ADDR_W-1:0] ic_offset_i,
     input  logic [3:0] input_channel_words_shift_i,
@@ -95,6 +97,7 @@ module spatial_ld_controller #(
     logic act_wr_en_nxt;
     logic [POS_W-1:0] act_wr_pos_nxt;
     logic [WORD_W-1:0] act_wr_data_nxt;
+    logic [WORD_W-1:0] pad_word;
     logic wgt_wr_en_nxt;
     logic [POS_W-1:0] wgt_wr_pos_nxt;
     logic [WORD_W-1:0] wgt_wr_data_nxt;
@@ -153,6 +156,12 @@ module spatial_ld_controller #(
         .wgt_addr_o(addr_gen_wgt_addr),
         .act_zero_o(addr_gen_act_zero)
     );
+
+    always_comb begin
+        for (int lane = 0; lane < (WORD_W / DATA_W); lane++) begin
+            pad_word[lane*DATA_W +: DATA_W] = pad_value_i;
+        end
+    end
 
     // Address setup is intentionally isolated in SETUP_ADDR. ISSUE_READ only
     // muxes one of the registered 9 addresses, keeping the SRAM address path short.
@@ -307,7 +316,7 @@ module spatial_ld_controller #(
         // SRAM word with the local-buffer write position.
         act_wr_en_nxt = act_rd_valid_pipe2;
         act_wr_pos_nxt = act_wr_pos_pipe2;
-        act_wr_data_nxt = act_zero_pipe2 ? '0 : gb_act_rd_data_i;
+        act_wr_data_nxt = act_zero_pipe2 ? pad_word : gb_act_rd_data_i;
         wgt_wr_en_nxt = wgt_rd_valid_pipe2;
         wgt_wr_pos_nxt = wgt_wr_pos_pipe2;
         wgt_wr_data_nxt = gb_wgt_rd_data_i;

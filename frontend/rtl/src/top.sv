@@ -101,6 +101,7 @@ module top #(
     logic [1:0]                    num_filter_code;
     logic                          stride;
     logic                          pad;
+    logic signed [DATA_W-1:0]      pad_value;
     logic signed [OUT_W-1:0]       output_zero_point;
     logic [PARAM_ADDR_W-1:0]       bias_base;
     logic [PARAM_ADDR_W-1:0]       requant_mult_base;
@@ -395,6 +396,7 @@ module top #(
         .num_filter_code_o(num_filter_code),
         .stride_o(stride),
         .pad_o(pad),
+        .pad_value_o(pad_value),
         .output_zero_point_o(output_zero_point),
         .bias_base_o(bias_base),
         .requant_mult_base_o(requant_mult_base),
@@ -564,6 +566,10 @@ module top #(
         .ifmap_size_code_i(ifmap_size_code),
         .stride_i(stride),
         .pad_i(pad),
+        .pad_value_i(pad_value),
+        .conv_mode_i(1'b0),
+        .input_channel_count_i(spatial_current_num_filter),
+        .input_channel_words_shift_i(4'd0),
         .current_num_filter_i(spatial_current_num_filter),
         .post_mode_i(spatial_post_mode),
         .residual_en_i(residual_en),

@@ -59,6 +59,7 @@ module layer_switcher #(
     output logic [1:0]                    num_filter_code_o,
     output logic                          stride_o,
     output logic                          pad_o,
+    output logic signed [DATA_W-1:0]      pad_value_o,
     output logic signed [OUT_W-1:0]       output_zero_point_o,
     output logic [PARAM_ADDR_W-1:0]       bias_base_o,
     output logic [PARAM_ADDR_W-1:0]       requant_mult_base_o,
@@ -278,6 +279,7 @@ module layer_switcher #(
         .num_filter_code_o(num_filter_code_o),
         .stride_o(stride_o),
         .pad_o(pad_o),
+        .pad_value_o(pad_value_o),
         .mode_o(mode_o),
         .output_zero_point_o(output_zero_point_o),
         .bias_base_o(bias_base_o),
@@ -299,6 +301,7 @@ module layer_switcher #(
     // Current device slots:
     //   LY_CONV1X1    -> CONV1X1_DEV
     //   LY_DWCONV3X3  -> SPATIAL_DEV
+    //   LY_CONV3X3    -> SPATIAL_DEV
     // -------------------------------------------------------------------------
     always_comb begin
         active_dev_valid_w = 1'b0;
@@ -311,6 +314,13 @@ module layer_switcher #(
             end
 
             LY_DWCONV3X3: begin
+                if (NUM_DEV > 1) begin
+                    active_dev_valid_w = 1'b1;
+                    active_dev_idx_w   = SPATIAL_DEV;
+                end
+            end
+
+            LY_CONV3X3: begin
                 if (NUM_DEV > 1) begin
                     active_dev_valid_w = 1'b1;
                     active_dev_idx_w   = SPATIAL_DEV;

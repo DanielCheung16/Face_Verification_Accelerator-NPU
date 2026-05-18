@@ -316,3 +316,6 @@ dwconv3x3好像不需要支持residual
 1. 需要是可综合设计。涉及到rom/ram的部分，一定是要按照能综合成memory的写法（要考虑接口大小，深度，读取数量）
 2. 宽bit大扇出的全局控制信号，考虑到net delay问题。如果不影响steady status，那么可以考虑加本地reg做间隔。输出在允许的情况下经历reg输出。
 3. 注意你C model的可配置性（可选layers），我不希望你每次都要重新写很多C code。不要去动之前做过精确性检查的那个最重要整个系统的golden c。
+
+
+## 支持普通conv3x3的设计
