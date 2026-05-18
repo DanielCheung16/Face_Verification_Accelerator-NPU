@@ -52,6 +52,10 @@ module spatial_top #(
     input  logic [2:0] ifmap_size_code_i,       // 0:7, 1:14, 2:28, 3:56, 4:112
     input  logic stride_i,                      // 0: stride=1, 1: stride=2
     input  logic pad_i,                         // 0: valid/no pad, 1: same pad
+    input  logic signed [DATA_W-1:0] pad_value_i,
+    input  logic conv_mode_i,                   // 0: DWConv3x3, 1: traditional Conv3x3
+    input  logic [FILTER_CNT_W-1:0] input_channel_count_i,
+    input  logic [3:0] input_channel_words_shift_i,
     input  logic [FILTER_CNT_W-1:0] current_num_filter_i,
 
     // Postprocess config.
@@ -137,6 +141,10 @@ module spatial_top #(
         .ifmap_size_code_i(ifmap_size_code_i),
         .stride_i(stride_i),
         .pad_i(pad_i),
+        .pad_value_i(pad_value_i),
+        .conv_mode_i(conv_mode_i),
+        .input_channel_count_i(input_channel_count_i),
+        .input_channel_words_shift_i(input_channel_words_shift_i),
         .current_num_filter_i(current_num_filter_i),
         .gb_act_rd_en_o(gb_act_rd_en_o),
         .gb_act_rd_addr_o(gb_act_rd_addr_o),

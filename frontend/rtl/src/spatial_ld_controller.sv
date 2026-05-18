@@ -1,6 +1,7 @@
 module spatial_ld_controller #(
     parameter int ADDR_W = 16,
     parameter int WORD_W = 128,
+    parameter int DATA_W = 8,
 
     localparam int NUM_POS = 9,
     localparam int POS_W = 4
@@ -19,6 +20,10 @@ module spatial_ld_controller #(
     input  logic [ADDR_W-1:0] out_y_i,
     input  logic stride_i,              //0: stride=1, 1: stride=2
     input  logic pad_i,                 //0: no padding, 1: 3x3 same padding
+    input  logic signed [DATA_W-1:0] pad_value_i,
+    input  logic conv_mode_i,           //0: DW, 1: traditional conv3x3
+    input  logic [ADDR_W-1:0] ic_offset_i,
+    input  logic [3:0] input_channel_words_shift_i,
     input  logic all_weights_loaded_i,
 
     //global A/O SRAM read
@@ -63,6 +68,9 @@ module spatial_ld_controller #(
     logic [ADDR_W-1:0] center_y, center_y_nxt;
     logic [3:0] num_filter_shift, num_filter_shift_nxt;
     logic [2:0] ifmap_size_code, ifmap_size_code_nxt;
+    logic conv_mode, conv_mode_nxt;
+    logic [ADDR_W-1:0] ic_offset, ic_offset_nxt;
+    logic [3:0] input_channel_words_shift, input_channel_words_shift_nxt;
     logic [ADDR_W-1:0] act_addr [NUM_POS];
     logic [ADDR_W-1:0] act_addr_nxt [NUM_POS];
     logic [ADDR_W-1:0] wgt_addr [NUM_POS];
@@ -89,6 +97,7 @@ module spatial_ld_controller #(
     logic act_wr_en_nxt;
     logic [POS_W-1:0] act_wr_pos_nxt;
     logic [WORD_W-1:0] act_wr_data_nxt;
+    logic [WORD_W-1:0] pad_word;
     logic wgt_wr_en_nxt;
     logic [POS_W-1:0] wgt_wr_pos_nxt;
     logic [WORD_W-1:0] wgt_wr_data_nxt;
@@ -101,6 +110,9 @@ module spatial_ld_controller #(
     logic [ADDR_W-1:0] cfg_center_y;
     logic [3:0] cfg_num_filter_shift;
     logic [2:0] cfg_ifmap_size_code;
+    logic cfg_conv_mode;
+    logic [ADDR_W-1:0] cfg_ic_offset;
+    logic [3:0] cfg_input_channel_words_shift;
     logic [ADDR_W-1:0] addr_gen_act_addr [NUM_POS];
     logic [ADDR_W-1:0] addr_gen_wgt_addr [NUM_POS];
     logic [NUM_POS-1:0] addr_gen_act_zero;
@@ -117,6 +129,9 @@ module spatial_ld_controller #(
         .out_y_i(out_y_i),
         .stride_i(stride_i),
         .pad_i(pad_i),
+        .conv_mode_i(conv_mode_i),
+        .ic_offset_i(ic_offset_i),
+        .input_channel_words_shift_i(input_channel_words_shift_i),
         .row_stride_i(row_stride),
         .pixel_stride_i(pixel_stride),
         .tile_offset_r_i(tile_offset),
@@ -124,6 +139,9 @@ module spatial_ld_controller #(
         .center_y_i(center_y),
         .num_filter_shift_i(num_filter_shift),
         .ifmap_size_code_r_i(ifmap_size_code),
+        .conv_mode_r_i(conv_mode),
+        .ic_offset_r_i(ic_offset),
+        .input_channel_words_shift_r_i(input_channel_words_shift),
         .cfg_row_stride_o(cfg_row_stride),
         .cfg_pixel_stride_o(cfg_pixel_stride),
         .cfg_tile_offset_o(cfg_tile_offset),
@@ -131,10 +149,19 @@ module spatial_ld_controller #(
         .cfg_center_y_o(cfg_center_y),
         .cfg_num_filter_shift_o(cfg_num_filter_shift),
         .cfg_ifmap_size_code_o(cfg_ifmap_size_code),
+        .cfg_conv_mode_o(cfg_conv_mode),
+        .cfg_ic_offset_o(cfg_ic_offset),
+        .cfg_input_channel_words_shift_o(cfg_input_channel_words_shift),
         .act_addr_o(addr_gen_act_addr),
         .wgt_addr_o(addr_gen_wgt_addr),
         .act_zero_o(addr_gen_act_zero)
     );
+
+    always_comb begin
+        for (int lane = 0; lane < (WORD_W / DATA_W); lane++) begin
+            pad_word[lane*DATA_W +: DATA_W] = pad_value_i;
+        end
+    end
 
     // Address setup is intentionally isolated in SETUP_ADDR. ISSUE_READ only
     // muxes one of the registered 9 addresses, keeping the SRAM address path short.
@@ -146,6 +173,9 @@ module spatial_ld_controller #(
         center_y_nxt = center_y;
         num_filter_shift_nxt = num_filter_shift;
         ifmap_size_code_nxt = ifmap_size_code;
+        conv_mode_nxt = conv_mode;
+        ic_offset_nxt = ic_offset;
+        input_channel_words_shift_nxt = input_channel_words_shift;
         for (int pos = 0; pos < NUM_POS; pos++) begin
             act_addr_nxt[pos] = act_addr[pos];
             wgt_addr_nxt[pos] = wgt_addr[pos];
@@ -160,6 +190,9 @@ module spatial_ld_controller #(
             center_y_nxt = cfg_center_y;
             num_filter_shift_nxt = cfg_num_filter_shift;
             ifmap_size_code_nxt = cfg_ifmap_size_code;
+            conv_mode_nxt = cfg_conv_mode;
+            ic_offset_nxt = cfg_ic_offset;
+            input_channel_words_shift_nxt = cfg_input_channel_words_shift;
         end
 
         if (state == SETUP_ADDR) begin
@@ -182,6 +215,9 @@ module spatial_ld_controller #(
             center_y <= '0;
             num_filter_shift <= '0;
             ifmap_size_code <= '0;
+            conv_mode <= 1'b0;
+            ic_offset <= '0;
+            input_channel_words_shift <= '0;
             act_wr_pos_pipe <= '0;
             wgt_wr_pos_pipe <= '0;
             act_wr_pos_pipe2 <= '0;
@@ -221,6 +257,9 @@ module spatial_ld_controller #(
             center_y <= center_y_nxt;
             num_filter_shift <= num_filter_shift_nxt;
             ifmap_size_code <= ifmap_size_code_nxt;
+            conv_mode <= conv_mode_nxt;
+            ic_offset <= ic_offset_nxt;
+            input_channel_words_shift <= input_channel_words_shift_nxt;
             act_wr_pos_pipe <= act_wr_pos_pipe_nxt;
             wgt_wr_pos_pipe <= wgt_wr_pos_pipe_nxt;
             act_wr_pos_pipe2 <= act_wr_pos_pipe2_nxt;
@@ -277,7 +316,7 @@ module spatial_ld_controller #(
         // SRAM word with the local-buffer write position.
         act_wr_en_nxt = act_rd_valid_pipe2;
         act_wr_pos_nxt = act_wr_pos_pipe2;
-        act_wr_data_nxt = act_zero_pipe2 ? '0 : gb_act_rd_data_i;
+        act_wr_data_nxt = act_zero_pipe2 ? pad_word : gb_act_rd_data_i;
         wgt_wr_en_nxt = wgt_rd_valid_pipe2;
         wgt_wr_pos_nxt = wgt_wr_pos_pipe2;
         wgt_wr_data_nxt = gb_wgt_rd_data_i;
@@ -315,7 +354,9 @@ module spatial_ld_controller #(
                     act_rd_valid_pipe_nxt = 1'b1;
                 end
 
-                if (!all_weights_loaded_i) begin
+                // DW can keep the local weight buffer after it is fully loaded.
+                // Conv3x3 reloads weights for each input-channel slice.
+                if (conv_mode || !all_weights_loaded_i) begin
                     gb_wgt_rd_en_nxt = 1'b1;
                     gb_wgt_rd_addr_nxt = wgt_addr[issue_pos_cnt];
                     wgt_rd_valid_pipe_nxt = 1'b1;

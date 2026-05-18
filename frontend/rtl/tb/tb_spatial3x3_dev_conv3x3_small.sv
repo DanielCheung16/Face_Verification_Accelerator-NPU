@@ -1,18 +1,20 @@
 `timescale 1ns/1ps
 
-module tb_spatial3x3_dev;
+module tb_spatial3x3_dev_conv3x3_small;
     parameter int ADDR_W = 16;
     parameter int WORD_W = 128;
     parameter int DATA_W = 8;
     parameter int ACC_W = 32;
     parameter int ACT_DEPTH = 1;
-    parameter int WGT_DEPTH = 2;
+    parameter int WGT_DEPTH = 4;
     parameter int HALF_CYCLE_TIME = 5;
 
     localparam int LANES = WORD_W / DATA_W;
     localparam int IFMAP_SIZE = 7;
-    localparam int NUM_FILTER = 32;
-    localparam int TOTAL_OUTPUTS = IFMAP_SIZE * IFMAP_SIZE * NUM_FILTER;
+    localparam int IC = 3;
+    localparam int OC = 64;
+    localparam int OC_WORDS = OC / LANES;
+    localparam int TOTAL_OUTPUTS = IFMAP_SIZE * IFMAP_SIZE * OC;
     localparam int MEM_DEPTH = 4096;
 
     logic clk;
@@ -25,6 +27,9 @@ module tb_spatial3x3_dev;
     logic [2:0] ifmap_size_code_i;
     logic stride_i;
     logic pad_i;
+    logic conv_mode_i;
+    logic [($clog2(WGT_DEPTH*LANES)+1)-1:0] input_channel_count_i;
+    logic [3:0] input_channel_words_shift_i;
     logic [($clog2(WGT_DEPTH*LANES)+1)-1:0] current_num_filter_i;
     logic gb_act_rd_en_o;
     logic [ADDR_W-1:0] gb_act_rd_addr_o;
@@ -65,9 +70,9 @@ module tb_spatial3x3_dev;
         .stride_i(stride_i),
         .pad_i(pad_i),
         .pad_value_i(8'sd0),
-        .conv_mode_i(1'b0),
-        .input_channel_count_i(current_num_filter_i),
-        .input_channel_words_shift_i(4'd0),
+        .conv_mode_i(conv_mode_i),
+        .input_channel_count_i(input_channel_count_i),
+        .input_channel_words_shift_i(input_channel_words_shift_i),
         .current_num_filter_i(current_num_filter_i),
         .gb_act_rd_en_o(gb_act_rd_en_o),
         .gb_act_rd_addr_o(gb_act_rd_addr_o),
@@ -81,35 +86,37 @@ module tb_spatial3x3_dev;
         .done_o(done_o)
     );
 
-    function automatic int signed act_value(input int x, input int y, input int ch);
+    function automatic int signed act_value(input int x, input int y, input int ic);
         begin
-            act_value = ((x * 3 + y * 5 + ch) % 13) - 6;
+            act_value = ((x * 5 + y * 3 + ic * 7) % 17) - 8;
         end
     endfunction
 
-    function automatic int signed wgt_value(input int pos, input int ch);
+    function automatic int signed wgt_value(input int ic, input int pos, input int oc);
         begin
-            wgt_value = ((pos * 2 + ch * 3) % 7) - 3;
+            wgt_value = ((ic * 11 + pos * 5 + oc * 3) % 13) - 6;
         end
     endfunction
 
-    function automatic int signed golden_psum(input int ox, input int oy, input int ch);
+    function automatic int signed golden_psum(input int ox, input int oy, input int oc);
         int signed acc;
         int ix;
         int iy;
         int pos;
         begin
             acc = 0;
-            pos = 0;
-            for (int kx = 0; kx < 3; kx++) begin
-                for (int ky = 0; ky < 3; ky++) begin
-                    ix = ox + kx - 1;
-                    iy = oy + ky - 1;
-                    if ((ix >= 0) && (ix < IFMAP_SIZE) &&
-                        (iy >= 0) && (iy < IFMAP_SIZE)) begin
-                        acc += act_value(ix, iy, ch) * wgt_value(pos, ch);
+            for (int ic = 0; ic < IC; ic++) begin
+                pos = 0;
+                for (int kx = 0; kx < 3; kx++) begin
+                    for (int ky = 0; ky < 3; ky++) begin
+                        ix = ox + kx - 1;
+                        iy = oy + ky - 1;
+                        if ((ix >= 0) && (ix < IFMAP_SIZE) &&
+                            (iy >= 0) && (iy < IFMAP_SIZE)) begin
+                            acc += act_value(ix, iy, ic) * wgt_value(ic, pos, oc);
+                        end
+                        pos++;
                     end
-                    pos++;
                 end
             end
             golden_psum = acc;
@@ -141,11 +148,14 @@ module tb_spatial3x3_dev;
         start_i = 1'b0;
         act_base_addr_i = '0;
         wgt_base_addr_i = '0;
-        num_filter_code_i = 2'd0;
-        ifmap_size_code_i = 3'd0;
+        num_filter_code_i = 2'd0;          // OC=64 -> four 128-bit channel words per pixel.
+        ifmap_size_code_i = 3'd0;          // 7x7
         stride_i = 1'b0;
         pad_i = 1'b1;
-        current_num_filter_i = NUM_FILTER;
+        conv_mode_i = 1'b1;
+        input_channel_count_i = IC;
+        input_channel_words_shift_i = 4'd0; // ceil(3/16)=1 word per pixel.
+        current_num_filter_i = OC;
 
         for (int addr = 0; addr < MEM_DEPTH; addr++) begin
             act_mem[addr] = '0;
@@ -154,29 +164,30 @@ module tb_spatial3x3_dev;
 
         for (int x = 0; x < IFMAP_SIZE; x++) begin
             for (int y = 0; y < IFMAP_SIZE; y++) begin
-                for (int tile = 0; tile < NUM_FILTER; tile += LANES) begin
-                    int addr;
-                    addr = (x * IFMAP_SIZE + y) * 64 + tile;
-                    for (int lane = 0; lane < LANES; lane++) begin
-                        set_word_lane(act_mem[addr], lane, act_value(x, y, tile + lane));
-                    end
+                int addr;
+                addr = x * IFMAP_SIZE + y;
+                for (int ic = 0; ic < IC; ic++) begin
+                    set_word_lane(act_mem[addr], ic, act_value(x, y, ic));
                 end
             end
         end
 
-        for (int pos = 0; pos < 9; pos++) begin
-            for (int tile = 0; tile < NUM_FILTER; tile += LANES) begin
-                int addr;
-                addr = pos * 64 + tile;
-                for (int lane = 0; lane < LANES; lane++) begin
-                    set_word_lane(wgt_mem[addr], lane, wgt_value(pos, tile + lane));
+        for (int ic = 0; ic < IC; ic++) begin
+            for (int pos = 0; pos < 9; pos++) begin
+                for (int tile = 0; tile < OC_WORDS; tile++) begin
+                    int addr;
+                    addr = (ic * 9 + pos) * OC_WORDS + tile;
+                    for (int lane = 0; lane < LANES; lane++) begin
+                        set_word_lane(wgt_mem[addr], lane,
+                                      wgt_value(ic, pos, tile * LANES + lane));
+                    end
                 end
             end
         end
 
         for (int x = 0; x < IFMAP_SIZE; x++) begin
             for (int y = 0; y < IFMAP_SIZE; y++) begin
-                for (int tile = 0; tile < NUM_FILTER; tile += LANES) begin
+                for (int tile = 0; tile < OC; tile += LANES) begin
                     for (int lane = 0; lane < LANES; lane++) begin
                         expected_q.push_back(golden_psum(x, y, tile + lane));
                     end
@@ -200,9 +211,9 @@ module tb_spatial3x3_dev;
               $sformatf("expected queue not empty: %0d", expected_q.size()));
 
         if (fail_cnt != 0) begin
-            $fatal(1, "[TB] spatial3x3_dev simple FAILED fail=%0d", fail_cnt);
+            $fatal(1, "[TB] spatial3x3_dev conv3x3 small FAILED fail=%0d", fail_cnt);
         end
-        $display("[TB] spatial3x3_dev simple PASSED outputs=%0d", out_cnt);
+        $display("[TB] spatial3x3_dev conv3x3 small PASSED outputs=%0d", out_cnt);
         $finish;
     end
 
@@ -234,7 +245,7 @@ module tb_spatial3x3_dev;
     end
 
     initial begin
-        repeat (20000) @(posedge clk);
+        repeat (100000) @(posedge clk);
         $fatal(1, "[TB] timeout out_cnt=%0d expected=%0d", out_cnt, TOTAL_OUTPUTS);
     end
 endmodule

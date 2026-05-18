@@ -53,12 +53,14 @@ module layer_switcher #(
     output logic                  residual_en_o,
     output logic [GB_ADDR_W-1:0]  residual_base_addr_o,
     output logic [MAX_LAYER-1:0]  layer_idx_o,
+    output layer_type_t           layer_type_o,
 
     output logic [1:0]                    mode_o,
     output logic [2:0]                    ifmap_size_code_o,
     output logic [1:0]                    num_filter_code_o,
     output logic                          stride_o,
     output logic                          pad_o,
+    output logic signed [DATA_W-1:0]      pad_value_o,
     output logic signed [OUT_W-1:0]       output_zero_point_o,
     output logic [PARAM_ADDR_W-1:0]       bias_base_o,
     output logic [PARAM_ADDR_W-1:0]       requant_mult_base_o,
@@ -99,6 +101,7 @@ module layer_switcher #(
     localparam int DEV_IDX_W = (NUM_DEV <= 1) ? 1 : $clog2(NUM_DEV);
     localparam logic [DEV_IDX_W-1:0] CONV1X1_DEV = '0;
     localparam logic [DEV_IDX_W-1:0] SPATIAL_DEV = (NUM_DEV > 1) ? DEV_IDX_W'(1) : '0;
+    localparam logic [DEV_IDX_W-1:0] GDCONV7X7_DEV = (NUM_DEV > 2) ? DEV_IDX_W'(2) : '0;
 
     typedef enum logic [2:0] {
         IDLE,
@@ -123,6 +126,7 @@ module layer_switcher #(
 
     assign active_done_w = active_dev_valid_w && seen_busy_r && done_i[active_dev_idx_w];
     assign layer_idx_o = layer_cnt_r;
+    assign layer_type_o = layer_type_w;
 
 `ifndef SYNTHESIS
     initial begin
@@ -278,6 +282,7 @@ module layer_switcher #(
         .num_filter_code_o(num_filter_code_o),
         .stride_o(stride_o),
         .pad_o(pad_o),
+        .pad_value_o(pad_value_o),
         .mode_o(mode_o),
         .output_zero_point_o(output_zero_point_o),
         .bias_base_o(bias_base_o),
@@ -298,7 +303,10 @@ module layer_switcher #(
     // device index that should receive start_o and own the shared GB connection.
     // Current device slots:
     //   LY_CONV1X1    -> CONV1X1_DEV
+    //   LY_FC         -> CONV1X1_DEV, as M=1 GEMM without a special FC datapath mode
     //   LY_DWCONV3X3  -> SPATIAL_DEV
+    //   LY_CONV3X3    -> SPATIAL_DEV
+    //   LY_GDCONV7X7  -> GDCONV7X7_DEV
     // -------------------------------------------------------------------------
     always_comb begin
         active_dev_valid_w = 1'b0;
@@ -310,10 +318,29 @@ module layer_switcher #(
                 active_dev_idx_w   = CONV1X1_DEV;
             end
 
+            LY_FC: begin
+                active_dev_valid_w = 1'b1;
+                active_dev_idx_w   = CONV1X1_DEV;
+            end
+
             LY_DWCONV3X3: begin
                 if (NUM_DEV > 1) begin
                     active_dev_valid_w = 1'b1;
                     active_dev_idx_w   = SPATIAL_DEV;
+                end
+            end
+
+            LY_CONV3X3: begin
+                if (NUM_DEV > 1) begin
+                    active_dev_valid_w = 1'b1;
+                    active_dev_idx_w   = SPATIAL_DEV;
+                end
+            end
+
+            LY_GDCONV7X7: begin
+                if (NUM_DEV > 2) begin
+                    active_dev_valid_w = 1'b1;
+                    active_dev_idx_w   = GDCONV7X7_DEV;
                 end
             end
 

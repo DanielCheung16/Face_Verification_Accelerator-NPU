@@ -23,6 +23,10 @@ module spatial3x3_dev #(
     input  logic [2:0] ifmap_size_code_i,       // 0:7, 1:14, 2:28, 3:56, 4:112
     input  logic stride_i,                      // 0: stride=1, 1: stride=2
     input  logic pad_i,                         // 0: valid/no pad, 1: same pad
+    input  logic signed [DATA_W-1:0] pad_value_i,
+    input  logic conv_mode_i,                   // 0: DWConv3x3, 1: traditional Conv3x3
+    input  logic [FILTER_CNT_W-1:0] input_channel_count_i,
+    input  logic [3:0] input_channel_words_shift_i,
     input  logic [FILTER_CNT_W-1:0] current_num_filter_i,
 
     // Global A/O SRAM read.
@@ -45,6 +49,9 @@ module spatial3x3_dev #(
     logic swap;
     logic load_start;
     logic read_start;
+    logic conv_mode;
+    logic [ADDR_W-1:0] ic_offset;
+    logic [3:0] input_channel_words_shift;
     logic [ADDR_W-1:0] tile_offset;
     logic [ADDR_W-1:0] out_x;
     logic [ADDR_W-1:0] out_y;
@@ -59,6 +66,8 @@ module spatial3x3_dev #(
 
     logic signed [DATA_W-1:0] activation [NUM_POS];
     logic signed [DATA_W-1:0] weight     [NUM_POS];
+    logic signed [ACC_W-1:0] pe_psum;
+    logic                    pe_valid;
 
     spatial_inside_controller #(
         .ADDR_W(ADDR_W),
@@ -72,6 +81,9 @@ module spatial3x3_dev #(
         .busy_o(busy_o),
         .done_o(done_o),
         .current_num_filter_i(current_num_filter_i),
+        .conv_mode_i(conv_mode_i),
+        .input_channel_count_i(input_channel_count_i),
+        .input_channel_words_shift_i(input_channel_words_shift_i),
         .ifmap_size_code_i(ifmap_size_code_i),
         .stride_i(stride_i),
         .load_busy_i(load_busy),
@@ -83,6 +95,9 @@ module spatial3x3_dev #(
         .tile_offset_o(tile_offset),
         .out_x_o(out_x),
         .out_y_o(out_y),
+        .conv_mode_o(conv_mode),
+        .ic_offset_o(ic_offset),
+        .input_channel_words_shift_o(input_channel_words_shift),
         .load_start_o(load_start),
         .read_start_o(read_start)
     );
@@ -109,6 +124,12 @@ module spatial3x3_dev #(
         .out_y_i(out_y),
         .stride_i(stride_i),
         .pad_i(pad_i),
+        .pad_value_i(pad_value_i),
+        // Window generator only owns local-buffer load/read. The controller
+        // provides conv-mode IC slice metadata; accumulation stays below.
+        .conv_mode_i(conv_mode),
+        .ic_offset_i(ic_offset),
+        .input_channel_words_shift_i(input_channel_words_shift),
         .current_num_filter_i(current_num_filter_i),
         .gb_act_rd_en_o(gb_act_rd_en_o),
         .gb_act_rd_addr_o(gb_act_rd_addr_o),
@@ -136,6 +157,22 @@ module spatial3x3_dev #(
         .enable_i(window_valid),
         .activation_i(activation),
         .weight_i(weight),
+        .psum_o(pe_psum),
+        .valid_o(pe_valid)
+    );
+
+    spatial_ic_accumulator #(
+        .ACC_W(ACC_W),
+        .FILTER_CNT_W(FILTER_CNT_W),
+        .LANES(WORD_W / DATA_W)
+    ) u_spatial_ic_accumulator (
+        .clk(clk),
+        .rst_n(rst_n),
+        .conv_mode_i(conv_mode),
+        .start_i(start_i),
+        .input_channel_count_i(input_channel_count_i),
+        .valid_i(pe_valid),
+        .partial_psum_i(pe_psum),
         .psum_o(psum_o),
         .valid_o(valid_o)
     );

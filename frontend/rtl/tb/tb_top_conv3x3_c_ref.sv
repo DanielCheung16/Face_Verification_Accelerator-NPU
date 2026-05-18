@@ -1,39 +1,32 @@
 `timescale 1ns/1ps
 
-module tb_top_system_2_2_c_ref;
-    parameter int PROFILE = 5;
+module tb_top_conv3x3_c_ref;
+    parameter int PROFILE = 9;
     parameter int ROW = 14;
     parameter int COL = 16;
     parameter int K_MAX = 512;
     parameter int DATA_W = 8;
     parameter int GB_DATA_W = 128;
-    parameter int AO_DEPTH = 65536;
-    parameter int WGT_DEPTH = 8192;
-    parameter int SPATIAL_WGT_DEPTH = 8;
-    parameter int PARAM_DEPTH = 9792;
+    parameter int AO_DEPTH = 600000;
+    parameter int WGT_DEPTH = 2048;
+    parameter int SPATIAL_WGT_DEPTH = 4;
+    parameter int PARAM_DEPTH = 128;
     parameter int HALF_CYCLE_TIME = 5;
     parameter int TIMEOUT_CYCLES = 5000000;
 
     localparam int AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH);
     localparam int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH);
     localparam int MASK_W = GB_DATA_W / DATA_W;
-    localparam int OUT_SIZE = (PROFILE == 12) ? 1 : ((PROFILE == 10) ? 56 : 28);
-    localparam int OUT_C = (PROFILE == 12) ? 128 : 64;
-    localparam int OUTPUT_WORDS = (OUT_SIZE * OUT_SIZE * OUT_C + MASK_W - 1) / MASK_W;
-    localparam int OUT_BASE = 40000;
+    localparam int LANES = MASK_W;
+    localparam int OUT_SIZE = 56;
+    localparam int OUT_C = 64;
+    localparam int OUTPUT_WORDS = (OUT_SIZE * OUT_SIZE * OUT_C) / LANES;
+    localparam int OUT_BASE = 300000;
 
-    localparam string GOLD_DIR = (PROFILE == 12) ?
-        "gold_models/qface_c/generated/system_4_1_gdconv7x7_fc" :
-        ((PROFILE == 10) ?
-        "gold_models/qface_c/generated/system_3_2_conv3x3_dw" :
-        ((PROFILE == 8) ?
-        "gold_models/qface_c/generated/system_2_4_stride2_dw_conv1x1" :
-        ((PROFILE == 6) ?
-            "gold_models/qface_c/generated/system_2_2_seq1" :
-            "gold_models/qface_c/generated/system_2_2_seq0")));
-    localparam string AO_INIT_FILE = {GOLD_DIR, "/system_2_2_ao_init.hex"};
-    localparam string WGT_INIT_FILE = {GOLD_DIR, "/system_2_2_wgt_init.hex"};
-    localparam string EXPECTED_FILE = {GOLD_DIR, "/system_2_2_golden.hex"};
+    localparam string GOLD_DIR = "gold_models/qface_c/generated";
+    localparam string AO_INIT_FILE = {GOLD_DIR, "/spatial_top_conv3x3_ao_init.txt"};
+    localparam string WGT_INIT_FILE = {GOLD_DIR, "/spatial_top_conv3x3_wgt_init.txt"};
+    localparam string EXPECTED_FILE = {GOLD_DIR, "/spatial_top_conv3x3_expected.txt"};
 
     logic clk;
     logic rst_n;
@@ -70,7 +63,6 @@ module tb_top_system_2_2_c_ref;
         .GB_DATA_W(GB_DATA_W),
         .AO_DEPTH(AO_DEPTH),
         .WGT_DEPTH(WGT_DEPTH),
-        .NUM_DEV(3),
         .AO_TRUE_DUAL_PORT(1'b0),
         .WGT_TRUE_DUAL_PORT(1'b0),
         .COMMON_PARAM_DEPTH(PARAM_DEPTH),
@@ -78,14 +70,14 @@ module tb_top_system_2_2_c_ref;
         .RESIDUAL_PARAM_DEPTH(PARAM_DEPTH),
         .SPATIAL_WGT_DEPTH(SPATIAL_WGT_DEPTH),
         .LAYER_CONFIG_PROFILE(PROFILE),
-        .QUANT_BIAS_INIT_FILE({GOLD_DIR, "/quant_param_bias.hex"}),
-        .QUANT_REQUANT_MULT_INIT_FILE({GOLD_DIR, "/quant_param_requant_mult.hex"}),
-        .QUANT_REQUANT_SHIFT_INIT_FILE({GOLD_DIR, "/quant_param_requant_shift.hex"}),
-        .QUANT_PRELU_MULT_INIT_FILE({GOLD_DIR, "/quant_param_prelu_mult.hex"}),
-        .QUANT_PRELU_SHIFT_INIT_FILE({GOLD_DIR, "/quant_param_prelu_shift.hex"}),
-        .QUANT_RESIDUAL_MULT_INIT_FILE({GOLD_DIR, "/quant_param_residual_mult.hex"}),
-        .QUANT_RESIDUAL_SHIFT_INIT_FILE({GOLD_DIR, "/quant_param_residual_shift.hex"}),
-        .QUANT_RESIDUAL_ZERO_POINT_INIT_FILE({GOLD_DIR, "/quant_param_residual_zero_point.hex"})
+        .QUANT_BIAS_INIT_FILE({GOLD_DIR, "/spatial_top_conv3x3_bias.hex"}),
+        .QUANT_REQUANT_MULT_INIT_FILE({GOLD_DIR, "/spatial_top_conv3x3_requant_mult.hex"}),
+        .QUANT_REQUANT_SHIFT_INIT_FILE({GOLD_DIR, "/spatial_top_conv3x3_requant_shift.hex"}),
+        .QUANT_PRELU_MULT_INIT_FILE({GOLD_DIR, "/spatial_top_conv3x3_prelu_mult.hex"}),
+        .QUANT_PRELU_SHIFT_INIT_FILE({GOLD_DIR, "/spatial_top_conv3x3_prelu_shift.hex"}),
+        .QUANT_RESIDUAL_MULT_INIT_FILE({GOLD_DIR, "/spatial_top_conv3x3_residual_mult.hex"}),
+        .QUANT_RESIDUAL_SHIFT_INIT_FILE({GOLD_DIR, "/spatial_top_conv3x3_residual_shift.hex"}),
+        .QUANT_RESIDUAL_ZERO_POINT_INIT_FILE({GOLD_DIR, "/spatial_top_conv3x3_residual_zero_point.hex"})
     ) dut (
         .aclk(clk),
         .aresetn(rst_n),
@@ -114,15 +106,82 @@ module tb_top_system_2_2_c_ref;
         end
     endtask
 
+    task automatic load_records_to_ao(input string path);
+        int fd;
+        int code;
+        int addr;
+        logic [GB_DATA_W-1:0] word;
+        begin
+            fd = $fopen(path, "r");
+            if (fd == 0) begin
+                $fatal(1, "failed to open %s", path);
+            end
+            while (!$feof(fd)) begin
+                code = $fscanf(fd, "%d %h\n", addr, word);
+                if (code == 2) begin
+                    dut.u_ao_gb.GEN_SDP.u_sram.mem[addr] = word;
+                end
+            end
+            $fclose(fd);
+        end
+    endtask
+
+    task automatic load_records_to_wgt(input string path);
+        int fd;
+        int code;
+        int addr;
+        logic [GB_DATA_W-1:0] word;
+        begin
+            fd = $fopen(path, "r");
+            if (fd == 0) begin
+                $fatal(1, "failed to open %s", path);
+            end
+            while (!$feof(fd)) begin
+                code = $fscanf(fd, "%d %h\n", addr, word);
+                if (code == 2) begin
+                    dut.u_wgt_gb.GEN_SDP.u_sram.mem[addr] = word;
+                end
+            end
+            $fclose(fd);
+        end
+    endtask
+
+    task automatic load_records_to_expected(input string path);
+        int fd;
+        int code;
+        int addr;
+        logic [GB_DATA_W-1:0] word;
+        begin
+            fd = $fopen(path, "r");
+            if (fd == 0) begin
+                $fatal(1, "failed to open %s", path);
+            end
+            while (!$feof(fd)) begin
+                code = $fscanf(fd, "%d %h\n", addr, word);
+                if (code == 2) begin
+                    expected[addr] = word;
+                end
+            end
+            $fclose(fd);
+        end
+    endtask
+
     task automatic load_hex_images();
         begin
-            $display("[TB] PROFILE=%0d GOLD_DIR=%s", PROFILE, GOLD_DIR);
+            for (int addr = 0; addr < AO_DEPTH; addr++) begin
+                dut.u_ao_gb.GEN_SDP.u_sram.mem[addr] = '0;
+                expected[addr] = '0;
+            end
+            for (int addr = 0; addr < WGT_DEPTH; addr++) begin
+                dut.u_wgt_gb.GEN_SDP.u_sram.mem[addr] = '0;
+            end
+
             $display("[TB] loading %s", AO_INIT_FILE);
-            $readmemh(AO_INIT_FILE, dut.u_ao_gb.GEN_SDP.u_sram.mem);
+            load_records_to_ao(AO_INIT_FILE);
             $display("[TB] loading %s", WGT_INIT_FILE);
-            $readmemh(WGT_INIT_FILE, dut.u_wgt_gb.GEN_SDP.u_sram.mem);
+            load_records_to_wgt(WGT_INIT_FILE);
             $display("[TB] loading %s", EXPECTED_FILE);
-            $readmemh(EXPECTED_FILE, expected);
+            load_records_to_expected(EXPECTED_FILE);
         end
     endtask
 
@@ -136,8 +195,8 @@ module tb_top_system_2_2_c_ref;
                 got = dut.u_ao_gb.GEN_SDP.u_sram.mem[addr];
                 exp = expected[addr];
                 check(got === exp,
-                      $sformatf("system profile=%0d word=%0d addr=%0d expected=0x%032h got=0x%032h",
-                                PROFILE, word, addr, exp, got));
+                      $sformatf("Conv3x3 final word=%0d addr=%0d expected=0x%032h got=0x%032h",
+                                word, addr, exp, got));
             end
         end
     endtask
@@ -176,9 +235,9 @@ module tb_top_system_2_2_c_ref;
         @(posedge clk);
 
         if (fail_cnt != 0) begin
-            $fatal(1, "[TB] system verification profile=%0d FAILED fail=%0d", PROFILE, fail_cnt);
+            $fatal(1, "[TB] top first Conv3x3 + PReLU + requant FAILED fail=%0d", fail_cnt);
         end
-        $display("[TB] system verification profile=%0d PASSED words=%0d", PROFILE, OUTPUT_WORDS);
+        $display("[TB] top first Conv3x3 + PReLU + requant PASSED words=%0d", OUTPUT_WORDS);
         $finish;
     end
 

@@ -10,6 +10,7 @@ module tb_top_conv1x1_requant_c_ref;
     parameter int WGT_DEPTH = 65536;
     parameter int HALF_CYCLE_TIME = 5;
     parameter int TIMEOUT_CYCLES = 1500000;
+    parameter int CONFIG_PROFILE = 1;
 
     localparam int AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH);
     localparam int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH);
@@ -63,7 +64,7 @@ module tb_top_conv1x1_requant_c_ref;
         .WGT_DEPTH(WGT_DEPTH),
         .AO_TRUE_DUAL_PORT(1'b0),
         .WGT_TRUE_DUAL_PORT(1'b0),
-        .LAYER_CONFIG_PROFILE(1),
+        .LAYER_CONFIG_PROFILE(CONFIG_PROFILE),
         .QUANT_BIAS_INIT_FILE({PARAM_DIR, "/quant_param_bias.hex"}),
         .QUANT_REQUANT_MULT_INIT_FILE({PARAM_DIR, "/quant_param_requant_mult.hex"}),
         .QUANT_REQUANT_SHIFT_INIT_FILE({PARAM_DIR, "/quant_param_requant_shift.hex"}),
@@ -178,9 +179,10 @@ module tb_top_conv1x1_requant_c_ref;
         @(posedge clk);
 
         if (fail_cnt != 0) begin
-            $fatal(1, "[TB] top conv1x1 + requant FAILED fail=%0d", fail_cnt);
+            $fatal(1, "[TB] top conv1x1/FC-reuse + requant FAILED profile=%0d fail=%0d",
+                   CONFIG_PROFILE, fail_cnt);
         end
-        $display("[TB] top conv1x1 + requant PASSED");
+        $display("[TB] top conv1x1/FC-reuse + requant PASSED profile=%0d", CONFIG_PROFILE);
         $finish;
     end
 

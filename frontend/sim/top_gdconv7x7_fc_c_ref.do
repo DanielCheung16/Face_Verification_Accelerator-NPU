@@ -1,7 +1,7 @@
 setenv LMC_TIMEUNIT -9
 
-exec make -C gold_models/qface_c dump_spatial_top_dw
-exec sh -c "cd gold_models/qface_c && ./dump_spatial_top_dw"
+exec make -C gold_models/qface_c dump_system_2_2
+exec sh -c "cd gold_models/qface_c && ./dump_system_2_2 generated/system_4_1_gdconv7x7_fc 12"
 
 vlib work
 vmap work work
@@ -54,9 +54,9 @@ vlog -sv -work work "../rtl/src/gdconv7x7_top.sv"
 vlog -sv +incdir+../rtl/src -work work "../rtl/src/layer_config_mem.sv"
 vlog -sv +incdir+../rtl/src -work work "../rtl/src/layer_switcher.sv"
 vlog -sv -work work "../rtl/src/top.sv"
-vlog -sv -work work "../rtl/tb/tb_top_dwconv3x3_prelu_c_ref.sv"
+vlog -sv -work work "../rtl/tb/tb_top_system_2_2_c_ref.sv"
 
-vsim -c -t 1ns -classdebug -voptargs=+acc +notimingchecks -L work work.tb_top_dwconv3x3_prelu_c_ref -wlf tb_top_dwconv3x3_prelu_c_ref.wlf
+vsim -c -t 1ns -classdebug -voptargs=+acc +notimingchecks -L work work.tb_top_system_2_2_c_ref -gPROFILE=12 -wlf tb_top_gdconv7x7_fc_c_ref.wlf
 
 onfinish stop
 run -all

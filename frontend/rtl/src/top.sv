@@ -1,3 +1,5 @@
+import layer_defs_pkg::*;
+
 module top #(
     parameter int ROW       = 4,
     parameter int COL       = 4,
@@ -19,7 +21,7 @@ module top #(
     parameter bit WGT_TRUE_DUAL_PORT = 1'b0,
     parameter int AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH),
     parameter int WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH),
-    parameter int NUM_DEV = 2,
+    parameter int NUM_DEV = 3,
     parameter int MAX_LAYER = 8,
     parameter int COMMON_PARAM_DEPTH = 9792,
     parameter int PRELU_PARAM_DEPTH = 7552,
@@ -75,6 +77,7 @@ module top #(
 );
     localparam int CONV1X1_DEV = 0;
     localparam int SPATIAL_DEV = 1;
+    localparam int GDCONV7X7_DEV = 2;
     localparam int SPATIAL_ELEM_CNT_W = 32;
     localparam int SPATIAL_WGT_BYTE_DEPTH = (GB_DATA_W / DATA_W) * SPATIAL_WGT_DEPTH;
     localparam int SPATIAL_WGT_RD_ADDR_W = (SPATIAL_WGT_BYTE_DEPTH <= 1) ? 1 : $clog2(SPATIAL_WGT_BYTE_DEPTH);
@@ -95,12 +98,14 @@ module top #(
     logic                  residual_en;
     logic [GB_ADDR_W-1:0]  residual_base_addr;
     logic [MAX_LAYER-1:0]  layer_idx;
+    layer_type_t           layer_type;
 
     logic [1:0]                    mode;
     logic [2:0]                    ifmap_size_code;
     logic [1:0]                    num_filter_code;
     logic                          stride;
     logic                          pad;
+    logic signed [DATA_W-1:0]      pad_value;
     logic signed [OUT_W-1:0]       output_zero_point;
     logic [PARAM_ADDR_W-1:0]       bias_base;
     logic [PARAM_ADDR_W-1:0]       requant_mult_base;
@@ -174,11 +179,17 @@ module top #(
     logic [PARAM_ADDR_W-1:0]  spatial_quant_prelu_rd_addr;
     logic                     spatial_quant_residual_rd_en;
     logic [PARAM_ADDR_W-1:0]  spatial_quant_residual_rd_addr;
+    logic                     gdconv_quant_common_rd_en;
+    logic [PARAM_ADDR_W-1:0]  gdconv_quant_common_rd_addr;
     logic                     conv_quant_active_w;
     logic                     spatial_quant_active_w;
+    logic                     gdconv_quant_active_w;
 
     logic [SPATIAL_ELEM_CNT_W-1:0] spatial_output_elements;
     logic [SPATIAL_FILTER_CNT_W-1:0] spatial_current_num_filter;
+    logic [SPATIAL_FILTER_CNT_W-1:0] spatial_input_channel_count;
+    logic [3:0] spatial_input_channel_words_shift;
+    logic spatial_conv_mode;
     logic signed [ACC_W-1:0] spatial_residual_stub;
     logic signed [ACC_W-1:0] spatial_output_zero_point;
     logic [2:0] spatial_post_mode;
@@ -194,10 +205,29 @@ module top #(
     assign accelerator_active_w = sys_start && !sys_done;
     assign spatial_output_elements = SPATIAL_ELEM_CNT_W'(m_size) * SPATIAL_ELEM_CNT_W'(n_size);
     assign spatial_current_num_filter = SPATIAL_FILTER_CNT_W'(n_size);
+    assign spatial_input_channel_count = SPATIAL_FILTER_CNT_W'(k_size);
+    assign spatial_conv_mode = (layer_type == LY_CONV3X3);
     assign spatial_residual_stub = '0;
     assign spatial_output_zero_point = ACC_W'($signed(output_zero_point));
     assign conv_quant_active_w = dev_start[CONV1X1_DEV] || dev_busy[CONV1X1_DEV];
     assign spatial_quant_active_w = dev_start[SPATIAL_DEV] || dev_busy[SPATIAL_DEV];
+    assign gdconv_quant_active_w = dev_start[GDCONV7X7_DEV] || dev_busy[GDCONV7X7_DEV];
+
+    always_comb begin
+        if (int'(k_size) <= 16) begin
+            spatial_input_channel_words_shift = 4'd0;
+        end else if (int'(k_size) <= 32) begin
+            spatial_input_channel_words_shift = 4'd1;
+        end else if (int'(k_size) <= 64) begin
+            spatial_input_channel_words_shift = 4'd2;
+        end else if (int'(k_size) <= 128) begin
+            spatial_input_channel_words_shift = 4'd3;
+        end else if (int'(k_size) <= 256) begin
+            spatial_input_channel_words_shift = 4'd4;
+        end else begin
+            spatial_input_channel_words_shift = 4'd5;
+        end
+    end
 
     // layer_config_mem uses the compact postprocess enum shared with conv1x1.
     // The spatial stream postprocess reserves 3'd1/2/3 for requant/PReLU/residual
@@ -240,6 +270,11 @@ module top #(
                 quant_residual_rd_addr = spatial_quant_residual_rd_addr;
             end
 
+            gdconv_quant_active_w: begin
+                quant_common_rd_en = gdconv_quant_common_rd_en;
+                quant_common_rd_addr = gdconv_quant_common_rd_addr;
+            end
+
             default: begin
                 // No active layer owns quant_param_mem.
             end
@@ -248,8 +283,8 @@ module top #(
 
 `ifndef SYNTHESIS
     initial begin
-        if (NUM_DEV < 2) begin
-            $fatal(1, "top requires NUM_DEV >= 2 for conv1x1 and spatial device slots");
+        if (NUM_DEV < 3) begin
+            $fatal(1, "top requires NUM_DEV >= 3 for conv1x1, spatial, and gdconv7x7 device slots");
         end
     end
 `endif
@@ -390,11 +425,13 @@ module top #(
         .residual_en_o(residual_en),
         .residual_base_addr_o(residual_base_addr),
         .layer_idx_o(layer_idx),
+        .layer_type_o(layer_type),
         .mode_o(mode),
         .ifmap_size_code_o(ifmap_size_code),
         .num_filter_code_o(num_filter_code),
         .stride_o(stride),
         .pad_o(pad),
+        .pad_value_o(pad_value),
         .output_zero_point_o(output_zero_point),
         .bias_base_o(bias_base),
         .requant_mult_base_o(requant_mult_base),
@@ -564,6 +601,10 @@ module top #(
         .ifmap_size_code_i(ifmap_size_code),
         .stride_i(stride),
         .pad_i(pad),
+        .pad_value_i(pad_value),
+        .conv_mode_i(spatial_conv_mode),
+        .input_channel_count_i(spatial_input_channel_count),
+        .input_channel_words_shift_i(spatial_input_channel_words_shift),
         .current_num_filter_i(spatial_current_num_filter),
         .post_mode_i(spatial_post_mode),
         .residual_en_i(residual_en),
@@ -600,10 +641,56 @@ module top #(
         .done_o(dev_done[SPATIAL_DEV])
     );
 
+    // Linear global depthwise 7x7 device slot. This handles
+    // output_layer.conv_6_dw.conv and writes a 1x1x512 HWC tensor that the
+    // following FC-as-GEMM layer reads from the same A/O SRAM base address.
+    gdconv7x7_top #(
+        .DATA_W(DATA_W),
+        .ACC_W(ACC_W),
+        .BIAS_W(BIAS_W),
+        .OUT_W(OUT_W),
+        .MULT_W(MULT_W),
+        .SHIFT_W(SHIFT_W),
+        .GB_DATA_W(GB_DATA_W),
+        .GB_ADDR_W(GB_ADDR_W),
+        .PARAM_ADDR_W(PARAM_ADDR_W),
+        .CHANNELS(512),
+        .KERNEL_ELEMS(49),
+        .ELEM_CNT_W(10)
+    ) u_gdconv7x7_dev (
+        .clk(aclk),
+        .rst_n(aresetn),
+        .run_en_i(1'b1),
+        .start_i(dev_start[GDCONV7X7_DEV]),
+        .busy_o(dev_busy[GDCONV7X7_DEV]),
+        .done_o(dev_done[GDCONV7X7_DEV]),
+        .act_base_addr_i(act_base_addr),
+        .wgt_base_addr_i(wgt_base_addr),
+        .out_base_addr_i(out_base_addr),
+        .output_zero_point_i(output_zero_point),
+        .common_param_base_i(bias_base),
+        .gb_act_rd_valid_o(dev_act_rd_valid[GDCONV7X7_DEV]),
+        .gb_act_rd_addr_o(dev_act_rd_addr[GDCONV7X7_DEV]),
+        .gb_act_rd_data_i(dev_act_rd_data[GDCONV7X7_DEV]),
+        .gb_wgt_rd_valid_o(dev_wgt_rd_valid[GDCONV7X7_DEV]),
+        .gb_wgt_rd_addr_o(dev_wgt_rd_addr[GDCONV7X7_DEV]),
+        .gb_wgt_rd_data_i(dev_wgt_rd_data[GDCONV7X7_DEV]),
+        .gb_ao_wr_valid_o(dev_ao_wr_valid[GDCONV7X7_DEV]),
+        .gb_ao_wr_addr_o(dev_ao_wr_addr[GDCONV7X7_DEV]),
+        .gb_ao_wr_data_o(dev_ao_wr_data[GDCONV7X7_DEV]),
+        .gb_ao_wr_mask_o(dev_ao_wr_mask[GDCONV7X7_DEV]),
+        .quant_common_rd_en_o(gdconv_quant_common_rd_en),
+        .quant_common_rd_addr_o(gdconv_quant_common_rd_addr),
+        .quant_common_rd_valid_i(quant_common_rd_valid),
+        .quant_param_bias_i(quant_param_bias),
+        .quant_param_requant_multiplier_i(quant_param_requant_multiplier),
+        .quant_param_requant_shift_i(quant_param_requant_shift)
+    );
+
     generate
         if (NUM_DEV > 1) begin : GEN_UNUSED_DEVICES
             for (genvar d = 0; d < NUM_DEV; d++) begin : GEN_DEV_TIEOFF
-                if ((d != CONV1X1_DEV) && (d != SPATIAL_DEV)) begin : GEN_UNUSED
+                if ((d != CONV1X1_DEV) && (d != SPATIAL_DEV) && (d != GDCONV7X7_DEV)) begin : GEN_UNUSED
                     assign dev_busy[d] = 1'b0;
                     assign dev_done[d] = 1'b0;
                     assign dev_act_rd_valid[d] = 1'b0;

@@ -1,4 +1,5 @@
 `timescale 1ns/1ps
+import layer_defs_pkg::*;
 
 module tb_layer_switcher;
     parameter int ROW = 14;
@@ -38,6 +39,8 @@ module tb_layer_switcher;
     localparam int WGT1_BASE = L0_K * ((L0_N + GB_LANES - 1) / GB_LANES);
     localparam int L0_PARAM_BASE = 0;
     localparam int L1_PARAM_BASE = 64;
+    localparam int L0_OUTPUT_ZERO_POINT = -18;
+    localparam int L1_OUTPUT_ZERO_POINT = -77;
 
     logic clk;
     logic rst_n;
@@ -57,12 +60,14 @@ module tb_layer_switcher;
     logic residual_en_o;
     logic [GB_ADDR_W-1:0] residual_base_addr_o;
     logic [7:0] layer_idx_o;
+    layer_type_t layer_type_o;
 
     logic [1:0]                    mode_o;
     logic [2:0]                    ifmap_size_code_o;
     logic [1:0]                    num_filter_code_o;
     logic                          stride_o;
     logic                          pad_o;
+    logic signed [DATA_W-1:0]      pad_value_o;
     logic signed [OUT_W-1:0]       output_zero_point_o;
     logic [PARAM_ADDR_W-1:0]       bias_base_o;
     logic [PARAM_ADDR_W-1:0]       requant_mult_base_o;
@@ -135,11 +140,13 @@ module tb_layer_switcher;
         .residual_en_o(residual_en_o),
         .residual_base_addr_o(residual_base_addr_o),
         .layer_idx_o(layer_idx_o),
+        .layer_type_o(layer_type_o),
         .mode_o(mode_o),
         .ifmap_size_code_o(ifmap_size_code_o),
         .num_filter_code_o(num_filter_code_o),
         .stride_o(stride_o),
         .pad_o(pad_o),
+        .pad_value_o(pad_value_o),
         .output_zero_point_o(output_zero_point_o),
         .bias_base_o(bias_base_o),
         .requant_mult_base_o(requant_mult_base_o),
@@ -208,6 +215,7 @@ module tb_layer_switcher;
         input int exp_out_base,
         input int exp_mode,
         input int exp_param_base,
+        input int exp_output_zero_point,
         input bit exp_residual_en,
         input string tag
     );
@@ -224,7 +232,9 @@ module tb_layer_switcher;
             check(num_filter_code_o === '0, $sformatf("%s num_filter_code", tag));
             check(stride_o === 1'b0, $sformatf("%s stride", tag));
             check(pad_o === 1'b0, $sformatf("%s pad", tag));
-            check(output_zero_point_o === '0, $sformatf("%s output_zero_point", tag));
+            check(pad_value_o === '0, $sformatf("%s pad_value", tag));
+            check(output_zero_point_o === OUT_W'(exp_output_zero_point),
+                  $sformatf("%s output_zero_point", tag));
             check(bias_base_o === PARAM_ADDR_W'(exp_param_base), $sformatf("%s bias_base", tag));
             check(requant_mult_base_o === PARAM_ADDR_W'(exp_param_base), $sformatf("%s requant_mult_base", tag));
             check(requant_shift_base_o === PARAM_ADDR_W'(exp_param_base), $sformatf("%s requant_shift_base", tag));
@@ -322,7 +332,7 @@ module tb_layer_switcher;
         check(start_o[0] === 1'b1, "layer0 start pulse");
         check(start_o[1] === 1'b0, "layer0 inactive device start");
         expect_config(L0_K, M28, L0_N, 0, 0, AO_OUT_BASE, MODE_RESIDUAL,
-                      L0_PARAM_BASE, 1'b1, "layer0");
+                      L0_PARAM_BASE, L0_OUTPUT_ZERO_POINT, 1'b1, "layer0");
 
         @(posedge clk);
         #1;
@@ -334,7 +344,7 @@ module tb_layer_switcher;
         #1;
         check(start_o[0] === 1'b1, "layer1 start pulse");
         expect_config(L1_K, M28, L1_N, AO_OUT_BASE, WGT1_BASE, 0, MODE_PRELU,
-                      L1_PARAM_BASE, 1'b0, "layer1");
+                      L1_PARAM_BASE, L1_OUTPUT_ZERO_POINT, 1'b0, "layer1");
 
         @(posedge clk);
         #1;

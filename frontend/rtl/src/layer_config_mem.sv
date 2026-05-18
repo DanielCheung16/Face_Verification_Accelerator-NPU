@@ -44,6 +44,7 @@ module layer_config_mem #(
     output logic [1:0]              num_filter_code_o,
     output logic                    stride_o,
     output logic                    pad_o,
+    output logic signed [DATA_W-1:0] pad_value_o,
 
     output postprocess_mode_t       mode_o,
     output logic signed [OUT_W-1:0] output_zero_point_o,
@@ -71,14 +72,22 @@ module layer_config_mem #(
     //   6: conv1x1+residual -> conv1x1+PReLU -> dwconv3x3+PReLU -> conv1x1+residual
     //   7: layer 0 only, dwconv3x3 stride2 56x56x128 -> 28x28x128, PReLU + requant
     //   8: dwconv3x3 stride2 + PReLU -> conv1x1 + requant
+    //   9: layer 0 only, first conv3x3 112x112x3 -> 56x56x64, PReLU + requant
+    //  10: first conv3x3 + following dwconv3x3, both PReLU + requant
+    //  11: layer 0 only, LY_FC opcode reusing conv1x1/GEMM datapath
+    //  12: gdconv7x7 -> LY_FC reuse, checks final two-layer writeback/readback
     localparam int IMG_28_M = 28 * 28;
     localparam int IMG_56_M = 56 * 56;
+    localparam int FIRST_CONV_K = 3;
+    localparam int FIRST_CONV_N = 64;
     localparam int L0_K = 128;
     localparam int L0_N = 64;
     localparam int L1_K = 64;
     localparam int L1_N = 128;
     localparam int DW0_N = 64;
     localparam int DW1_N = 128;
+    localparam int GDCONV7X7_C = 512;
+    localparam int LINEAR_FC_N = 128;
     localparam int L0_WGT_WORDS = L0_K * ((L0_N + GB_LANES - 1) / GB_LANES);
     localparam int JOINT_M = IMG_28_M;
     localparam int JOINT_C64 = 64;
@@ -112,6 +121,8 @@ module layer_config_mem #(
     localparam logic [PARAM_ADDR_W-1:0] P6_L3_PARAM_BASE = PARAM_ADDR_W'(1344);
     localparam logic [PARAM_ADDR_W-1:0] P8_L0_PARAM_BASE = PARAM_ADDR_W'(256);
     localparam logic [PARAM_ADDR_W-1:0] P8_L1_PARAM_BASE = PARAM_ADDR_W'(384);
+    localparam logic [PARAM_ADDR_W-1:0] GDCONV7X7_PARAM_BASE = PARAM_ADDR_W'(9152);
+    localparam logic [PARAM_ADDR_W-1:0] LINEAR_FC_PARAM_BASE = PARAM_ADDR_W'(9664);
     localparam logic signed [OUT_W-1:0] L0_OUTPUT_ZERO_POINT = -$signed(OUT_W'(18));
     localparam logic signed [OUT_W-1:0] L1_OUTPUT_ZERO_POINT = -$signed(OUT_W'(77));
     localparam logic signed [OUT_W-1:0] DW0_OUTPUT_ZERO_POINT = -$signed(OUT_W'(57));
@@ -124,6 +135,15 @@ module layer_config_mem #(
     localparam logic signed [OUT_W-1:0] P6_L1_OUTPUT_ZERO_POINT = -$signed(OUT_W'(86));
     localparam logic signed [OUT_W-1:0] P6_L2_OUTPUT_ZERO_POINT = -$signed(OUT_W'(108));
     localparam logic signed [OUT_W-1:0] P6_L3_OUTPUT_ZERO_POINT = -$signed(OUT_W'(13));
+    // Real-value zero padding in asymmetric int8 maps to -input_zero_point.
+    localparam logic signed [DATA_W-1:0] FIRST_CONV_PAD_VALUE = $signed(DATA_W'(10));
+    localparam logic signed [OUT_W-1:0] FIRST_CONV_OUTPUT_ZERO_POINT = -$signed(OUT_W'(31));
+    localparam logic signed [DATA_W-1:0] DW0_PAD_VALUE = -$signed(DATA_W'(31));
+    localparam logic signed [DATA_W-1:0] DW1_PAD_VALUE = -$signed(DATA_W'(87));
+    localparam logic signed [DATA_W-1:0] P5_L2_PAD_VALUE = -$signed(DATA_W'(61));
+    localparam logic signed [DATA_W-1:0] P6_L2_PAD_VALUE = -$signed(DATA_W'(86));
+    localparam logic signed [OUT_W-1:0] GDCONV7X7_OUTPUT_ZERO_POINT = $signed(OUT_W'(3));
+    localparam logic signed [OUT_W-1:0] LINEAR_FC_OUTPUT_ZERO_POINT = '0;
 
     typedef struct packed {
         logic                    layer_valid;
@@ -141,6 +161,7 @@ module layer_config_mem #(
         logic [1:0]              num_filter_code;
         logic                    stride;
         logic                    pad;
+        logic signed [DATA_W-1:0] pad_value;
         postprocess_mode_t       mode;
         logic signed [OUT_W-1:0] output_zero_point;
         logic [PARAM_ADDR_W-1:0] bias_base;
@@ -171,14 +192,43 @@ module layer_config_mem #(
             cfg = default_cfg();
             cfg.layer_valid = 1'b1;
             cfg.layer_last = ((CONFIG_PROFILE != 0) && (CONFIG_PROFILE != 5) &&
-                              (CONFIG_PROFILE != 6) && (CONFIG_PROFILE != 8));
+                              (CONFIG_PROFILE != 6) && (CONFIG_PROFILE != 8) &&
+                              (CONFIG_PROFILE != 10) && (CONFIG_PROFILE != 12));
             cfg.layer_type = LY_CONV1X1;
             cfg.m_size = DIM_W'(IMG_28_M);
             cfg.act_base_addr = AO_IN_BASE;
             cfg.wgt_base_addr = WGT0_BASE;
             cfg.out_base_addr = AO_OUT_BASE;
 
-            if (CONFIG_PROFILE == 5) begin
+            if (CONFIG_PROFILE == 12) begin
+                cfg.layer_type = LY_GDCONV7X7;
+                cfg.k_size = K_SIZE_W'(GDCONV7X7_C);
+                cfg.m_size = DIM_W'(1);
+                cfg.n_size = DIM_W'(GDCONV7X7_C);
+                cfg.act_base_addr = JOINT_AO_BASE0;
+                cfg.wgt_base_addr = JOINT_WGT_BASE0;
+                cfg.out_base_addr = JOINT_AO_BASE3;
+                cfg.residual_en = 1'b0;
+                cfg.mode = MODE_REQUANT;
+                cfg.output_zero_point = GDCONV7X7_OUTPUT_ZERO_POINT;
+                cfg.bias_base = GDCONV7X7_PARAM_BASE;
+                cfg.requant_mult_base = GDCONV7X7_PARAM_BASE;
+                cfg.requant_shift_base = GDCONV7X7_PARAM_BASE;
+                cfg.prelu_mult_base = GDCONV7X7_PARAM_BASE;
+                cfg.prelu_shift_base = GDCONV7X7_PARAM_BASE;
+            end else if (CONFIG_PROFILE == 11) begin
+                cfg.layer_type = LY_FC;
+                cfg.k_size = K_SIZE_W'(L0_K);
+                cfg.n_size = DIM_W'(L0_N);
+                cfg.residual_en = 1'b0;
+                cfg.mode = MODE_REQUANT;
+                cfg.output_zero_point = L0_OUTPUT_ZERO_POINT;
+                cfg.bias_base = L0_PARAM_BASE;
+                cfg.requant_mult_base = L0_PARAM_BASE;
+                cfg.requant_shift_base = L0_PARAM_BASE;
+                cfg.prelu_mult_base = L0_PARAM_BASE;
+                cfg.prelu_shift_base = L0_PARAM_BASE;
+            end else if (CONFIG_PROFILE == 5) begin
                 cfg.k_size = K_SIZE_W'(JOINT_C128);
                 cfg.m_size = DIM_W'(JOINT_M);
                 cfg.n_size = DIM_W'(JOINT_C64);
@@ -211,9 +261,28 @@ module layer_config_mem #(
                 cfg.residual_mult_base = P6_L0_PARAM_BASE;
                 cfg.residual_shift_base = P6_L0_PARAM_BASE;
                 cfg.residual_zero_point_base = P6_L0_PARAM_BASE;
+            end else if ((CONFIG_PROFILE == 9) || (CONFIG_PROFILE == 10)) begin
+                cfg.layer_type = LY_CONV3X3;
+                cfg.k_size = K_SIZE_W'(FIRST_CONV_K);
+                cfg.m_size = DIM_W'(IMG_56_M);
+                cfg.n_size = DIM_W'(FIRST_CONV_N);
+                cfg.out_base_addr = (CONFIG_PROFILE == 10) ? JOINT_AO_BASE2 : SPATIAL_OUT_BASE;
+                cfg.mode = MODE_PRELU;
+                cfg.output_zero_point = FIRST_CONV_OUTPUT_ZERO_POINT;
+                cfg.ifmap_size_code = 3'd4; // 112x112 input, stride2 -> 56x56 output
+                cfg.num_filter_code = 2'd0; // 64 output channels
+                cfg.stride = 1'b1;
+                cfg.pad = 1'b1;
+                cfg.pad_value = FIRST_CONV_PAD_VALUE;
+                cfg.bias_base = L0_PARAM_BASE;
+                cfg.requant_mult_base = L0_PARAM_BASE;
+                cfg.requant_shift_base = L0_PARAM_BASE;
+                cfg.prelu_mult_base = L0_PARAM_BASE;
+                cfg.prelu_shift_base = L0_PARAM_BASE;
             end else if ((CONFIG_PROFILE == 4) || (CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8)) begin
                 cfg.layer_type = LY_DWCONV3X3;
-                cfg.k_size = '0;
+                cfg.k_size = ((CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8)) ?
+                             K_SIZE_W'(DW1_N) : K_SIZE_W'(DW0_N);
                 cfg.m_size = ((CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8)) ?
                              DIM_W'(IMG_28_M) : DIM_W'(IMG_56_M);
                 cfg.n_size = ((CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8)) ?
@@ -229,6 +298,8 @@ module layer_config_mem #(
                                       2'd1 : 2'd0; // 64/128 channels
                 cfg.stride = (CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8); // stride 1/2
                 cfg.pad = 1'b1;             // same padding
+                cfg.pad_value = ((CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8)) ?
+                                DW1_PAD_VALUE : DW0_PAD_VALUE;
                 cfg.bias_base = (CONFIG_PROFILE == 8) ? P8_L0_PARAM_BASE : L0_PARAM_BASE;
                 cfg.requant_mult_base = cfg.bias_base;
                 cfg.requant_shift_base = cfg.bias_base;
@@ -269,8 +340,10 @@ module layer_config_mem #(
         begin
             cfg = default_cfg();
             cfg.layer_valid = (CONFIG_PROFILE == 0) || (CONFIG_PROFILE == 5) ||
-                              (CONFIG_PROFILE == 6) || (CONFIG_PROFILE == 8);
-            cfg.layer_last = (CONFIG_PROFILE == 0) || (CONFIG_PROFILE == 8);
+                              (CONFIG_PROFILE == 6) || (CONFIG_PROFILE == 8) ||
+                              (CONFIG_PROFILE == 10) || (CONFIG_PROFILE == 12);
+            cfg.layer_last = (CONFIG_PROFILE == 0) || (CONFIG_PROFILE == 8) ||
+                             (CONFIG_PROFILE == 10) || (CONFIG_PROFILE == 12);
             cfg.layer_type = LY_CONV1X1;
             cfg.k_size = K_SIZE_W'(L1_K);
             cfg.m_size = DIM_W'(IMG_28_M);
@@ -325,6 +398,42 @@ module layer_config_mem #(
                 cfg.requant_shift_base = P8_L1_PARAM_BASE;
                 cfg.prelu_mult_base = P8_L1_PARAM_BASE;
                 cfg.prelu_shift_base = P8_L1_PARAM_BASE;
+            end else if (CONFIG_PROFILE == 10) begin
+                cfg.layer_type = LY_DWCONV3X3;
+                cfg.k_size = K_SIZE_W'(DW0_N);
+                cfg.m_size = DIM_W'(IMG_56_M);
+                cfg.n_size = DIM_W'(DW0_N);
+                cfg.act_base_addr = JOINT_AO_BASE2;
+                cfg.wgt_base_addr = JOINT_WGT_BASE1;
+                cfg.out_base_addr = JOINT_AO_BASE4;
+                cfg.mode = MODE_PRELU;
+                cfg.output_zero_point = DW0_OUTPUT_ZERO_POINT;
+                cfg.ifmap_size_code = 3'd3; // 56x56
+                cfg.num_filter_code = 2'd0; // 64 channels
+                cfg.stride = 1'b0;
+                cfg.pad = 1'b1;
+                cfg.pad_value = DW0_PAD_VALUE;
+                cfg.bias_base = L1_PARAM_BASE;
+                cfg.requant_mult_base = L1_PARAM_BASE;
+                cfg.requant_shift_base = L1_PARAM_BASE;
+                cfg.prelu_mult_base = L1_PARAM_BASE;
+                cfg.prelu_shift_base = L1_PARAM_BASE;
+            end else if (CONFIG_PROFILE == 12) begin
+                cfg.layer_type = LY_FC;
+                cfg.k_size = K_SIZE_W'(GDCONV7X7_C);
+                cfg.m_size = DIM_W'(1);
+                cfg.n_size = DIM_W'(LINEAR_FC_N);
+                cfg.act_base_addr = JOINT_AO_BASE3;
+                cfg.wgt_base_addr = JOINT_WGT_BASE1;
+                cfg.out_base_addr = JOINT_AO_BASE4;
+                cfg.residual_en = 1'b0;
+                cfg.mode = MODE_REQUANT;
+                cfg.output_zero_point = LINEAR_FC_OUTPUT_ZERO_POINT;
+                cfg.bias_base = LINEAR_FC_PARAM_BASE;
+                cfg.requant_mult_base = LINEAR_FC_PARAM_BASE;
+                cfg.requant_shift_base = LINEAR_FC_PARAM_BASE;
+                cfg.prelu_mult_base = LINEAR_FC_PARAM_BASE;
+                cfg.prelu_shift_base = LINEAR_FC_PARAM_BASE;
             end
             layer1_cfg = cfg;
         end
@@ -349,6 +458,7 @@ module layer_config_mem #(
             cfg.num_filter_code = 2'd1; // 128 channels
             cfg.stride = 1'b0;
             cfg.pad = 1'b1;
+            cfg.pad_value = (CONFIG_PROFILE == 6) ? P6_L2_PAD_VALUE : P5_L2_PAD_VALUE;
             cfg.bias_base = (CONFIG_PROFILE == 6) ? P6_L2_PARAM_BASE : P5_L2_PARAM_BASE;
             cfg.requant_mult_base = cfg.bias_base;
             cfg.requant_shift_base = cfg.bias_base;
@@ -432,6 +542,7 @@ module layer_config_mem #(
     assign num_filter_code_o = cfg_w.num_filter_code;
     assign stride_o = cfg_w.stride;
     assign pad_o = cfg_w.pad;
+    assign pad_value_o = cfg_w.pad_value;
     assign mode_o = cfg_w.mode;
     assign output_zero_point_o = cfg_w.output_zero_point;
     assign bias_base_o = cfg_w.bias_base;

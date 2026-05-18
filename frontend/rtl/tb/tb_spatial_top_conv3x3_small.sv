@@ -1,57 +1,45 @@
 `timescale 1ns/1ps
 
-module tb_spatial_top_c_ref;
+module tb_spatial_top_conv3x3_small;
     parameter int GB_ADDR_W = 20;
     parameter int GB_DATA_W = 128;
     parameter int DATA_W = 8;
     parameter int ACC_W = 32;
     parameter int ACT_DEPTH = 1;
-    parameter int WGT_DEPTH = 4; // qface op1: 64 channels / 16 lanes
+    parameter int WGT_DEPTH = 4;
     parameter int ELEM_CNT_W = 32;
+    parameter int PARAM_ADDR_W = 16;
     parameter int HALF_CYCLE_TIME = 5;
 
     localparam int LANES = GB_DATA_W / DATA_W;
-    localparam int MASK_W = LANES;
-    localparam int C = 64;
-    localparam int OUT_SIZE = 56;
-    localparam int OUTPUTS = OUT_SIZE * OUT_SIZE * C;
+    localparam int IFMAP_SIZE = 7;
+    localparam int IC = 3;
+    localparam int OC = 64;
+    localparam int OC_WORDS = OC / LANES;
+    localparam int OUTPUTS = IFMAP_SIZE * IFMAP_SIZE * OC;
     localparam int OUTPUT_WORDS = OUTPUTS / LANES;
-    localparam int MEM_DEPTH = 600000;
-    localparam int PARAM_DEPTH = 128;
-    localparam int PARAM_ADDR_W = 16;
-    localparam int ACT_BASE = 0;
-    localparam int WGT_BASE = 0;
-    localparam int OUT_BASE = 300000;
-
-    localparam string AO_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_ao_init.txt";
-    localparam string WGT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_wgt_init.txt";
-    localparam string EXPECTED_FILE = "gold_models/qface_c/generated/spatial_top_dw_expected.txt";
-    localparam string BIAS_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_bias.hex";
-    localparam string REQUANT_MULT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_requant_mult.hex";
-    localparam string REQUANT_SHIFT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_requant_shift.hex";
-    localparam string PRELU_MULT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_prelu_mult.hex";
-    localparam string PRELU_SHIFT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_prelu_shift.hex";
-    localparam string RESIDUAL_MULT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_residual_mult.hex";
-    localparam string RESIDUAL_SHIFT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_residual_shift.hex";
-    localparam string RESIDUAL_ZERO_POINT_INIT_FILE = "gold_models/qface_c/generated/spatial_top_dw_residual_zero_point.hex";
+    localparam int MEM_DEPTH = 4096;
+    localparam int PARAM_DEPTH = 64;
+    localparam int OUT_BASE = 1024;
+    localparam int FILTER_CNT_W = $clog2(WGT_DEPTH * LANES) + 1;
 
     logic clk;
     logic rst_n;
     logic run_en_i;
     logic start_i;
-    logic [GB_ADDR_W-1:0] act_base_addr_i;
-    logic [GB_ADDR_W-1:0] wgt_base_addr_i;
-    logic [GB_ADDR_W-1:0] out_base_addr_i;
-    logic [ELEM_CNT_W-1:0] output_elements_i;
-    logic [1:0] num_filter_code_i;
-    logic [2:0] ifmap_size_code_i;
-    logic stride_i;
-    logic pad_i;
-    logic [($clog2(WGT_DEPTH*LANES)+1)-1:0] current_num_filter_i;
-    logic [2:0] post_mode_i;
-    logic residual_en_i;
-    logic signed [ACC_W-1:0] residual_i;
-    logic signed [ACC_W-1:0] output_zero_point_i;
+    logic [GB_ADDR_W-1:0] gb_act_rd_addr_o;
+    logic [GB_DATA_W-1:0] gb_act_rd_data_i;
+    logic gb_act_rd_en_o;
+    logic [GB_ADDR_W-1:0] gb_wgt_rd_addr_o;
+    logic [GB_DATA_W-1:0] gb_wgt_rd_data_i;
+    logic gb_wgt_rd_en_o;
+    logic gb_ao_wr_valid_o;
+    logic [GB_ADDR_W-1:0] gb_ao_wr_addr_o;
+    logic [GB_DATA_W-1:0] gb_ao_wr_data_o;
+    logic [LANES-1:0] gb_ao_wr_mask_o;
+    logic busy_o;
+    logic done_o;
+
     logic quant_common_rd_en_o;
     logic [PARAM_ADDR_W-1:0] quant_common_rd_addr_o;
     logic quant_common_rd_valid_i;
@@ -69,19 +57,6 @@ module tb_spatial_top_c_ref;
     logic signed [31:0] quant_param_residual_multiplier_i;
     logic [5:0] quant_param_residual_shift_i;
     logic signed [63:0] quant_param_residual_zero_point_i;
-
-    logic gb_act_rd_en_o;
-    logic [GB_ADDR_W-1:0] gb_act_rd_addr_o;
-    logic [GB_DATA_W-1:0] gb_act_rd_data_i;
-    logic gb_wgt_rd_en_o;
-    logic [GB_ADDR_W-1:0] gb_wgt_rd_addr_o;
-    logic [GB_DATA_W-1:0] gb_wgt_rd_data_i;
-    logic gb_ao_wr_valid_o;
-    logic [GB_ADDR_W-1:0] gb_ao_wr_addr_o;
-    logic [GB_DATA_W-1:0] gb_ao_wr_data_o;
-    logic [MASK_W-1:0] gb_ao_wr_mask_o;
-    logic busy_o;
-    logic done_o;
 
     logic [GB_DATA_W-1:0] ao_mem [MEM_DEPTH];
     logic [GB_DATA_W-1:0] wgt_mem [MEM_DEPTH];
@@ -106,31 +81,31 @@ module tb_spatial_top_c_ref;
         .rst_n(rst_n),
         .run_en_i(run_en_i),
         .start_i(start_i),
-        .act_base_addr_i(act_base_addr_i),
-        .wgt_base_addr_i(wgt_base_addr_i),
-        .out_base_addr_i(out_base_addr_i),
-        .output_elements_i(output_elements_i),
-        .bias_base_i(16'd0),
-        .requant_mult_base_i(16'd0),
-        .requant_shift_base_i(16'd0),
-        .prelu_mult_base_i(16'd0),
-        .prelu_shift_base_i(16'd0),
-        .residual_mult_base_i(16'd0),
-        .residual_shift_base_i(16'd0),
-        .residual_zero_point_base_i(16'd0),
-        .num_filter_code_i(num_filter_code_i),
-        .ifmap_size_code_i(ifmap_size_code_i),
-        .stride_i(stride_i),
-        .pad_i(pad_i),
-        .pad_value_i(-8'sd31),
-        .conv_mode_i(1'b0),
-        .input_channel_count_i(current_num_filter_i),
+        .act_base_addr_i('0),
+        .wgt_base_addr_i('0),
+        .out_base_addr_i(GB_ADDR_W'(OUT_BASE)),
+        .output_elements_i(ELEM_CNT_W'(OUTPUTS)),
+        .bias_base_i('0),
+        .requant_mult_base_i('0),
+        .requant_shift_base_i('0),
+        .prelu_mult_base_i('0),
+        .prelu_shift_base_i('0),
+        .residual_mult_base_i('0),
+        .residual_shift_base_i('0),
+        .residual_zero_point_base_i('0),
+        .num_filter_code_i(2'd0),
+        .ifmap_size_code_i(3'd0),
+        .stride_i(1'b0),
+        .pad_i(1'b1),
+        .pad_value_i(8'sd0),
+        .conv_mode_i(1'b1),
+        .input_channel_count_i(FILTER_CNT_W'(IC)),
         .input_channel_words_shift_i(4'd0),
-        .current_num_filter_i(current_num_filter_i),
-        .post_mode_i(post_mode_i),
-        .residual_en_i(residual_en_i),
-        .residual_i(residual_i),
-        .output_zero_point_i(output_zero_point_i),
+        .current_num_filter_i(FILTER_CNT_W'(OC)),
+        .post_mode_i(3'd0),
+        .residual_en_i(1'b0),
+        .residual_i('0),
+        .output_zero_point_i('0),
         .quant_common_rd_en_o(quant_common_rd_en_o),
         .quant_common_rd_addr_o(quant_common_rd_addr_o),
         .quant_common_rd_valid_i(quant_common_rd_valid_i),
@@ -162,23 +137,13 @@ module tb_spatial_top_c_ref;
         .done_o(done_o)
     );
 
-    // Parameter memory loaded from the C golden dump. The scheduler reads one
-    // channel row per spatial psum and aligns the ROM latency before postprocess.
     quant_param_mem #(
         .COMMON_PARAM_DEPTH(PARAM_DEPTH),
         .PRELU_PARAM_DEPTH(PARAM_DEPTH),
         .RESIDUAL_PARAM_DEPTH(PARAM_DEPTH),
         .COMMON_PARAM_ADDR_W(PARAM_ADDR_W),
         .PRELU_PARAM_ADDR_W(PARAM_ADDR_W),
-        .RESIDUAL_PARAM_ADDR_W(PARAM_ADDR_W),
-        .BIAS_INIT_FILE(BIAS_INIT_FILE),
-        .REQUANT_MULT_INIT_FILE(REQUANT_MULT_INIT_FILE),
-        .REQUANT_SHIFT_INIT_FILE(REQUANT_SHIFT_INIT_FILE),
-        .PRELU_MULT_INIT_FILE(PRELU_MULT_INIT_FILE),
-        .PRELU_SHIFT_INIT_FILE(PRELU_SHIFT_INIT_FILE),
-        .RESIDUAL_MULT_INIT_FILE(RESIDUAL_MULT_INIT_FILE),
-        .RESIDUAL_SHIFT_INIT_FILE(RESIDUAL_SHIFT_INIT_FILE),
-        .RESIDUAL_ZERO_POINT_INIT_FILE(RESIDUAL_ZERO_POINT_INIT_FILE)
+        .RESIDUAL_PARAM_ADDR_W(PARAM_ADDR_W)
     ) u_quant_param_mem (
         .clk(clk),
         .rst_n(rst_n),
@@ -201,6 +166,51 @@ module tb_spatial_top_c_ref;
         .residual_zero_point_o(quant_param_residual_zero_point_i)
     );
 
+    function automatic int signed act_value(input int x, input int y, input int ic);
+        begin
+            act_value = ((x + y + ic) % 3) - 1;
+        end
+    endfunction
+
+    function automatic int signed wgt_value(input int ic, input int pos, input int oc);
+        begin
+            wgt_value = ((ic + pos + oc) % 3) - 1;
+        end
+    endfunction
+
+    function automatic int signed sat8(input int signed value);
+        begin
+            if (value > 127) sat8 = 127;
+            else if (value < -128) sat8 = -128;
+            else sat8 = value;
+        end
+    endfunction
+
+    function automatic int signed golden_psum(input int ox, input int oy, input int oc);
+        int signed acc;
+        int ix;
+        int iy;
+        int pos;
+        begin
+            acc = 0;
+            for (int ic = 0; ic < IC; ic++) begin
+                pos = 0;
+                for (int kx = 0; kx < 3; kx++) begin
+                    for (int ky = 0; ky < 3; ky++) begin
+                        ix = ox + kx - 1;
+                        iy = oy + ky - 1;
+                        if ((ix >= 0) && (ix < IFMAP_SIZE) &&
+                            (iy >= 0) && (iy < IFMAP_SIZE)) begin
+                            acc += act_value(ix, iy, ic) * wgt_value(ic, pos, oc);
+                        end
+                        pos++;
+                    end
+                end
+            end
+            golden_psum = acc;
+        end
+    endfunction
+
     task automatic check(input bit cond, input string msg);
         if (!cond) begin
             fail_cnt++;
@@ -208,32 +218,14 @@ module tb_spatial_top_c_ref;
         end
     endtask
 
-    task automatic load_records(input string path, ref logic [GB_DATA_W-1:0] mem [MEM_DEPTH]);
-        int fd;
-        int code;
-        int addr;
-        logic [GB_DATA_W-1:0] word;
+    task automatic set_word_lane(
+        inout logic [GB_DATA_W-1:0] word,
+        input int lane,
+        input int signed value
+    );
         begin
-            fd = $fopen(path, "r");
-            if (fd == 0) begin
-                $fatal(1, "failed to open %s", path);
-            end
-
-            while (!$feof(fd)) begin
-                code = $fscanf(fd, "%d %h\n", addr, word);
-                if (code == 2) begin
-                    mem[addr] = word;
-                end
-            end
-            $fclose(fd);
+            word[lane*DATA_W +: DATA_W] = DATA_W'(value);
         end
-    endtask
-
-    task automatic pulse_start;
-        @(negedge clk);
-        start_i = 1'b1;
-        @(negedge clk);
-        start_i = 1'b0;
     endtask
 
     initial begin
@@ -242,19 +234,6 @@ module tb_spatial_top_c_ref;
         rst_n = 1'b0;
         run_en_i = 1'b1;
         start_i = 1'b0;
-        act_base_addr_i = GB_ADDR_W'(ACT_BASE);
-        wgt_base_addr_i = GB_ADDR_W'(WGT_BASE);
-        out_base_addr_i = GB_ADDR_W'(OUT_BASE);
-        output_elements_i = ELEM_CNT_W'(OUTPUTS);
-        num_filter_code_i = 2'd0;       // 64 channels
-        ifmap_size_code_i = 3'd3;       // 56x56
-        stride_i = 1'b0;
-        pad_i = 1'b1;
-        current_num_filter_i = C;
-        post_mode_i = 3'd2;             // qface op1: PReLU + requant.
-        residual_en_i = 1'b0;
-        residual_i = '0;
-        output_zero_point_i = -32'sd57;
 
         for (int addr = 0; addr < MEM_DEPTH; addr++) begin
             ao_mem[addr] = '0;
@@ -262,15 +241,51 @@ module tb_spatial_top_c_ref;
             exp_mem[addr] = '0;
         end
 
-        load_records(AO_INIT_FILE, ao_mem);
-        load_records(WGT_INIT_FILE, wgt_mem);
-        load_records(EXPECTED_FILE, exp_mem);
+        for (int x = 0; x < IFMAP_SIZE; x++) begin
+            for (int y = 0; y < IFMAP_SIZE; y++) begin
+                int addr;
+                addr = x * IFMAP_SIZE + y;
+                for (int ic = 0; ic < IC; ic++) begin
+                    set_word_lane(ao_mem[addr], ic, act_value(x, y, ic));
+                end
+            end
+        end
+
+        for (int ic = 0; ic < IC; ic++) begin
+            for (int pos = 0; pos < 9; pos++) begin
+                for (int tile = 0; tile < OC_WORDS; tile++) begin
+                    int addr;
+                    addr = (ic * 9 + pos) * OC_WORDS + tile;
+                    for (int lane = 0; lane < LANES; lane++) begin
+                        set_word_lane(wgt_mem[addr], lane,
+                                      wgt_value(ic, pos, tile * LANES + lane));
+                    end
+                end
+            end
+        end
+
+        for (int x = 0; x < IFMAP_SIZE; x++) begin
+            for (int y = 0; y < IFMAP_SIZE; y++) begin
+                for (int tile = 0; tile < OC_WORDS; tile++) begin
+                    int addr;
+                    addr = OUT_BASE + (x * IFMAP_SIZE + y) * OC_WORDS + tile;
+                    for (int lane = 0; lane < LANES; lane++) begin
+                        set_word_lane(exp_mem[addr], lane,
+                                      sat8(golden_psum(x, y, tile * LANES + lane)));
+                    end
+                end
+            end
+        end
 
         repeat (4) @(posedge clk);
         rst_n = 1'b1;
         repeat (2) @(posedge clk);
 
-        pulse_start();
+        @(negedge clk);
+        start_i = 1'b1;
+        @(negedge clk);
+        start_i = 1'b0;
+
         wait (done_o);
         repeat (2) @(posedge clk);
 
@@ -278,9 +293,9 @@ module tb_spatial_top_c_ref;
               $sformatf("write words expected=%0d got=%0d", OUTPUT_WORDS, write_cnt));
 
         if (fail_cnt != 0) begin
-            $fatal(1, "[TB] spatial_top C-ref FAILED fail=%0d", fail_cnt);
+            $fatal(1, "[TB] spatial_top conv3x3 small FAILED fail=%0d", fail_cnt);
         end
-        $display("[TB] spatial_top C-ref PASSED words=%0d", write_cnt);
+        $display("[TB] spatial_top conv3x3 small PASSED words=%0d", write_cnt);
         $finish;
     end
 
@@ -295,14 +310,6 @@ module tb_spatial_top_c_ref;
             if (gb_wgt_rd_en_o) begin
                 gb_wgt_rd_data_i <= wgt_mem[gb_wgt_rd_addr_o];
             end
-            if (gb_ao_wr_valid_o) begin
-                for (int lane = 0; lane < LANES; lane++) begin
-                    if (gb_ao_wr_mask_o[lane]) begin
-                        ao_mem[gb_ao_wr_addr_o][lane*DATA_W +: DATA_W] <=
-                            gb_ao_wr_data_o[lane*DATA_W +: DATA_W];
-                    end
-                end
-            end
         end
     end
 
@@ -311,12 +318,17 @@ module tb_spatial_top_c_ref;
             check(gb_ao_wr_addr_o == GB_ADDR_W'(OUT_BASE + write_cnt),
                   $sformatf("addr mismatch word=%0d expected=0x%0h got=0x%0h",
                             write_cnt, OUT_BASE + write_cnt, gb_ao_wr_addr_o));
-            check(gb_ao_wr_mask_o == {MASK_W{1'b1}},
+            check(gb_ao_wr_mask_o == {LANES{1'b1}},
                   $sformatf("mask mismatch word=%0d got=0x%0h", write_cnt, gb_ao_wr_mask_o));
             check(gb_ao_wr_data_o == exp_mem[gb_ao_wr_addr_o],
                   $sformatf("data mismatch word=%0d addr=0x%0h expected=%0h got=%0h",
                             write_cnt, gb_ao_wr_addr_o, exp_mem[gb_ao_wr_addr_o], gb_ao_wr_data_o));
             write_cnt++;
         end
+    end
+
+    initial begin
+        repeat (120000) @(posedge clk);
+        $fatal(1, "[TB] timeout write_cnt=%0d expected=%0d", write_cnt, OUTPUT_WORDS);
     end
 endmodule
