@@ -73,6 +73,7 @@ module layer_config_mem #(
     //   7: layer 0 only, dwconv3x3 stride2 56x56x128 -> 28x28x128, PReLU + requant
     //   8: dwconv3x3 stride2 + PReLU -> conv1x1 + requant
     //   9: layer 0 only, first conv3x3 112x112x3 -> 56x56x64, PReLU + requant
+    //  10: first conv3x3 + following dwconv3x3, both PReLU + requant
     localparam int IMG_28_M = 28 * 28;
     localparam int IMG_56_M = 56 * 56;
     localparam int FIRST_CONV_K = 3;
@@ -183,7 +184,8 @@ module layer_config_mem #(
             cfg = default_cfg();
             cfg.layer_valid = 1'b1;
             cfg.layer_last = ((CONFIG_PROFILE != 0) && (CONFIG_PROFILE != 5) &&
-                              (CONFIG_PROFILE != 6) && (CONFIG_PROFILE != 8));
+                              (CONFIG_PROFILE != 6) && (CONFIG_PROFILE != 8) &&
+                              (CONFIG_PROFILE != 10));
             cfg.layer_type = LY_CONV1X1;
             cfg.m_size = DIM_W'(IMG_28_M);
             cfg.act_base_addr = AO_IN_BASE;
@@ -223,12 +225,12 @@ module layer_config_mem #(
                 cfg.residual_mult_base = P6_L0_PARAM_BASE;
                 cfg.residual_shift_base = P6_L0_PARAM_BASE;
                 cfg.residual_zero_point_base = P6_L0_PARAM_BASE;
-            end else if (CONFIG_PROFILE == 9) begin
+            end else if ((CONFIG_PROFILE == 9) || (CONFIG_PROFILE == 10)) begin
                 cfg.layer_type = LY_CONV3X3;
                 cfg.k_size = K_SIZE_W'(FIRST_CONV_K);
                 cfg.m_size = DIM_W'(IMG_56_M);
                 cfg.n_size = DIM_W'(FIRST_CONV_N);
-                cfg.out_base_addr = SPATIAL_OUT_BASE;
+                cfg.out_base_addr = (CONFIG_PROFILE == 10) ? JOINT_AO_BASE2 : SPATIAL_OUT_BASE;
                 cfg.mode = MODE_PRELU;
                 cfg.output_zero_point = FIRST_CONV_OUTPUT_ZERO_POINT;
                 cfg.ifmap_size_code = 3'd4; // 112x112 input, stride2 -> 56x56 output
@@ -302,8 +304,10 @@ module layer_config_mem #(
         begin
             cfg = default_cfg();
             cfg.layer_valid = (CONFIG_PROFILE == 0) || (CONFIG_PROFILE == 5) ||
-                              (CONFIG_PROFILE == 6) || (CONFIG_PROFILE == 8);
-            cfg.layer_last = (CONFIG_PROFILE == 0) || (CONFIG_PROFILE == 8);
+                              (CONFIG_PROFILE == 6) || (CONFIG_PROFILE == 8) ||
+                              (CONFIG_PROFILE == 10);
+            cfg.layer_last = (CONFIG_PROFILE == 0) || (CONFIG_PROFILE == 8) ||
+                             (CONFIG_PROFILE == 10);
             cfg.layer_type = LY_CONV1X1;
             cfg.k_size = K_SIZE_W'(L1_K);
             cfg.m_size = DIM_W'(IMG_28_M);
@@ -358,6 +362,26 @@ module layer_config_mem #(
                 cfg.requant_shift_base = P8_L1_PARAM_BASE;
                 cfg.prelu_mult_base = P8_L1_PARAM_BASE;
                 cfg.prelu_shift_base = P8_L1_PARAM_BASE;
+            end else if (CONFIG_PROFILE == 10) begin
+                cfg.layer_type = LY_DWCONV3X3;
+                cfg.k_size = K_SIZE_W'(DW0_N);
+                cfg.m_size = DIM_W'(IMG_56_M);
+                cfg.n_size = DIM_W'(DW0_N);
+                cfg.act_base_addr = JOINT_AO_BASE2;
+                cfg.wgt_base_addr = JOINT_WGT_BASE1;
+                cfg.out_base_addr = JOINT_AO_BASE4;
+                cfg.mode = MODE_PRELU;
+                cfg.output_zero_point = DW0_OUTPUT_ZERO_POINT;
+                cfg.ifmap_size_code = 3'd3; // 56x56
+                cfg.num_filter_code = 2'd0; // 64 channels
+                cfg.stride = 1'b0;
+                cfg.pad = 1'b1;
+                cfg.pad_value = DW0_PAD_VALUE;
+                cfg.bias_base = L1_PARAM_BASE;
+                cfg.requant_mult_base = L1_PARAM_BASE;
+                cfg.requant_shift_base = L1_PARAM_BASE;
+                cfg.prelu_mult_base = L1_PARAM_BASE;
+                cfg.prelu_shift_base = L1_PARAM_BASE;
             end
             layer1_cfg = cfg;
         end
