@@ -316,6 +316,21 @@ dwconv3x3好像不需要支持residual
 1. 需要是可综合设计。涉及到rom/ram的部分，一定是要按照能综合成memory的写法（要考虑接口大小，深度，读取数量）
 2. 宽bit大扇出的全局控制信号，考虑到net delay问题。如果不影响steady status，那么可以考虑加本地reg做间隔。输出在允许的情况下经历reg输出。
 3. 注意你C model的可配置性（可选layers），我不希望你每次都要重新写很多C code。不要去动之前做过精确性检查的那个最重要整个系统的golden c。
+4. 不到万不得已的地方，尽量不要用function。
+5. 遇到错误时（特别时多层layer一起时），首先检查tb检查的地址是否out_base_addr匹配。（这可能导致回写覆盖等问题）
 
 
 ## 支持普通conv3x3的设计
+```
+spatial_top
+  ├─ spatial3x3_dev
+  │   ├─ window_generator
+  │   ├─ spatial3x3_pe_array
+  |   ├─ spatial_inside_controller
+  │   └─ spatial_ic_accumulator
+  ├─ spatial_param_scheduler
+  └─ spatial_wb
+```
+1. 添加spatial_ic_accumulator用于做累加。
+2. spatial_inside_controller应该自己通过ic来判断是否做累加结束了（是否当前要用的层加载完毕了）。
+3. 为了支持pad（不能直接用0），**每一layer**有自己的pad_value(8bits)，很适合放在layer_config_mem中。

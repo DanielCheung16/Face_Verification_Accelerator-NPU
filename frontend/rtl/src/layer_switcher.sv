@@ -302,6 +302,7 @@ module layer_switcher #(
     // device index that should receive start_o and own the shared GB connection.
     // Current device slots:
     //   LY_CONV1X1    -> CONV1X1_DEV
+    //   LY_FC         -> CONV1X1_DEV, as M=1 GEMM without a special FC datapath mode
     //   LY_DWCONV3X3  -> SPATIAL_DEV
     //   LY_CONV3X3    -> SPATIAL_DEV
     // -------------------------------------------------------------------------
@@ -311,6 +312,11 @@ module layer_switcher #(
 
         case (layer_type_w)
             LY_CONV1X1: begin
+                active_dev_valid_w = 1'b1;
+                active_dev_idx_w   = CONV1X1_DEV;
+            end
+
+            LY_FC: begin
                 active_dev_valid_w = 1'b1;
                 active_dev_idx_w   = CONV1X1_DEV;
             end

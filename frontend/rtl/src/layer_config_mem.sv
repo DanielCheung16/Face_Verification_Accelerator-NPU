@@ -74,6 +74,7 @@ module layer_config_mem #(
     //   8: dwconv3x3 stride2 + PReLU -> conv1x1 + requant
     //   9: layer 0 only, first conv3x3 112x112x3 -> 56x56x64, PReLU + requant
     //  10: first conv3x3 + following dwconv3x3, both PReLU + requant
+    //  11: layer 0 only, LY_FC opcode reusing conv1x1/GEMM datapath
     localparam int IMG_28_M = 28 * 28;
     localparam int IMG_56_M = 56 * 56;
     localparam int FIRST_CONV_K = 3;
@@ -192,7 +193,19 @@ module layer_config_mem #(
             cfg.wgt_base_addr = WGT0_BASE;
             cfg.out_base_addr = AO_OUT_BASE;
 
-            if (CONFIG_PROFILE == 5) begin
+            if (CONFIG_PROFILE == 11) begin
+                cfg.layer_type = LY_FC;
+                cfg.k_size = K_SIZE_W'(L0_K);
+                cfg.n_size = DIM_W'(L0_N);
+                cfg.residual_en = 1'b0;
+                cfg.mode = MODE_REQUANT;
+                cfg.output_zero_point = L0_OUTPUT_ZERO_POINT;
+                cfg.bias_base = L0_PARAM_BASE;
+                cfg.requant_mult_base = L0_PARAM_BASE;
+                cfg.requant_shift_base = L0_PARAM_BASE;
+                cfg.prelu_mult_base = L0_PARAM_BASE;
+                cfg.prelu_shift_base = L0_PARAM_BASE;
+            end else if (CONFIG_PROFILE == 5) begin
                 cfg.k_size = K_SIZE_W'(JOINT_C128);
                 cfg.m_size = DIM_W'(JOINT_M);
                 cfg.n_size = DIM_W'(JOINT_C64);
