@@ -72,8 +72,11 @@ module layer_config_mem #(
     //   6: conv1x1+residual -> conv1x1+PReLU -> dwconv3x3+PReLU -> conv1x1+residual
     //   7: layer 0 only, dwconv3x3 stride2 56x56x128 -> 28x28x128, PReLU + requant
     //   8: dwconv3x3 stride2 + PReLU -> conv1x1 + requant
+    //   9: layer 0 only, first conv3x3 112x112x3 -> 56x56x64, PReLU + requant
     localparam int IMG_28_M = 28 * 28;
     localparam int IMG_56_M = 56 * 56;
+    localparam int FIRST_CONV_K = 3;
+    localparam int FIRST_CONV_N = 64;
     localparam int L0_K = 128;
     localparam int L0_N = 64;
     localparam int L1_K = 64;
@@ -126,6 +129,8 @@ module layer_config_mem #(
     localparam logic signed [OUT_W-1:0] P6_L2_OUTPUT_ZERO_POINT = -$signed(OUT_W'(108));
     localparam logic signed [OUT_W-1:0] P6_L3_OUTPUT_ZERO_POINT = -$signed(OUT_W'(13));
     // Real-value zero padding in asymmetric int8 maps to -input_zero_point.
+    localparam logic signed [DATA_W-1:0] FIRST_CONV_PAD_VALUE = $signed(DATA_W'(10));
+    localparam logic signed [OUT_W-1:0] FIRST_CONV_OUTPUT_ZERO_POINT = -$signed(OUT_W'(31));
     localparam logic signed [DATA_W-1:0] DW0_PAD_VALUE = -$signed(DATA_W'(31));
     localparam logic signed [DATA_W-1:0] DW1_PAD_VALUE = -$signed(DATA_W'(87));
     localparam logic signed [DATA_W-1:0] P5_L2_PAD_VALUE = -$signed(DATA_W'(61));
@@ -218,6 +223,24 @@ module layer_config_mem #(
                 cfg.residual_mult_base = P6_L0_PARAM_BASE;
                 cfg.residual_shift_base = P6_L0_PARAM_BASE;
                 cfg.residual_zero_point_base = P6_L0_PARAM_BASE;
+            end else if (CONFIG_PROFILE == 9) begin
+                cfg.layer_type = LY_CONV3X3;
+                cfg.k_size = K_SIZE_W'(FIRST_CONV_K);
+                cfg.m_size = DIM_W'(IMG_56_M);
+                cfg.n_size = DIM_W'(FIRST_CONV_N);
+                cfg.out_base_addr = SPATIAL_OUT_BASE;
+                cfg.mode = MODE_PRELU;
+                cfg.output_zero_point = FIRST_CONV_OUTPUT_ZERO_POINT;
+                cfg.ifmap_size_code = 3'd4; // 112x112 input, stride2 -> 56x56 output
+                cfg.num_filter_code = 2'd0; // 64 output channels
+                cfg.stride = 1'b1;
+                cfg.pad = 1'b1;
+                cfg.pad_value = FIRST_CONV_PAD_VALUE;
+                cfg.bias_base = L0_PARAM_BASE;
+                cfg.requant_mult_base = L0_PARAM_BASE;
+                cfg.requant_shift_base = L0_PARAM_BASE;
+                cfg.prelu_mult_base = L0_PARAM_BASE;
+                cfg.prelu_shift_base = L0_PARAM_BASE;
             end else if ((CONFIG_PROFILE == 4) || (CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8)) begin
                 cfg.layer_type = LY_DWCONV3X3;
                 cfg.k_size = ((CONFIG_PROFILE == 7) || (CONFIG_PROFILE == 8)) ?
