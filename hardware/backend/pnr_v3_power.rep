@@ -1,0 +1,197 @@
+
+Power Net Detected:
+    Voltage	    Name
+    0.00V	    VSS
+    1.10V	    VDD
+Load RC corner of view setup_view
+
+Begin Power Analysis
+
+    0.00V	    VSS
+    1.10V	    VDD
+
+Begin Processing Timing Library for Power Calculation
+
+Begin Processing Timing Library for Power Calculation
+
+
+
+Begin Processing Power Net/Grid for Power Calculation
+
+Ended Processing Power Net/Grid for Power Calculation: (cpu=0:00:00, real=0:00:00, mem(process/total)=1925.72MB/1925.72MB)
+
+Begin Processing Timing Window Data for Power Calculation
+
+clk(200MHz) CK: assigning clock clk to net clk
+Ended Processing Timing Window Data for Power Calculation: (cpu=0:00:00, real=0:00:00, mem(process/total)=1926.03MB/1926.03MB)
+
+Begin Processing User Attributes
+
+Ended Processing User Attributes: (cpu=0:00:00, real=0:00:00, mem(process/total)=1926.03MB/1926.03MB)
+
+Begin Processing Signal Activity
+
+
+Starting Levelizing
+2026-May-20 17:52:13 (2026-May-20 22:52:13 GMT)
+2026-May-20 17:52:13 (2026-May-20 22:52:13 GMT): 10%
+2026-May-20 17:52:13 (2026-May-20 22:52:13 GMT): 20%
+2026-May-20 17:52:13 (2026-May-20 22:52:13 GMT): 30%
+2026-May-20 17:52:13 (2026-May-20 22:52:13 GMT): 40%
+2026-May-20 17:52:13 (2026-May-20 22:52:13 GMT): 50%
+2026-May-20 17:52:13 (2026-May-20 22:52:13 GMT): 60%
+2026-May-20 17:52:13 (2026-May-20 22:52:13 GMT): 70%
+2026-May-20 17:52:13 (2026-May-20 22:52:13 GMT): 80%
+2026-May-20 17:52:13 (2026-May-20 22:52:13 GMT): 90%
+
+Finished Levelizing
+2026-May-20 17:52:14 (2026-May-20 22:52:14 GMT)
+
+Starting Activity Propagation
+2026-May-20 17:52:14 (2026-May-20 22:52:14 GMT)
+** INFO:  (VOLTUS_POWR-1356): No default input activity has been set. Defaulting to 0.2.
+Use 'set_default_switching_activity -input_activity' command to change the default activity value.
+
+2026-May-20 17:52:15 (2026-May-20 22:52:15 GMT): 10%
+2026-May-20 17:52:15 (2026-May-20 22:52:15 GMT): 20%
+2026-May-20 17:52:15 (2026-May-20 22:52:15 GMT): 30%
+
+Finished Activity Propagation
+2026-May-20 17:52:17 (2026-May-20 22:52:17 GMT)
+Ended Processing Signal Activity: (cpu=0:00:04, real=0:00:04, mem(process/total)=1926.35MB/1926.35MB)
+
+Begin Power Computation
+
+      ----------------------------------------------------------
+      # of cell(s) missing both power/leakage table: 0
+      # of cell(s) missing power table: 0
+      # of cell(s) missing leakage table: 0
+      # of MSMV cell(s) missing power_level: 0
+      ----------------------------------------------------------
+
+
+
+Starting Calculating power
+2026-May-20 17:52:17 (2026-May-20 22:52:17 GMT)
+ ... Calculating switching power
+2026-May-20 17:52:17 (2026-May-20 22:52:17 GMT): 10%
+2026-May-20 17:52:17 (2026-May-20 22:52:17 GMT): 20%
+2026-May-20 17:52:17 (2026-May-20 22:52:17 GMT): 30%
+2026-May-20 17:52:17 (2026-May-20 22:52:17 GMT): 40%
+2026-May-20 17:52:17 (2026-May-20 22:52:17 GMT): 50%
+ ... Calculating internal and leakage power
+2026-May-20 17:52:19 (2026-May-20 22:52:19 GMT): 60%
+2026-May-20 17:52:22 (2026-May-20 22:52:22 GMT): 70%
+2026-May-20 17:52:25 (2026-May-20 22:52:25 GMT): 80%
+2026-May-20 17:52:28 (2026-May-20 22:52:28 GMT): 90%
+
+Finished Calculating power
+2026-May-20 17:52:31 (2026-May-20 22:52:31 GMT)
+Ended Power Computation: (cpu=0:00:13, real=0:00:13, mem(process/total)=1926.85MB/1926.85MB)
+
+Begin Processing User Attributes
+
+Ended Processing User Attributes: (cpu=0:00:00, real=0:00:00, mem(process/total)=1926.85MB/1926.85MB)
+
+Ended Power Analysis: (cpu=0:00:18, real=0:00:19, mem(process/total)=1926.97MB/1926.97MB)
+
+Begin Static Power Report Generation
+*----------------------------------------------------------------------------------------
+*	Innovus 16.20-p002_1 (64bit) 11/08/2016 11:31 (Linux 2.6.18-194.el5)
+*	
+*
+* 	Date & Time:	2026-May-20 17:52:31 (2026-May-20 22:52:31 GMT)
+*
+*----------------------------------------------------------------------------------------
+*
+*	Design: mfn_frontend_top_v3
+*
+*	Liberty Libraries used:
+*	        setup_view: /vol/ece303/genus_tutorial/NangateOpenCellLibrary_typical.lib
+*	        setup_view: ../frontend/syn/lib/sram_psum_a_1rw1r0w_40_512_freepdk45.lib
+*	        setup_view: ../frontend/syn/lib/sram_psum_b_1rw0r0w_40_512_freepdk45.lib
+*	        setup_view: ../frontend/syn/lib/sram_act_buf_1rw0r0w_192_64_freepdk45.lib
+*
+*	Power Domain used:
+*		Rail:        VDD 	Voltage:        1.1
+*
+*       Power View : setup_view
+*
+*       User-Defined Activity : N.A.
+*
+*       Activity File: N.A.
+*
+*       Hierarchical Global Activity: N.A.
+*
+*       Global Activity: N.A.
+*
+*       Sequential Element Activity: 0.200000
+*
+*       Primary Input Activity: 0.200000
+*
+*       Default icg ratio: N.A.
+*
+*       Global Comb ClockGate Ratio: N.A.
+*
+*	Power Units = 1mW
+*
+*	Time Units = 1e-09 secs
+*
+*       report_power
+*
+-----------------------------------------------------------------------------------------
+
+
+Total Power
+-----------------------------------------------------------------------------------------
+Total Internal Power:       48.60088655 	   50.4594%
+Total Switching Power:      43.75657982 	   45.4298%
+Total Leakage Power:         3.95939664 	    4.1108%
+Total Power:                96.31686294
+-----------------------------------------------------------------------------------------
+
+
+Group                           Internal   Switching     Leakage       Total  Percentage 
+                                Power      Power         Power         Power  (%)        
+-----------------------------------------------------------------------------------------
+Sequential                         2.316      0.6927      0.1945       3.203       3.326
+Macro                              5.167     0.04801     0.03472        5.25        5.45
+IO                                     0           0           0           0           0
+Combinational                      41.02       42.25       3.729          87       90.32
+Clock (Combinational)            0.09641      0.7696     0.00132      0.8674      0.9005
+Clock (Sequential)                     0           0           0           0           0
+-----------------------------------------------------------------------------------------
+Total                               48.6       43.76       3.959       96.32         100
+-----------------------------------------------------------------------------------------
+
+
+Rail                  Voltage   Internal   Switching     Leakage       Total  Percentage 
+                                Power      Power         Power         Power  (%)        
+-----------------------------------------------------------------------------------------
+VDD                       1.1       48.6       43.76       3.959       96.32         100
+
+
+Clock                           Internal   Switching     Leakage       Total  Percentage 
+                                Power      Power         Power         Power  (%)        
+-----------------------------------------------------------------------------------------
+clk                              0.09641      0.7696     0.00132      0.8674      0.9005
+-----------------------------------------------------------------------------------------
+Total                            0.09641      0.7696     0.00132      0.8674      0.9005
+-----------------------------------------------------------------------------------------
+ 
+ 
+-----------------------------------------------------------------------------------------
+*	Power Distribution Summary: 
+* 		Highest Average Power:       u_psum_mem/u_sram_a (sram_psum_a_1rw1r0w_40_512_freepdk45): 	     4.309
+* 		Highest Leakage Power:       u_psum_mem/u_sram_a (sram_psum_a_1rw1r0w_40_512_freepdk45): 	   0.02183
+* 		Total Cap: 	7.93708e-10 F
+* 		Total instances in design: 90360
+* 		Total instances in design with no power:     0
+*                Total instances in design with no activty:     0
+
+* 		Total Fillers and Decap:     0
+-----------------------------------------------------------------------------------------
+ 
+Ended Static Power Report Generation: (cpu=0:00:00, real=0:00:00,
+mem(process/total)=1927.22MB/1927.22MB)
+

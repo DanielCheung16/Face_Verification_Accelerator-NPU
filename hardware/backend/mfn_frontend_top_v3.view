@@ -1,7 +1,7 @@
 # ============================================================
 # MMMC View File v3 — MobileFaceNet Frontend (12×12 SA)
-# Target: 83 MHz / 12 ns
-# Lib: NangateOpenCellLibrary + psum SRAM libs (same as v2).
+# Target: 200 MHz / 5.0 ns (note §35 Stage 3 max-push)
+# Lib: NangateOpenCellLibrary + psum SRAM lib + act_buf SRAM lib.
 # Note: mfn_weight_rom_v3 and ROM black boxes have no .lib;
 #       Innovus will warn but proceed (0-cell modules in netlist).
 # ============================================================
@@ -12,6 +12,7 @@ create_library_set \
         /vol/ece303/genus_tutorial/NangateOpenCellLibrary_typical.lib \
         ../frontend/syn/lib/sram_psum_a_1rw1r0w_40_512_freepdk45.lib \
         ../frontend/syn/lib/sram_psum_b_1rw0r0w_40_512_freepdk45.lib \
+        ../frontend/syn/lib/sram_act_buf_1rw0r0w_192_64_freepdk45.lib \
     }
 
 create_rc_corner \

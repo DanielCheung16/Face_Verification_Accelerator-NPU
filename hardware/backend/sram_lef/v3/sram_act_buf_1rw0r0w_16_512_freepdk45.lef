@@ -1,0 +1,402 @@
+VERSION 5.4 ;
+NAMESCASESENSITIVE ON ;
+BUSBITCHARS "[]" ;
+DIVIDERCHAR "/" ;
+UNITS
+  DATABASE MICRONS 2000 ;
+END UNITS
+MACRO sram_act_buf_1rw0r0w_16_512_freepdk45
+   CLASS BLOCK ;
+   SIZE 111.005 BY 131.6 ;
+   SYMMETRY X Y R90 ;
+   PIN din0[0]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 11.03 0.97 11.17 1.105 ;
+      END
+   END din0[0]
+   PIN din0[1]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 14.845 0.97 14.98 1.105 ;
+      END
+   END din0[1]
+   PIN din0[2]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 18.66 0.97 18.8 1.105 ;
+      END
+   END din0[2]
+   PIN din0[3]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 22.48 0.97 22.61 1.105 ;
+      END
+   END din0[3]
+   PIN din0[4]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 26.29 0.97 26.43 1.105 ;
+      END
+   END din0[4]
+   PIN din0[5]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 30.11 0.97 30.24 1.105 ;
+      END
+   END din0[5]
+   PIN din0[6]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 33.92 0.97 34.06 1.105 ;
+      END
+   END din0[6]
+   PIN din0[7]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 37.735 0.97 37.87 1.105 ;
+      END
+   END din0[7]
+   PIN din0[8]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 41.55 0.97 41.69 1.105 ;
+      END
+   END din0[8]
+   PIN din0[9]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 45.37 0.97 45.5 1.105 ;
+      END
+   END din0[9]
+   PIN din0[10]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 49.18 0.97 49.32 1.105 ;
+      END
+   END din0[10]
+   PIN din0[11]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 52.995 0.97 53.13 1.105 ;
+      END
+   END din0[11]
+   PIN din0[12]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 56.81 0.97 56.95 1.105 ;
+      END
+   END din0[12]
+   PIN din0[13]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 60.63 0.97 60.76 1.105 ;
+      END
+   END din0[13]
+   PIN din0[14]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 64.445 0.97 64.58 1.105 ;
+      END
+   END din0[14]
+   PIN din0[15]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 68.26 0.97 68.39 1.105 ;
+      END
+   END din0[15]
+   PIN dout0[0]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 11.03 14.59 11.17 14.73 ;
+      END
+   END dout0[0]
+   PIN dout0[1]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 14.845 14.59 14.98 14.73 ;
+      END
+   END dout0[1]
+   PIN dout0[2]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 18.66 14.59 18.8 14.73 ;
+      END
+   END dout0[2]
+   PIN dout0[3]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 22.48 14.59 22.61 14.73 ;
+      END
+   END dout0[3]
+   PIN dout0[4]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 26.29 14.59 26.43 14.73 ;
+      END
+   END dout0[4]
+   PIN dout0[5]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 30.11 14.59 30.24 14.73 ;
+      END
+   END dout0[5]
+   PIN dout0[6]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 33.92 14.59 34.06 14.73 ;
+      END
+   END dout0[6]
+   PIN dout0[7]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 37.735 14.59 37.87 14.73 ;
+      END
+   END dout0[7]
+   PIN dout0[8]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 41.55 14.59 41.69 14.73 ;
+      END
+   END dout0[8]
+   PIN dout0[9]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 45.37 14.59 45.5 14.73 ;
+      END
+   END dout0[9]
+   PIN dout0[10]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 49.18 14.59 49.32 14.73 ;
+      END
+   END dout0[10]
+   PIN dout0[11]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 52.995 14.59 53.13 14.73 ;
+      END
+   END dout0[11]
+   PIN dout0[12]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 56.81 14.59 56.95 14.73 ;
+      END
+   END dout0[12]
+   PIN dout0[13]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 60.63 14.59 60.76 14.73 ;
+      END
+   END dout0[13]
+   PIN dout0[14]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 64.445 14.59 64.58 14.73 ;
+      END
+   END dout0[14]
+   PIN dout0[15]
+      DIRECTION OUTPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 68.26 14.59 68.39 14.73 ;
+      END
+   END dout0[15]
+   PIN addr0[0]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 90.96 19.67 91.09 19.805 ;
+      END
+   END addr0[0]
+   PIN addr0[1]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 90.96 29.91 91.09 30.04 ;
+      END
+   END addr0[1]
+   PIN addr0[2]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 90.96 40.14 91.09 40.28 ;
+      END
+   END addr0[2]
+   PIN addr0[3]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 90.96 50.38 91.09 50.51 ;
+      END
+   END addr0[3]
+   PIN addr0[4]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 90.96 60.61 91.09 60.75 ;
+      END
+   END addr0[4]
+   PIN addr0[5]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 90.96 70.85 91.09 70.98 ;
+      END
+   END addr0[5]
+   PIN addr0[6]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 90.96 81.085 91.09 81.22 ;
+      END
+   END addr0[6]
+   PIN addr0[7]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 90.96 91.32 91.09 91.45 ;
+      END
+   END addr0[7]
+   PIN addr0[8]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 90.96 101.55 91.09 101.69 ;
+      END
+   END addr0[8]
+   PIN wmask0[0]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 3.26 0.97 3.4 1.105 ;
+      END
+   END wmask0[0]
+   PIN wmask0[1]
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 7.7 0.97 7.835 1.105 ;
+      END
+   END wmask0[1]
+   PIN clk0
+      DIRECTION INPUT ;
+      USE CLOCK ;
+      PORT
+         LAYER metal3 ;
+         RECT 16.58 0.97 16.715 1.105 ;
+      END
+   END clk0
+   PIN csb0
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 21.02 0.97 21.16 1.105 ;
+      END
+   END csb0
+   PIN web0
+      DIRECTION INPUT ;
+      USE SIGNAL ;
+      PORT
+         LAYER metal3 ;
+         RECT 25.46 0.97 25.6 1.105 ;
+      END
+   END web0
+   PIN vdd
+      DIRECTION INOUT ;
+      USE POWER ;
+      PORT
+         LAYER metal1 ;
+         RECT 0.085 131.515 110.92 131.685 ;
+      END
+   END vdd
+   PIN gnd
+      DIRECTION INOUT ;
+      USE GROUND ;
+      PORT
+         LAYER metal1 ;
+         RECT 0.085 0.085 110.92 0.255 ;
+      END
+   END gnd
+   OBS
+      LAYER metal4 ;
+         RECT 0.14 0.14 110.865 131.46 ;
+   END
+END sram_act_buf_1rw0r0w_16_512_freepdk45
+
+END LIBRARY

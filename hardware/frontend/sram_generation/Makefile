@@ -31,11 +31,12 @@ COMPILER  := sram_compiler.py
 
 CFG_A     := freepdk45_sram_psum_a_40x512.py
 CFG_B     := freepdk45_sram_psum_b_40x512.py
-CFG_ACT   := freepdk45_sram_act_buf_16x512.py
+# v3+ (opt④): wide act_buf SRAM — 192-bit word (12 ch × 16-bit) × 64 words
+CFG_ACT   := freepdk45_sram_act_buf_192x64.py
 
 NAME_A    := sram_psum_a_1rw1r0w_40_512_freepdk45
 NAME_B    := sram_psum_b_1rw0r0w_40_512_freepdk45
-NAME_ACT  := sram_act_buf_1rw0r0w_16_512_freepdk45
+NAME_ACT  := sram_act_buf_1rw0r0w_192_64_freepdk45
 
 MACRO_A   := macro/$(NAME_A)
 MACRO_B   := macro/$(NAME_B)

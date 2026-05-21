@@ -2179,5 +2179,392 @@ psum 是行為 register-file）。`sim3/Makefile` 的 `make top` 跑的是純 RT
 
 `synthesis_v3.tcl` **可以直接跑**（所有引用檔案都在，netlist 已於
 05-16 產出）。但 `act_buf` 以 FF array 合成 → 面積 312,671 µm²，
-若改用 SRAM macro（已有 LEF `sram_act_buf...` 111×131.6 µm ≈ 14,609 µm²）
-可省 ~5–8× 面積。目前面積數字「正確但未最佳化」。
+若改用 SRAM macro 可省一大半面積。目前面積數字「正確但未最佳化」。
+
+---
+
+## 33. act_buf → SRAM Macro 改造（2026-05-18）
+
+承 §32.5 —— act_buf 以 FF array 合成佔了過半面積。本節把 act_buf 換成
+真正的 SRAM macro。過程中踩到一個 OpenRAM SRAM 的時序陷阱，完整記錄如下。
+
+### 33.1 動機
+
+opt④（12-ch 寬載入）讓 act_buf 的 FF array 更大（寬寫埠的 mux 網路）：
+
+| | opt④ 前 | opt④ 後（FF array） |
+|--|---------|---------------------|
+| act_buf cell 數 | 87,490 | 168,001 |
+| act_buf 面積 | 152,636 µm² | 259,999 µm² |
+
+全設計 455,340 µm² 中 act_buf 佔 **57%**。換成 SRAM macro 可大幅縮小，
+並讓 act_buf 收斂成單一緊湊區塊（對後端繞線、頻率也有利）。
+
+### 33.2 SRAM 規格
+
+opt④ 要求一個 cycle 存取 12 個 channel → SRAM 的 word 必須是「12 channel 一列」：
+
+- `word_size = 192-bit`（12 × 16-bit），`num_words = 64`（512 ch ÷ 12 ≈ 43 → 取 64），1RW
+- `write_size = 16` → 12-bit write mask（窄寫單一 channel 用）
+- OpenRAM 產出 `sram_act_buf_1rw0r0w_192_64_freepdk45`，**639.37 × 152.365 µm = 97,420 µm²**
+- `mfn_act_buf` 改成薄 wrapper：channel C → (row = C/12, lane = C%12)、wide/narrow 寫、wmask 產生
+
+### 33.3 踩到的陷阱：OpenRAM SRAM 是「半週期讀取」
+
+第一版合成 Setup WNS 只有 **+4 ps**（FF 版有 +4,842 ps）。Critical path：
+`act_buf SRAM dout → SA 16×16 乘法器 → 40-bit 加法樹 → acc_reg`。
+
+**根因**：OpenRAM SRAM 的 `dout0` 在 **negedge** 才產生
+（`.v`：`always @(negedge clk0)`；`.lib`：`timing_type: falling_edge`）。
+SRAM 讀出資料只在半個 cycle 後才有效 → 下游 SA 點積（~5.8 ns）只剩
+**半個 cycle（6 ns）** 可用 → +4 ps，P&R 必然 violate。
+
+### 33.4 失敗的嘗試：反相時脈
+
+想法：用 `~clk` 餵 SRAM → negedge-dout 落在系統 posedge → SA 拿回整個 cycle。
+
+結果：模擬 **layer 47–49 MISMATCH**。原因：act_buf 同時要**寫入**
+（寫入資料 `pixel_in` 來自 testbench 的 posedge 記憶體）。反相時脈讓
+寫入資料與寫入位址/致能錯位 —— 讀、寫對時脈邊緣的需求衝突，反相
+解決不了讀的問題卻弄壞寫。→ 還原。
+
+### 33.5 正解：輸出暫存 + 2-cycle controller
+
+- **wrapper 加一級 posedge 輸出暫存**：SRAM dout（negedge 有效）經 posedge FF
+  鎖存 → `act_out` 變成乾淨的 posedge 訊號，SA 拿到完整一個 cycle。
+- 代價：act_buf 讀取延遲 1 → **2 cycle**。controller 必須把讀位址
+  `act_base_ch` 提前 **2 拍**：
+  - **PW / std**：`S_CIN_COMPUTE` 驅動「下一 tile」的位址。compute loop 本來
+    就 2 cycle/tile（COMPUTE→NEXT_CIN），剛好對齊 → **零額外 state**。
+  - **DW12 / global DW**：FETCH 與 COMPUTE 之間插入**兩個** RADDR state
+    （`S_DW12_RADDR/RADDR2`、`S_DW_RADDR/RADDR2`）。
+- 重新驗證：**50 層全 MATCH ✅**
+
+### 33.6 順手優化：移除 psum_b
+
+查 controller —— `psum_we_b` 永遠是 `1'b0`，**v3 從來沒用過 psum port B**
+（那是 v2 dual-MAC 的遺產：v2 一次算 2 個 output channel 要 2 顆 psum）。
+v3 的 SA 內部有 12 個累加器、writeback 逐一用 port A 寫出，用不到 port B。
+
+→ 移除 `sram_psum_b`，v3 從 3-macro 變 **2-macro**（psum_a + act_buf），
+省 ~32,571 µm² + 一顆 macro。
+
+### 33.7 合成結果（genus.log4，0 errors）
+
+| 項目 | FF act_buf 版 | **SRAM act_buf 版** |
+|------|--------------|---------------------|
+| 全設計 cell 數 | 268,231 | **87,190**（−67%）|
+| 全設計 cell 面積 | 455,340 µm² | **189,689 µm²**（−58%）|
+| act_buf | 168,001 cells | 1,230 cells（wrapper+輸出暫存）+ 1 SRAM macro |
+| Setup WNS @ 12 ns | +4,842 ps | **+4,913 ps** ✅ |
+| Critical path | state → SA acc | `psum SRAM → activation`（962 ps）|
+| SRAM macro 數 | 2（psum_a/b）| **2（psum_a + act_buf）**|
+
+輸出暫存後 act_buf→SA 不再是關鍵路徑；critical path ~7 ns，餘裕充足。
+
+### 33.8 效能總結
+
+| 版本 | Cycles | 50 層 |
+|------|--------|-------|
+| v3 opt①②③④（FF act_buf）| 12,281,668 | MATCH |
+| + act_buf SRAM（1-cycle，時序未過）| 13,027,242 | MATCH |
+| **+ 輸出暫存（2-cycle，最終版）** | **13,772,816** | **MATCH ✅** |
+
+2-cycle 的 RADDR2 比 FF 版多約 1.49M cycle（DW 路徑每個 kernel position +1）。
+
+FPS（13,772,816 cycles）：
+
+| 頻率 | FPS |
+|------|-----|
+| 83 MHz | 6.0 |
+| 110 MHz | 8.0 |
+| 125 MHz | 9.1 |
+
+合成 critical path 才 ~7 ns，且 act_buf 已是緊湊 macro（不像 FF 版散佈
+整個 die）→ 預期 P&R 後繞線延遲遠小於 FF 版（FF 版 7 ns→11 ns），
+SRAM 版很可能能 P&R 到 110–125 MHz，比 FF 版（~83–90 MHz）更快。
+
+### 33.9 檔案異動清單
+
+| 檔案 | 變更 |
+|------|------|
+| `sram_generation/freepdk45_sram_act_buf_192x64.py` | 新：OpenRAM 設定（192×64）|
+| `sv3/sram_act_buf_1rw0r0w_192_64_freepdk45.sv` | 新：行為模型（模擬用）|
+| `sv3/mfn_act_buf.sv` | FF array → SRAM wrapper + posedge 輸出暫存 |
+| `sv3/mfn_controller_v3.sv` | act_base_ch 提前 2 拍；新增 RADDR/RADDR2 states |
+| `syn/v3_rom_stubs.sv` | act_buf SRAM black-box stub；移除 psum_b 實例化 |
+| `syn/synthesis_v3.tcl` | 加 act_buf .lib、black-box；移除 psum_b 參考 |
+| `backend/run_innovus_3.tcl` | 加 act_buf macro（LEF/place/CTS）；移除 psum_b |
+| `backend/fix_sram_lef.py` | 一併剝除 act_buf LEF 的 M3/M4 OBS |
+
+---
+
+## 34. 架構問答：12×12 陣列、記憶體、模擬模型
+
+設計審查時釐清的幾個重點，整理備查。
+
+### 34.1 v3 的 12×12 陣列怎麼運作
+
+`mfn_sa_12x12`：12 row × 12 col 的 MAC 陣列。
+- **12 col = 12 個 input channel**；**12 row = 12 個 output channel**
+- 每 cycle：`act_in[0..11]` 廣播給全部 12 row；row r 用自己的 12 個 weight
+  `wgt_in[r][0..11]`，算一個 12-tap 點積累加進 `acc[r] += Σ_c act_in[c]·wgt_in[r][c]`
+- 一個 cycle 做 **144 個乘加**
+- **Output-stationary**：`acc[r]` 留在 PE 內跨 c_in tile 累加，算完才寫出
+
+### 34.2 跟「標準 systolic array」的差異
+
+| | 標準 systolic array | v3 `mfn_sa_12x12` |
+|--|---------------------|-------------------|
+| 資料流 | 資料逐 cycle 在 PE 間**行進** | act_in **廣播**給全部 row，144 乘積同時算 |
+| PE 連線 | 只連鄰居 → 線短、可 pipeline | 廣播 → fanout 大 + 寬加法樹 |
+| 控制 | 複雜（fill/drain latency）| 簡單（一拍進、一拍算）|
+
+→ v3 **嚴格說不是 systolic array**，是「activation 廣播 + output-stationary
+的 144-MAC 平行陣列」。有 systolic 的核心好處（大量平行、psum 不搬動），
+但沒有「資料行進」那層。
+
+### 34.3 跟 v2「雙 3×3 MAC array」的差異
+
+v2 = 雙 `mfn_mac_array`，每個 9 乘法器。**那個「9」是 3×3 kernel 的 9 個
+空間 tap，不是 channel。**
+
+| | v2 雙 9-MAC | v3 12×12 |
+|--|------------|----------|
+| 平行維度 | **空間**（3×3 的 9 像素）× 2 out-ch | **通道**（12 in-ch × 12 out-ch）|
+| 乘法器數 | 18 | **144**（8×）|
+| 對 PW(1×1) | 無 3×3 window → 把 9 lane 硬當 9 channel | 天生 channel 導向，直接對上 |
+
+→ v2 是空間平行（為 3×3 卷積設計），對佔多數的 PW 1×1 彆扭；v3 改成
+通道平行 → 平行度 8× 又天生適合 PW。這是換 v3 的根本理由。
+
+### 34.4 換成「真 systolic array」會更好嗎？
+
+**不太會。** v3 瓶頸不在 SA 運算（144 MAC/cycle 夠了），而在
+**activation fetch + spatial loop + 後端繞線**。真 systolic 只小幅受益
+時脈、cycle 數不變，還多 fill/drain latency 與控制複雜度 → CP 值低。
+
+要再更好，依效益排序：
+1. **空間平行** —— 一次算多個 output pixel（複製 PE / 重構 dataflow），真正砍 cycle
+2. **模型端** —— INT8 量化、channel pruning，直接減運算量
+3. SA accumulator 加 pipeline → 提頻
+4. 後端 floorplan 收緊（已做）
+
+### 34.5 兩顆 SRAM 的用途
+
+| SRAM | 用途 |
+|------|------|
+| **act_buf SRAM**（192-bit × 64）| 存當前 pixel 的全部 input channel，讓 SA 一次讀 12 個 channel |
+| **psum SRAM**（sram_psum_a，512 × 40-bit）| 存 partial sum / 輸出；SA 的 12 個累加器結果寫進此、activation 模組讀出；residual 也讀此 |
+
+### 34.6 weight / bias / prelu / config 放在哪？
+
+**沒有實體化** —— 這 4 個 ROM 在合成時都是 **black box（0 cell、無 LEF）**，
+後端 P&R **不會出現**。
+
+- **bias / prelu / config**（合計 ~45 KB，極小）：學術上可接受省略，面積誤差 <1%
+- **weight（~2–3 MB）**：真 tapeout 必須有實體存儲（片外 DRAM/Flash 或片上
+  ROM macro）；目前當「片外、future work」處理，晶片只留位址 pin
+
+### 34.7 模擬怎麼模擬？是 flip-flop 嗎？
+
+ROM **不是 flip-flop、也不是真 SRAM** —— 模擬時是行為模型的 `$readmemh` 陣列：
+```systemverilog
+logic [..] mem [0:N-1];
+initial $readmemh("hex/weights.hex", mem);   // 從 hex 檔載入查表
+```
+它**不會被合成**（合成時是 black box）。三種狀態對照：
+
+| | 模擬 | 合成 | 後端/實體 |
+|--|------|------|----------|
+| weight/bias/prelu/config ROM | `$readmemh` 行為陣列 | black box（0 cell）| ❌ 沒有 |
+| psum / act_buf SRAM | 行為模型 | black box macro | ✅ SRAM macro |
+| act_buf（舊 FF 版）| 行為陣列 | 合成成真 flip-flop | ✅ 一堆 FF |
+
+只有**舊版 act_buf** 才真的合成成 flip-flop；現已改為 SRAM macro。
+
+---
+
+## 35. 衝 150 MHz 的 Pipeline 計畫（**已達成，2026-05-19**）
+
+起點：SRAM 版 13,772,816 cycles @ ~87 MHz = **6.0 fps**。
+目標：150 MHz（period 6.67 ns）→ 預估 **~10.9 fps**。
+
+P&R 後 critical path ~11.5 ns，要砍到 <6.67 ns 只能靠 pipeline。
+
+### Stage 1 — `mfn_activation` 入口 register（DONE ✓）
+
+**瓶頸**：critical path = `psum SRAM dout1 (negedge) → activation stage-1 邏輯 → clamped_s1_reg`。
+psum SRAM 是 OpenRAM negedge-dout → activation 的 shift+clamp 邏輯只有半 cycle（~5.4 ns）。
+
+**修法**：在 `mfn_activation` 入口加一級 posedge 暫存（**stage-0**）：
+- 暫存 `p_out` / `valid_in` / `has_prelu` / `prelu_w` / `layer_is_res` / `residual_in`
+- 後續 stage-1 邏輯改用 `_s0` 版本
+- activation 從 2-stage 變 **3-stage**
+
+效果：
+- 路徑切成兩段：`SRAM dout → 入口 FF`（半 cycle，純線、輕鬆）+ `入口 FF → stage-1 邏輯 → clamped_s1`（全 cycle）→ critical path 約砍半
+- 8 ns synth: WNS +2604 ps，critical path 已不再是 SRAM 半週期，而是 `act_buf/act_out_reg → SA mult+CSA tree → acc_reg`（5240 ps）
+- valid_out 晚 1 拍 → controller 加 1 個 drain wait state（見下「Controller drain 修正」）
+- 總 cycle 數每層 +1（50 層共 +50，13,772,816 → 13,772,866）
+
+### Stage 2 — activation `Stage 2` 拆成 2A+2B（DONE ✓）
+
+**理由**：Stage 1 後 critical path 變成 SA mult+tree（~5.4 ns），但 activation 的 stage-2 內部
+`16×16 mult + 30-bit MUX + 17-bit add + 32-bit clamp` 整段約 5 ns，6.67 ns 還塞得下但保險起見切開：
+
+**修法**：把 stage-2 拆成
+- **Stage 2A combinational**: `prelu_prod = clamped_s1 * prelu_w_s1`（16×16 → 32-bit）
+- **Stage 2A register**: `prelu_prod_s2a` + sideband（`clamped_s2a`、`has_prelu_s2a`、`layer_is_res_s2a`、`residual_s2a`、`valid_s2a`）
+- **Stage 2B combinational**: `>>> F_BITS` + MUX（has_prelu && clamped<0）+ residual add + clamp
+- **Stage 2B register**: `out_reg` / `valid_reg`
+
+→ activation 從 3-stage 變 **4-stage**，valid_out 比 valid_in 晚 4 拍。
+
+效果：
+- 即使 6.67 ns，activation 內部不再是 critical
+- u_act 面積：789 cells（仍是全 design 0.9%，幾乎免費）
+- 每層 cycle 再 +1（13,772,866 → 13,772,916，總共 +100 vs 原始 SRAM 版）
+
+### Controller drain 修正（隨 Stage 1+2 必做）
+
+**問題（debug 過程）**：Stage 0 加完後跑 `make diff` 全部 MISMATCH，layer 0 只差最後 1 個 pixel（位置 172031）、layer 1 之後因為輸入是錯的而連鎖崩盤。
+
+**原因**：activation 變深一級 → 每層最後一個 pixel 的 `valid_out` 比 controller 走到
+`S_NEXT_LAYER` 晚 1 cycle 才到 → TB 在 `state_reg == S_NEXT_LAYER` 觸發 `$writememh`
+跟 TB 的 `if (valid_out) sram[...] = pixel_out` 在同一個 posedge clk 競態 → 最後一個 pixel 被吃掉。
+
+**修法**：在 `mfn_controller_v3.sv` 的 state enum 加 `S_NEXT_LAYER_WAIT2` / `S_NEXT_LAYER_WAIT3`，把
+`S_SPATIAL_LOOP → S_NEXT_LAYER` 的距離從 1 cycle 拉成 **3 cycles**，等 4-stage pipeline 完全 drain
+才換層。每層多 1 cycle（Stage 0 加完）再 +1 cycle（Stage 2 加完），共 +2 cycle/層。
+
+### 結果（2026-05-19，4-stage activation）
+
+| 階段 | Cycle / 層 (avg) | Total cycles | 備註 |
+|------|------------------|-------------|------|
+| 原 SRAM 版（2-stage activation） | — | 13,772,816 | §30 |
+| + Stage 0（3-stage） | +1 | 13,772,866 | +1 drain |
+| + Stage 2 split（4-stage） | +1 | 13,772,916 | +2 drain 總共 |
+
+**Genus synth @ 6.67 ns**：
+- WNS **+1.121 ns**，critical path = `u_act_buf/act_out_reg → u_sa/mul_55_31 → CSA tree → u_sa/acc_reg[0][39]`（5,393 ps data）
+- 全 design 86,834 cells、334,956 µm²、143.6 mW（synth default activity）
+
+**Innovus P&R @ 6.67 ns**（`innovus.log4`）：
+- DRC = 0、Connectivity = 0、Antenna = 0 ✅
+- Setup WNS **+0.688 ns**、Hold WNS **+0.440 ns**、TNS = 0
+- Critical path 與 synth 同（SA mult+tree）；post-route data 6.234 ns（+0.84 ns 繞線）
+- Useful clock skew +0.45 ns，capture 端 latency 多幫忙 setup
+- Placement density 51.99%、clock skew 0.059 ns（target 0.050 接近）、insertion delay 0.309–0.369 ns
+- Total power **77.87 mW**（vs §30 之 45.37 mW @ 87 MHz —— +72% 頻率對 +72% power，energy/inference 從 7.56 → **7.15 mJ**）
+- **FPS：13,772,916 cycles ÷ 150 MHz = 10.89 fps** ✓ §35 目標達成
+
+### Stage 3 — SA mult + CSA tree 後加 register（DONE ✓，2026-05-20）
+
+**動機**：6.67 ns post-route critical path 6.234 ns 內，16×16 mult + 12-tap CSA tree ~3.5 ns、
+40-bit `acc + row_dot` add ~2 ns —— 全部在一級裡，6.67 ns 已是極限。
+
+**修法**：在 [`mfn_sa_12x12.sv`](sv3/mfn_sa_12x12.sv) 裡把單一 always_ff 的 acc 更新切成兩段：
+
+- **Stage A comb**：`act × wgt → 16×16 mul × 12 → 12-tap adder tree → row_dot[r]`
+- **Stage A register**：
+  ```systemverilog
+  logic signed [AWIDTH-1:0] row_dot_reg [SA_ROWS];   // 12 × 40-bit
+  logic                     enable_d;                 // 1 bit
+
+  always_ff @(posedge clk or negedge rst_n) begin
+      if (!rst_n) begin
+          foreach (row_dot_reg[r]) row_dot_reg[r] <= '0;
+          enable_d <= 1'b0;
+      end else begin
+          enable_d <= enable;
+          if (enable)
+              foreach (row_dot_reg[r]) row_dot_reg[r] <= row_dot[r];
+      end
+  end
+  ```
+- **Stage B register**（既有 acc）：
+  ```systemverilog
+  always_ff: if (clear) acc <= bias; else if (enable_d) acc <= acc + row_dot_reg;
+  ```
+  `clear` 不經 pipeline（bias 直入 acc，沒 race，因為 controller 的 S_BIAS_LOAD 不會緊接 S_*_COMPUTE）。
+
+**Cost**：12 × 40-bit row_dot_reg + 1-bit enable_d = **481 FF**（vs 全 design 86 K，+0.56% 幾乎免費）。
+
+**Controller 配合**（[`mfn_controller_v3.sv`](sv3/mfn_controller_v3.sv)）：
+- 大部分 enable 路徑天然有 drain：
+  - PW：`S_CIN_COMPUTE(en=1) → S_NEXT_CIN(en=0) → S_CIN_COMPUTE(en=1) ...` ← drain 落在 `S_NEXT_CIN`
+  - DW12：`S_DW12_COMPUTE(en=1) → S_DW12_KP_NEXT(en=0) → ...` ← drain 落在 `S_DW12_KP_NEXT`
+- **唯一例外**：global DW 從 last `S_DW_COMPUTE` 直接跳 `S_DW_WRITEBACK` 沒 drain
+  → 加一個新 state `S_DW_DRAIN`，1-cycle wait：
+  ```
+  S_DW_COMPUTE → (last c_in?) → S_DW_DRAIN → S_DW_WRITEBACK
+  ```
+  影響：layer 48 (linear7, 512 channels, global DW) +1 cycle/channel = +512 cycles。
+
+**Cycle 影響**：
+| 階段 | Total cycles | Δ vs prev |
+|------|-------------|-----------|
+| Stage 0+2 後（4-stage activation）| 13,772,916 | — |
+| **+ Stage 3** | **13,773,428** | **+512**（layer 48 only，+0.0037%）|
+
+### 結果（2026-05-20，Stage 3 SA pipeline）
+
+**Genus synth @ 5.75 ns**：critical path endpoint 從 `acc_reg` 移到 **`row_dot_reg_reg`** ← Stage 3 register，
+合成器把 mult + CSA tree 合併成 `csa_tree_add_71_27` 一棵 Wallace tree，path 中已看不到獨立 `mul_55_31`。
+
+**Innovus P&R @ 5.75 ns**（[`innovus.log7`](../backend/innovus.log7)）：
+- DRC = 0、Connectivity = 0、Antenna = 0 ✅
+- Setup WNS **+0.565 ns**、Hold WNS **+0.483 ns**、TNS = 0
+- Critical path：`u_act_buf/act_out_reg/QN → CSA tree → u_sa/row_dot_reg_reg[4][36]/SI`（5.503 ns data）
+- Stage B（`row_dot_reg → +acc → acc_reg`）沒進 worst path → 切得均衡
+- Placement density **52.92%**、clock skew 0.068 ns、insertion delay 0.377–0.445 ns（avg 0.417）
+- Total power **88.20 mW**
+
+### 200 MHz 再加碼（2026-05-20，**RTL 沒動**，只縮 SDC 5.75 → 5.0 ns）
+
+**Genus synth @ 5.0 ns**：WNS **+0.177 ns**（邊緣警告，本來預估 P&R 會掉到 fail）。
+
+**Innovus P&R @ 5.0 ns**（[`innovus.log`](../backend/innovus.log)）—— **賭贏 ✅**：
+- DRC = 0、Connectivity = 0、Antenna = 0 ✅
+- Setup WNS **+0.257 ns**（**比 syn 還升 0.08 ns**）、Hold WNS **+0.508 ns**、TNS = 0
+- Critical path（同 5.75 ns）：`u_act_buf/act_out_reg → CSA tree → u_sa/row_dot_reg_reg[0][33]/SI`（5.051 ns data）
+- 預期失誤的原因：Genus 用 wire-load 預估保守、Innovus 拿到實際走線後反而較短；useful clock skew 0.475 ns 又倒貼 setup
+- Placement density 52.87%、clock skew 0.069 ns、insertion delay 0.357–0.426 ns（avg 0.409, sd 0.012）
+- Total power **99.13 mW**
+
+### v3 完整演進總表
+
+| 階段 | freq | Cycles | FPS | Power | µJ/inf | WNS | Floorplan |
+|------|------|--------|-----|-------|--------|-----|-----------|
+| §30（2-stage activation）| 87 MHz | 13,772,816 | 6.0 | 45.37 mW | 7.56 | +0.464 ns | 800×700 |
+| Stage 0+2 @ 6.67 ns | 150 MHz | 13,772,916 | 10.89 | 77.87 mW | 7.15 | +0.688 ns | 800×700 |
+| + Stage 3 @ 5.75 ns | 174 MHz | 13,773,428 | 12.63 | 88.20 mW | 6.98 | +0.565 ns | 800×700 |
+| + 5.0 ns push（RTL 不動）| 200 MHz | 13,773,428 | 14.52 | 99.13 mW | 6.83 | +0.257 ns | 800×700 |
+| **+ 720×720 area-shrink** | **200 MHz** | **13,773,428** | **14.52** | **96.32 mW** | **6.63** | **+0.089 ns** | **720×720** |
+
+→ vs §30 起點：**freq +130%、FPS +142%、energy −12.3%、area −7.4%**。
+最後兩階都是「不動 RTL，只動 SDC / floorplan」純後端收益：
+- **5.0 ns push（200 MHz）**：純頻率，cycle 不變、power +12% 但 energy/inf 略降到 6.83 µJ
+- **720×720 area-shrink**：area −7.4%、switching power −5.7%（線短了）、energy −2.9% 到 6.63 µJ；
+  代價是 setup WNS +0.257 → +0.089 ns（仍 MET，但邊緣 1.8% headroom，data path +0.121 ns 是 router 在 59% density 下避擠多繞造成）。
+  clock tree 反而**更短更平衡**：insertion delay avg 0.409→0.348、sd 0.012→0.009。
+
+### Stage 4（不需要做）—— 每個 SRAM 輸出都暫存
+
+act_buf 改 SRAM macro 時就是 registered output（`u_act_buf/act_out_reg`），psum SRAM 的 negedge-dout 也已被
+Stage 0 register 吃掉 → Stage 4 本質上已隱含完成，不需另作。
+
+### Stage 3.5（未做，但是真正的下一步空間）—— per-PE product register
+
+Stage 3 後 post-route critical path 5.051 ns 仍在 `act_buf → mult + CSA tree → row_dot_reg`（mult+tree 合併），
+Stage B (`row_dot_reg → acc_reg`) ~2 ns 還很閒。要再快需切 Stage A 內部：
+
+- Stage A1：`act × wgt → mul × 144 → product_reg`（~2 ns）
+- Stage A2：`product_reg → 12-tap CSA tree → row_dot_reg`（~2.5 ns）
+- Stage B ：`row_dot_reg + acc → acc_reg`（~2 ns）
+
+代價：**144 PE × 32-bit product_reg = 4,608 FF**（vs 86 K，+5.3%）；controller 也要再加 1 個 drain cycle。
+預估可推到 ~3.5 ns / **280 MHz**（vs 現在 5.0 ns post-route +0.257 ns 等效 ~210 MHz max）。
+
+**現階段先不做** —— 已超過 §35 Stage 3 200 MHz 目標；Stage 3.5 屬下一輪深 pipeline 工程。

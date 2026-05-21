@@ -1,16 +1,24 @@
 # ============================================================
 # Innovus P&R Script v3 — MobileFaceNet Frontend
 # Top module : mfn_frontend_top_v3
-# Target     : 83 MHz / 12 ns (NangateOpenCellLibrary / FreePDK45)
+# Target     : 200 MHz / 5.0 ns (NangateOpenCellLibrary / FreePDK45)
+#              (note §35 Stage 3 max-push; 5.75 ns post-route had slack
+#               +0.565 ns with critical path on Stage 3's row_dot_reg)
 #
 # v3 vs v2:
-#   - 12×12 output-stationary SA (was 6×1), dw_mode diagonal path
-#   - mfn_act_buf synthesized as FF array (87K cells, ~152K µm²)
-#   - mfn_controller_v3: DW-12-parallel + bias-preload + act-preload
+#   - 12×12 = 144-MAC output-stationary array (was dual 9-MAC)
+#   - mfn_controller_v3: opt①②③④ (DW-12-parallel, preloads, 12-ch wide fetch)
+#       + S_DW_DRAIN (1-cycle drain for the global DW path's Stage 3 pipeline)
+#   - 2 SRAM macros: psum SRAM_A + act_buf SRAM (192-bit × 64).
+#     psum SRAM_B dropped — v3 never uses psum port B.
+#   - act_buf SRAM: registered output (2-cycle read latency) → SA full cycle
+#   - mfn_activation: 4-stage pipeline (stage-0 input reg + stage-2A mult / 2B
+#     MUX+residual+clamp split).  Controller adds 3 drain wait cycles after
+#     S_SPATIAL_LOOP so the last pixel reaches valid_out before TB dump.
+#   - mfn_sa_12x12: Stage 3 — row_dot_reg (12 × 40-bit) + enable_d break the
+#     mult+CSA-tree away from the final +acc add (480 FF added).
 #   - Weight ROM (mfn_weight_rom_v3) is 0-cell black box → Innovus warns, ok
-#   - Floorplan: 1000×900 µm core (~41% stdcell util)
-#   - Same psum SRAM macros (u_sram_a + u_sram_b) as v2
-#   - Same M4 blockage fix for SRAM_B dout0 SHORTs
+#   - SRAM LEFs patched (fix_sram_lef.py): M3/M4 OBS stripped → dout routable
 #   - addFiller post-route (same fix as v2: avoids IMPOPT-310)
 # ============================================================
 
@@ -22,7 +30,7 @@ set init_top_cell     "mfn_frontend_top_v3"
 set init_lef_file     [list \
     "/vol/ece303/genus_tutorial/NangateOpenCellLibrary.lef" \
     "./sram_lef/sram_psum_a_1rw1r0w_40_512_freepdk45_fixed.lef" \
-    "./sram_lef/sram_psum_b_1rw0r0w_40_512_freepdk45_fixed.lef" \
+    "./sram_lef/v3/sram_act_buf_1rw0r0w_192_64_freepdk45_fixed.lef" \
 ]
 set init_mmmc_file    "./mfn_frontend_top_v3.view"
 set init_pwr_net      "VDD"
@@ -34,20 +42,26 @@ setLibraryUnit -cap 1ff
 init_design
 
 # ── 2. Floorplan ─────────────────────────────────────────────
-# Cell area (area_v3.rep, opt④ netlist): 455,340 µm²
-#   (u_act_buf 260K — FF array + 12-lane wide-write mux — dominates; u_sa 177K)
-# psum SRAM macros: SRAM_A 275.49×240.50=66,265 µm²  SRAM_B 158.995×204.86=32,571 µm²
-# 1100×1000 core = 1,100,000 µm²; available for cells = 1,100,000−98,836 = 1,001,164 µm²
-# Stdcell utilization: 455,340 / 1,001,164 ≈ 45%  (leaves routing margin)
-floorPlan -s 1100 1000 5 5 5 5
+# 200 MHz / 5.0 ns version: stdcell cell area ≈ 193,422 µm² (genus.log9).
+# Macros: psum SRAM_A 66,255 µm² + act_buf SRAM (639.37×152.365) 97,420 µm²
+#         → 163,675 µm² of macro.
+# 720×720 core = 518,400 µm²; available for cells ≈ 354,725 µm².
+# Stdcell utilization ≈ 55%; Innovus placement density typically ~58-60%.
+#   (Previous 800×700 ran at 52.87% density with +0.257 ns slack — shrinking
+#    to 720×720 saves 7.4% area and 45 µm of max diagonal for slightly shorter
+#    nets / clock tree.  Density stays inside Innovus's comfort zone (<65%).)
+floorPlan -s 720 720 5 5 5 5
 fit
 
-# ── 2b. SRAM Macro Placement ─────────────────────────────────
-# Same psum SRAM footprints and positions as v2 (lower-left corner of die).
-# SRAM_A (275.49 × 240.50 µm): origin (10,10)
-# SRAM_B (158.995 × 204.86 µm): origin (10,280) — 29.5 µm gap above SRAM_A top
-placeInstance u_ctrl/u_psum_mem/u_sram_a 10 10 R0
-placeInstance u_ctrl/u_psum_mem/u_sram_b 10 280 R0
+# ── 2b. SRAM Macro Placement (2 macros) ──────────────────────
+# psum SRAM_A (275.49 × 240.50 µm): lower-left, origin (10,10).
+# (v3 uses only SRAM_A — psum SRAM_B dropped, port B unused.)
+placeInstance u_psum_mem/u_sram_a 10 10 R0
+# act_buf SRAM (v3+ opt④, 639.37 × 152.365 µm): wide macro along the top edge.
+# (10,545)-(649.4,697.4) — slid up 10 µm from the 800×700 layout to keep the
+# routing channel above the macro non-zero (was 12 µm there, now 17 µm here)
+# while leaving 545−250 = 295 µm of clean stdcell space between psum and act_buf.
+placeInstance u_act_buf/u_sram 10 545 R0
 
 # ── 3. Power Connections ─────────────────────────────────────
 globalNetConnect VDD -type pgpin -pin VDD -inst *
@@ -58,13 +72,12 @@ globalNetConnect VSS -type pgpin -pin gnd -inst *
 globalNetConnect VDD -type tiehi
 globalNetConnect VSS -type tielo
 
-# ── 3b. Placement Blockage around psum SRAMs ─────────────────
-# 25 µm right of SRAM_A, 31 µm right of SRAM_B routing corridors (same as v2).
-# Extra core width (1000 µm vs 560 µm) gives the FF-array stdcells room to spread right.
-#   SRAM_A footprint (10,10)-(285.5,250.5) → block (5,5)-(310,276)
-#   SRAM_B footprint (10,280)-(169,484.9) → block (5,275)-(200,495)
+# ── 3b. Placement Blockage around macros ─────────────────────
+# Keep stdcells a little clear of the macros for routing corridors.
+#   psum SRAM_A footprint (10,10)-(285.5,250.5)   → block (5,5)-(310,276)
+#   act_buf SRAM footprint (10,545)-(649.4,697.4) → block (5,540)-(655,702)
 createPlaceBlockage -type hard -box {5 5 310 276}
-createPlaceBlockage -type hard -box {5 275 200 495}
+createPlaceBlockage -type hard -box {5 540 655 702}
 
 # ── 3c. SRAM Routing Obstruction Note ────────────────────────
 # No createRouteBlk over the SRAM bodies.  fix_sram_lef.py strips the
@@ -88,7 +101,7 @@ addRing -nets {VSS VDD} -type core_rings -follow io \
         -offset  {top 0 bottom 0 left 0 right 0} \
         -center 0
 
-# Wider die → increase stripe count: set_to_set_distance 50 → ~20 pairs across 1000 µm
+# 720-wide core: set_to_set_distance 50 → ~14 VDD/VSS stripe pairs.
 addStripe -block_ring_top_layer_limit metal5 \
           -max_same_layer_jog_length 1.6 \
           -padcore_ring_bottom_layer_limit metal3 \
@@ -147,15 +160,23 @@ set_ccopt_property buffer_cells {CLKBUF_X1 CLKBUF_X2 CLKBUF_X3}
 set_ccopt_property use_inverters false
 
 # Mark all SRAM clock pins as stop sinks — macros have no timing data.
-set_ccopt_property -pin u_ctrl/u_psum_mem/u_sram_a/clk0 sink_type stop
-set_ccopt_property -pin u_ctrl/u_psum_mem/u_sram_a/clk0 \
+set_ccopt_property -pin u_psum_mem/u_sram_a/clk0 sink_type stop
+set_ccopt_property -pin u_psum_mem/u_sram_a/clk0 \
     -delay_corner dc_typical capacitance_override 50
-set_ccopt_property -pin u_ctrl/u_psum_mem/u_sram_a/clk1 sink_type stop
-set_ccopt_property -pin u_ctrl/u_psum_mem/u_sram_a/clk1 \
+set_ccopt_property -pin u_psum_mem/u_sram_a/clk1 sink_type stop
+set_ccopt_property -pin u_psum_mem/u_sram_a/clk1 \
     -delay_corner dc_typical capacitance_override 50
-set_ccopt_property -pin u_ctrl/u_psum_mem/u_sram_b/clk0 sink_type stop
-set_ccopt_property -pin u_ctrl/u_psum_mem/u_sram_b/clk0 \
+set_ccopt_property -pin u_act_buf/u_sram/clk0 sink_type stop
+set_ccopt_property -pin u_act_buf/u_sram/clk0 \
     -delay_corner dc_typical capacitance_override 50
+
+# Explicit skew / slew targets — give CCOpt firm goals so the clock tree is
+# balanced more uniformly.  Combined with the tighter 720×720 floorplan
+# (max diagonal 1018 µm vs 1063 µm at 800×700), this shortens and evens
+# out the tree.  Prior 800×700 / 5.0 ns runs landed at skew 0.069 ns,
+# insertion delay 0.357–0.426 ns (avg 0.409, sd 0.012).
+set_ccopt_property target_skew      0.050
+set_ccopt_property target_max_trans 0.100
 
 create_ccopt_clock_tree_spec
 ccopt_design
@@ -213,12 +234,15 @@ puts "======================================================"
 puts "  Innovus P&R v3 Finished — mfn_frontend_top_v3"
 puts "  v3 additions:"
 puts "    12×12 output-stationary SA (dw_mode diagonal)"
-puts "    act_buf as FF array (87K cells, 152K µm²; no SRAM macro)"
+puts "    act_buf SRAM (192×64 OpenRAM macro, 2-cyc registered read)"
+puts "    psum SRAM_A only (port B dropped)"
 puts "    DW-12-parallel + bias-preload + act-preload controller"
-puts "    Floorplan: 1000×900 µm core (~41% stdcell util)"
-puts "    Same M4 SRAM blockage fix as v2"
+puts "    Floorplan: 720×720 µm core (~55% stdcell util)"
+puts "    M3/M4 SRAM OBS stripped via fix_sram_lef.py"
 puts "    addFiller post-route (avoids IMPOPT-310)"
-puts "  Target: 83 MHz / 12 ns"
+puts "    mfn_activation 4-stage pipeline (Stage 0+2 split, note §35)"
+puts "    SA Stage 3: row_dot_reg between mult+CSA tree and acc add"
+puts "  Target: 200 MHz / 5.0 ns"
 puts "  Reports : mfn_frontend_top_v3.{drc,conn,antenna}.rpt"
 puts "            pnr_v3_timing.rep  pnr_v3_power.rep"
 puts "  Netlist : mfn_frontend_top_v3_final_nophy.v"

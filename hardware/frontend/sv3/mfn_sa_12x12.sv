@@ -15,8 +15,16 @@
 //   enable=1            : compute one c_in tile (12 products per row → add to acc)
 //   clear and enable are mutually exclusive (clear has priority)
 //
+// Pipeline (note §35 Stage 3, 200 MHz push):
+//   stage A (comb)  : act/wgt → 12 mul + adder tree → row_dot[r]
+//   stage A register: row_dot_reg[r], enable_d                  (this file)
+//   stage B (ff)    : acc[r] <= acc[r] + row_dot_reg[r]         (this file)
+// Controller is unchanged — every COMPUTE cycle is followed by a NEXT_CIN /
+// KP_NEXT cycle with enable=0, which is exactly the drain cycle this pipeline
+// needs to flush row_dot_reg into acc.  Per-c_out-tile cycle count unchanged.
+//
 // Memory interface:
-//   Read: acc_out[r] valid the cycle after enable goes low
+//   Read: acc_out[r] valid the cycle after the drain (i.e. when WRITEBACK starts)
 //   Write: controller reads acc_out and writes to psum SRAM sequentially
 // =============================================================================
 
@@ -67,7 +75,26 @@ module mfn_sa_12x12 #(
         end
     end
 
-    // ── per-row accumulator register ─────────────────────────────────────────
+    // ── stage A → stage B register: 12 × 40-bit row_dot + 1-bit enable ──────
+    // Splits the 16×16 mult + 12-tap adder tree away from the final +acc add.
+    // 480 FF added (vs ~86k total) — clear stays unregistered so bias loads
+    // still take effect immediately (no race because controller's
+    // S_BIAS_LOAD never follows S_*_COMPUTE directly).
+    logic signed [AWIDTH-1:0] row_dot_reg [SA_ROWS];
+    logic                     enable_d;
+
+    always_ff @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            foreach (row_dot_reg[r]) row_dot_reg[r] <= '0;
+            enable_d <= 1'b0;
+        end else begin
+            enable_d <= enable;
+            if (enable)
+                foreach (row_dot_reg[r]) row_dot_reg[r] <= row_dot[r];
+        end
+    end
+
+    // ── per-row accumulator register (stage B) ───────────────────────────────
     logic signed [AWIDTH-1:0] acc [SA_ROWS];
 
     always_ff @(posedge clk or negedge rst_n) begin
@@ -75,8 +102,8 @@ module mfn_sa_12x12 #(
             foreach (acc[r]) acc[r] <= '0;
         else if (clear)
             foreach (acc[r]) acc[r] <= bias_in[r];
-        else if (enable)
-            foreach (acc[r]) acc[r] <= acc[r] + row_dot[r];
+        else if (enable_d)
+            foreach (acc[r]) acc[r] <= acc[r] + row_dot_reg[r];
     end
 
     assign acc_out = acc;

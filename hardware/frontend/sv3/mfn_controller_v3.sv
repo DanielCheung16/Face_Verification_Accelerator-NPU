@@ -110,12 +110,20 @@ module mfn_controller_v3 #(
         S_DW_CTILE_INIT,
         S_DW_BIAS_LOAD,      // global DW only: 1-cycle bias load
         S_DW_FETCH,          // global DW only
+        S_DW_RADDR,          // global DW only: drive act_buf read addr (SRAM 2-cyc latency)
+        S_DW_RADDR2,         // global DW only: 2nd addr-drive cycle
         S_DW_COMPUTE,        // global DW only
+        // 1-cycle drain so the Stage 3 SA pipeline's final row_dot_reg lands in
+        // acc before S_DW_WRITEBACK reads sa_acc.  PW (S_NEXT_CIN) and DW12
+        // (S_DW12_KP_NEXT) already have this drain implicit.
+        S_DW_DRAIN,          // global DW only: Stage 3 pipeline drain
         S_DW_WRITEBACK,      // global DW only
         S_DW_NEXT_CTILE,     // global DW only
         // Regular DW 12-ch parallel path (opt ①)
         S_DW12_BIAS,         // 12+1 cycles: load biases for 12 DW channels
         S_DW12_FETCH,        // 1 cycle: 12-ch wide fetch at kernel pos kp (opt ④)
+        S_DW12_RADDR,        // drive act_buf read addr (SRAM 2-cyc read latency)
+        S_DW12_RADDR2,       // 2nd addr-drive cycle
         S_DW12_COMPUTE,      // 1 cycle: SA enable (dw_mode=1)
         S_DW12_KP_NEXT,      // advance kernel pos or go to writeback
         S_DW12_WB,           // 12 cycles: writeback + preload next tile biases (opt ③)
@@ -126,7 +134,11 @@ module mfn_controller_v3 #(
         S_ADD_RESIDUAL,
         S_WRITE_OUT,         // inc_write + activation output
         S_SPATIAL_LOOP,
+        // 3 wait cycles before S_NEXT_LAYER let the 4-stage activation pipeline
+        // drain (last valid_out comes 4 cycles after the last inc_write — note §35).
         S_NEXT_LAYER_WAIT,
+        S_NEXT_LAYER_WAIT2,
+        S_NEXT_LAYER_WAIT3,
         S_NEXT_LAYER,
         S_DONE
     } state_t;
@@ -436,6 +448,10 @@ module mfn_controller_v3 #(
                 sub_k_next  = '0;
                 state_next  = S_BIAS_LOAD;
                 bias_addr   = bias_base_reg + {4'b0, c_out_tile_reg};
+                // [SRAM act_buf] 2-cycle read latency → drive tile-0 read addr
+                // here AND in S_BIAS_LOAD (the 2 cycles before S_CIN_COMPUTE).
+                act_base_ch = '0;
+                act_max_ch  = {1'b0, eff_in_ch_reg};
             end
 
             // ------------------------------------------------------------------
@@ -443,6 +459,11 @@ module mfn_controller_v3 #(
             //         Otherwise: 12 load + 1 sa_clear = 13 cycles
             // ------------------------------------------------------------------
             S_BIAS_LOAD: begin
+                // [SRAM act_buf] prefetch read addr for the first S_CIN_COMPUTE
+                // (c_in tile 0).  act_buf read is registered → drive base_ch one
+                // cycle early; harmless to drive it every BIAS_LOAD cycle.
+                act_base_ch = '0;
+                act_max_ch  = {1'b0, eff_in_ch_reg};
                 if (bias_preloaded_reg && sub_k_reg == '0) begin
                     // Biases already in bias_stage_reg from previous WRITEBACK
                     sa_clear           = 1'b1;
@@ -466,8 +487,13 @@ module mfn_controller_v3 #(
 
             // ------------------------------------------------------------------
             S_CIN_COMPUTE: begin
+                // act_out for THIS tile is already valid (its read addr was
+                // driven 2 cycles ago).  [SRAM act_buf, 2-cycle latency]
+                // Drive the NEXT tile's read addr now — the loop is 2 cycles
+                // per tile (COMPUTE → NEXT_CIN), so this lands exactly at the
+                // next S_CIN_COMPUTE.
                 sa_enable   = 1'b1;
-                act_base_ch = c_in_tile_reg[$clog2(512)-1:0];
+                act_base_ch = 9'(c_in_tile_reg + 10'(SA_COLS));
                 act_max_ch  = {1'b0, eff_in_ch_reg};
 
                 for (int r = 0; r < SA_ROWS; r++) begin
@@ -494,6 +520,7 @@ module mfn_controller_v3 #(
                 end else begin
                     c_in_tile_next = c_in_tile_reg + SA_COLS;
                     state_next     = S_CIN_COMPUTE;
+                    // (next tile's read addr was already driven by S_CIN_COMPUTE)
                 end
             end
 
@@ -613,7 +640,7 @@ module mfn_controller_v3 #(
                         c_in_tile_next = '0;
                         gdw_kx_next    = '0;
                         gdw_ky_next    = '0;
-                        state_next     = S_DW_COMPUTE;
+                        state_next     = S_DW_RADDR;
                     end else begin
                         sub_k_next = sub_k_reg + 1'b1;
                     end
@@ -623,11 +650,24 @@ module mfn_controller_v3 #(
                 end
             end
 
+            // [SRAM act_buf] drive act_buf read addr for the next S_DW_COMPUTE
+            // c_in tile — registered read needs the address one cycle early.
+            // [SRAM act_buf, 2-cycle latency] drive read addr for two cycles
+            // before S_DW_COMPUTE consumes act_out.
+            S_DW_RADDR: begin
+                act_base_ch = c_in_tile_reg[$clog2(512)-1:0] * 9'd12;
+                act_max_ch  = {3'b0, layer_w} * {3'b0, layer_h};
+                state_next  = S_DW_RADDR2;
+            end
+            S_DW_RADDR2: begin
+                act_base_ch = c_in_tile_reg[$clog2(512)-1:0] * 9'd12;
+                act_max_ch  = {3'b0, layer_w} * {3'b0, layer_h};
+                state_next  = S_DW_COMPUTE;
+            end
+
             S_DW_COMPUTE: begin
                 sa_enable = 1'b1;
                 if (is_global_dw) begin
-                    act_base_ch = c_in_tile_reg[$clog2(512)-1:0] * 9'd12;
-                    act_max_ch  = {3'b0, layer_w} * {3'b0, layer_h};
                     for (int r = 0; r < SA_ROWS; r++) begin
                         logic [19:0] gdw_ch_off, gdw_tile_off;
                         gdw_ch_off   = {10'b0, dw_ctile_reg} * {2'b0, wgt_step_reg};
@@ -637,14 +677,17 @@ module mfn_controller_v3 #(
                     if (c_in_tile_reg * 10'd12 + 10'd12 >=
                             {3'b0, layer_w} * {3'b0, layer_h}) begin
                         c_in_tile_next = '0;
-                        state_next     = S_DW_WRITEBACK;
+                        state_next     = S_DW_DRAIN;
                     end else begin
                         c_in_tile_next = c_in_tile_reg + 1'b1;
+                        state_next     = S_DW_RADDR;
                     end
                 end else begin
                     state_next = S_IDLE; // should not occur
                 end
             end
+
+            S_DW_DRAIN: state_next = S_DW_WRITEBACK;
 
             S_DW_WRITEBACK: begin
                 if (dw_ctile_reg < layer_out_ch) begin
@@ -702,15 +745,27 @@ module mfn_controller_v3 #(
                 x_out         = x_reg + kp_x_off;
                 y_out         = y_reg + kp_y_off;
                 sub_k_next    = '0;
-                state_next    = S_DW12_COMPUTE;
+                state_next    = S_DW12_RADDR;
+            end
+
+            // [SRAM act_buf, 2-cycle latency] drive act_buf read addr for two
+            // cycles — the row written by S_DW12_FETCH is now committed; the
+            // registered read needs the address two cycles before COMPUTE.
+            S_DW12_RADDR: begin
+                act_base_ch = '0;
+                act_max_ch  = 10'(SA_ROWS);
+                state_next  = S_DW12_RADDR2;
+            end
+            S_DW12_RADDR2: begin
+                act_base_ch = '0;
+                act_max_ch  = 10'(SA_ROWS);
+                state_next  = S_DW12_COMPUTE;
             end
 
             // 1 SA enable cycle: dw_mode → acc[r] += act_buf[r] * wgt[r][0]
             S_DW12_COMPUTE: begin
                 sa_enable  = 1'b1;
                 sa_dw_mode = 1'b1;
-                act_base_ch = '0;           // act_buf[0..11] = 12 channel pixels
-                act_max_ch  = 10'(SA_ROWS); // only channels 0..11 valid
                 for (int r = 0; r < SA_ROWS; r++) begin
                     logic [19:0] dw_off;
                     // wgt_addr[r] → wgt_out[r][0] = weight for channel(dw_ctile+r) at pos kp
@@ -856,7 +911,9 @@ module mfn_controller_v3 #(
             end
 
             // ------------------------------------------------------------------
-            S_NEXT_LAYER_WAIT: state_next = S_NEXT_LAYER;
+            S_NEXT_LAYER_WAIT:  state_next = S_NEXT_LAYER_WAIT2;
+            S_NEXT_LAYER_WAIT2: state_next = S_NEXT_LAYER_WAIT3;
+            S_NEXT_LAYER_WAIT3: state_next = S_NEXT_LAYER;
 
             S_NEXT_LAYER: begin
                 if (layer_idx_reg >= 6'd49) begin

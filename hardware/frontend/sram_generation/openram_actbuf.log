@@ -1,0 +1,68 @@
+--- Generating act_buf SRAM (1RW, 16-bit x 512) ---
+python3.8 sram_compiler.py freepdk45_sram_act_buf_192x64.py
+fatal: not a git repository (or any parent up to mount point /home)
+Stopping at filesystem boundary (GIT_DISCOVERY_ACROSS_FILESYSTEM not set).
+WARNING: file globals.py: line 168: Failed to find coverage installation. This can be installed with pip3 install coverage
+WARNING: file lib.py: line 778: Failed to retrieve git id
+|==============================================================================|
+|=========                      OpenRAM v1.2.48                       =========|
+|=========                                                            =========|
+|=========               VLSI Design and Automation Lab               =========|
+|=========        Computer Science and Engineering Department         =========|
+|=========            University of California Santa Cruz             =========|
+|=========                                                            =========|
+|=========          Usage help: openram-user-group@ucsc.edu           =========|
+|=========        Development help: openram-dev-group@ucsc.edu        =========|
+|=========                See LICENSE for license info                =========|
+|==============================================================================|
+** Start: 05/18/2026 10:49:52
+Technology: freepdk45
+Total size: 12288 bits
+Word size: 192
+Words: 64
+Banks: 1
+Write size: 16
+RW ports: 1
+R-only ports: 0
+W-only ports: 0
+Design supply routing skipped. Supplies will have multiple must-connect pins. (route_supplies=True to enable supply routing).
+DRC/LVS/PEX is only run on the top-level design to save run-time (inline_lvsdrc=True to do inline checking).
+DRC/LVS/PEX is disabled (check_lvsdrc=True to enable).
+Characterization is disabled (using analytical delay models) (analytical_delay=False to simulate).
+Only generating nominal corner timing.
+Words per row: None
+Output files are: 
+/home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.lvs
+/home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.sp
+/home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.v
+/home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.lib
+/home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.py
+/home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.html
+/home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.log
+/home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.lef
+/home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.gds
+** Submodules: 95.5 seconds
+** Placement: 0.7 seconds
+** Routing: 144.3 seconds
+** Verification: 0.0 seconds
+** SRAM creation: 240.4 seconds
+SP: Writing to /home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.sp
+** Spice writing: 0.6 seconds
+DELAY: Writing stimulus...
+** DELAY: 1.5 seconds
+GDS: Writing to /home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.gds
+** GDS: 0.9 seconds
+LEF: Writing to /home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.lef
+** LEF: 0.4 seconds
+LVS: Writing to /home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.lvs.sp
+** LVS writing: 0.2 seconds
+LIB: Characterizing... 
+** Characterization: 1.7 seconds
+Config: Writing to /home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.py
+** Config: 0.0 seconds
+Datasheet: Writing to /home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.html
+** Datasheet: 0.1 seconds
+Verilog: Writing to /home/gel8580/CE392_Project/hardware/frontend/sram_generation/macro/sram_act_buf_1rw0r0w_192_64_freepdk45/sram_act_buf_1rw0r0w_192_64_freepdk45.v
+** Verilog: 0.0 seconds
+** End: 246.2 seconds
+=== act_buf SRAM generated ===
