@@ -23,6 +23,13 @@ module sram_simple_dual_port_model #(
     input  logic [ADDR_W-1:0]     rd_addr_i,
     output logic [DATA_W-1:0]     rd_data_o
 );
+`ifdef FPGA_XPM
+`define SRAM_SIMPLE_DUAL_PORT_USE_XPM
+`elsif SYNTHESIS
+`define SRAM_SIMPLE_DUAL_PORT_USE_XPM
+`endif
+
+`ifdef SRAM_SIMPLE_DUAL_PORT_USE_XPM
     logic [WMASK_W-1:0] wea_vec;
 
     assign wea_vec = wr_en_i ? wr_mask_i : {WMASK_W{1'b0}};
@@ -64,6 +71,57 @@ module sram_simple_dual_port_model #(
         .sleep(1'b0),
         .wea(wea_vec)
     );
+`else
+    logic [DATA_W-1:0] mem [0:DEPTH-1];
+
+    function automatic logic [DATA_W-1:0] merge_masked_word(
+        input logic [DATA_W-1:0] old_word,
+        input logic [DATA_W-1:0] new_word,
+        input logic [WMASK_W-1:0] mask
+    );
+        logic [DATA_W-1:0] merged;
+        begin
+            merged = old_word;
+            for (int b = 0; b < WMASK_W; b++) begin
+                if (mask[b]) begin
+                    merged[b*BYTE_W +: BYTE_W] = new_word[b*BYTE_W +: BYTE_W];
+                end
+            end
+            merge_masked_word = merged;
+        end
+    endfunction
+
+    initial begin
+        for (int i = 0; i < DEPTH; i++) begin
+            mem[i] = '0;
+        end
+
+        if (INIT_FILE != "none") begin
+            $display("[sram_simple_dual_port_model] loading %s", INIT_FILE);
+            $readmemh(INIT_FILE, mem);
+        end
+    end
+
+    always @(posedge clk) begin
+        if (!rst_n) begin
+            rd_data_o <= '0;
+        end else begin
+            if (rd_en_i) begin
+                rd_data_o <= mem[rd_addr_i];
+                if (READ_DURING_WRITE_NEW_DATA && wr_en_i && (wr_addr_i == rd_addr_i)) begin
+                    rd_data_o <= merge_masked_word(mem[rd_addr_i], wr_data_i, wr_mask_i);
+                end
+            end
+
+            if (wr_en_i) begin
+                mem[wr_addr_i] <= merge_masked_word(mem[wr_addr_i], wr_data_i, wr_mask_i);
+            end
+        end
+    end
+`endif
+`ifdef SRAM_SIMPLE_DUAL_PORT_USE_XPM
+`undef SRAM_SIMPLE_DUAL_PORT_USE_XPM
+`endif
 endmodule
 
 

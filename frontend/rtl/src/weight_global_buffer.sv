@@ -54,7 +54,8 @@ module weight_global_buffer #(
                 .DATA_W(DATA_W),
                 .DEPTH(DEPTH),
                 .BYTE_W(BYTE_W),
-                .ADDR_W(ADDR_W)
+                .ADDR_W(ADDR_W),
+                .INIT_FILE(INIT_FILE)
             ) u_sram (
                 .clk        (clk),
                 .rst_n      (rst_n),

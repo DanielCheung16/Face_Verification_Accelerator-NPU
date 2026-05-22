@@ -65,57 +65,76 @@ module small_output_process #(
     localparam logic [MODE_W-1:0] MODE_RESIDUAL_REQUANT = 3'd3;
 
     logic signed [VALUE_W-1:0] s0_main_value;
-    logic signed [PRODUCT_W-1:0] s0_residual_product;
-    logic [SHIFT_W-1:0] s0_residual_shift;
-    logic s0_residual_active;
-    logic [MODE_W-1:0] s0_mode;
-    logic [SHIFT_W-1:0] s0_requant_shift;
-    logic [SHIFT_W-1:0] s0_prelu_shift;
+    logic signed [VALUE_W-1:0] s0_residual_centered;
+    logic signed [MUL_W-1:0]   s0_residual_multiplier;
+    logic [SHIFT_W-1:0]        s0_residual_shift;
+    logic                      s0_residual_active;
+    logic [MODE_W-1:0]         s0_mode;
+    logic [SHIFT_W-1:0]        s0_requant_shift;
+    logic [SHIFT_W-1:0]        s0_prelu_shift;
     logic signed [VALUE_W-1:0] s0_output_zero_point;
-    logic signed [MUL_W-1:0] s0_requant_multiplier;
-    logic signed [MUL_W-1:0] s0_prelu_multiplier;
-    logic s0_valid;
+    logic signed [MUL_W-1:0]   s0_requant_multiplier;
+    logic signed [MUL_W-1:0]   s0_prelu_multiplier;
+    logic                      s0_valid;
 
-    logic signed [VALUE_W-1:0] s1_value;
-    logic [MODE_W-1:0] s1_mode;
-    logic [SHIFT_W-1:0] s1_requant_shift;
-    logic [SHIFT_W-1:0] s1_prelu_shift;
-    logic signed [VALUE_W-1:0] s1_output_zero_point;
-    logic signed [MUL_W-1:0] s1_requant_multiplier;
-    logic signed [MUL_W-1:0] s1_prelu_multiplier;
-    logic s1_valid;
+    logic signed [VALUE_W-1:0]   s1_main_value;
+    logic signed [PRODUCT_W-1:0] s1_residual_product;
+    logic [SHIFT_W-1:0]          s1_residual_shift;
+    logic                        s1_residual_active;
+    logic [MODE_W-1:0]           s1_mode;
+    logic [SHIFT_W-1:0]          s1_requant_shift;
+    logic [SHIFT_W-1:0]          s1_prelu_shift;
+    logic signed [VALUE_W-1:0]   s1_output_zero_point;
+    logic signed [MUL_W-1:0]     s1_requant_multiplier;
+    logic signed [MUL_W-1:0]     s1_prelu_multiplier;
+    logic                        s1_valid;
 
     logic signed [VALUE_W-1:0] s2_value;
-    logic signed [PRODUCT_W-1:0] s2_prelu_product;
-    logic s2_do_prelu;
-    logic [MODE_W-1:0] s2_mode;
-    logic [SHIFT_W-1:0] s2_requant_shift;
-    logic [SHIFT_W-1:0] s2_prelu_shift;
+    logic [MODE_W-1:0]         s2_mode;
+    logic [SHIFT_W-1:0]        s2_requant_shift;
+    logic [SHIFT_W-1:0]        s2_prelu_shift;
     logic signed [VALUE_W-1:0] s2_output_zero_point;
-    logic signed [MUL_W-1:0] s2_requant_multiplier;
-    logic s2_valid;
+    logic signed [MUL_W-1:0]   s2_requant_multiplier;
+    logic signed [MUL_W-1:0]   s2_prelu_multiplier;
+    logic                      s2_valid;
 
-    logic signed [VALUE_W-1:0] s3_value;
-    logic s3_requant_en;
-    logic [MODE_W-1:0] s3_mode;
-    logic [SHIFT_W-1:0] s3_requant_shift;
-    logic signed [VALUE_W-1:0] s3_output_zero_point;
-    logic signed [MUL_W-1:0] s3_requant_multiplier;
-    logic s3_valid;
+    logic signed [VALUE_W-1:0]   s3_value;
+    logic signed [PRODUCT_W-1:0] s3_prelu_product;
+    logic                        s3_do_prelu;
+    logic [MODE_W-1:0]           s3_mode;
+    logic [SHIFT_W-1:0]          s3_requant_shift;
+    logic [SHIFT_W-1:0]          s3_prelu_shift;
+    logic signed [VALUE_W-1:0]   s3_output_zero_point;
+    logic signed [MUL_W-1:0]     s3_requant_multiplier;
+    logic                        s3_valid;
 
-    logic signed [PRODUCT_W-1:0] s4_requant_product;
-    logic [MODE_W-1:0] s4_mode;
-    logic [SHIFT_W-1:0] s4_requant_shift;
+    logic signed [VALUE_W-1:0] s4_value;
+    logic                      s4_requant_en;
+    logic [MODE_W-1:0]         s4_mode;
+    logic [SHIFT_W-1:0]        s4_requant_shift;
     logic signed [VALUE_W-1:0] s4_output_zero_point;
-    logic s4_valid;
+    logic signed [MUL_W-1:0]   s4_requant_multiplier;
+    logic                      s4_valid;
 
-    logic signed [VALUE_W-1:0] s5_value;
-    logic s5_valid;
+    logic signed [PRODUCT_W-1:0] s5_requant_product;
+    logic                        s5_requant_en;
+    logic [SHIFT_W-1:0]          s5_requant_shift;
+    logic signed [VALUE_W-1:0]   s5_output_zero_point;
+    logic                        s5_valid;
+
+    logic signed [VALUE_W-1:0] s6_requant_shifted;
+    logic                      s6_requant_en;
+    logic signed [VALUE_W-1:0] s6_output_zero_point;
+    logic                      s6_valid;
+
+    logic signed [VALUE_W-1:0] s7_value;
+    logic                      s7_valid;
 
     logic signed [VALUE_W-1:0] main_value_w;
     logic signed [VALUE_W-1:0] residual_centered_w;
-    logic [SHIFT_W-1:0] requant_total_shift_w;
-    logic quant_mode_w;
+    logic [SHIFT_W-1:0]        requant_total_shift_w;
+    logic                      quant_mode_w;
+    logic                      residual_active_w;
     logic signed [VALUE_W-1:0] residual_shifted_w;
     logic signed [VALUE_W-1:0] residual_work_w;
     logic signed [VALUE_W-1:0] prelu_shifted_w;
@@ -127,7 +146,6 @@ module small_output_process #(
     logic signed [PRODUCT_W-1:0] residual_product_rounded_w;
     logic signed [PRODUCT_W-1:0] prelu_product_rounded_w;
     logic signed [PRODUCT_W-1:0] requant_product_rounded_w;
-    logic residual_active_w;
 
     function automatic logic signed [DATA_W-1:0] sat_int8(input logic signed [VALUE_W-1:0] value);
         logic signed [VALUE_W-1:0] max_v;
@@ -158,29 +176,30 @@ module small_output_process #(
     assign requant_total_shift_w = requant_shift_i + SHIFT_W'(BIAS_SHIFT);
 
     // Match the C reference round_shift_i64(): (value + (1 << (shift-1))) >> shift.
-    assign residual_round_offset_w = (s0_residual_shift == '0) ? '0 :
-                                     (PRODUCT_W'(1) <<< (s0_residual_shift - SHIFT_W'(1)));
-    assign prelu_round_offset_w = (s2_prelu_shift == '0) ? '0 :
-                                  (PRODUCT_W'(1) <<< (s2_prelu_shift - SHIFT_W'(1)));
-    assign requant_round_offset_w = (s4_requant_shift == '0) ? '0 :
-                                    (PRODUCT_W'(1) <<< (s4_requant_shift - SHIFT_W'(1)));
-    assign residual_product_rounded_w = s0_residual_product + residual_round_offset_w;
-    assign prelu_product_rounded_w = s2_prelu_product + prelu_round_offset_w;
-    assign requant_product_rounded_w = s4_requant_product + requant_round_offset_w;
-    assign residual_shifted_w = VALUE_W'(residual_product_rounded_w >>> s0_residual_shift);
-    assign residual_work_w = ((s0_mode == MODE_REQUANT) ||
-                              (s0_mode == MODE_PRELU_REQUANT) ||
-                              (s0_mode == MODE_RESIDUAL_REQUANT)) ?
+    assign residual_round_offset_w = (s1_residual_shift == '0) ? '0 :
+                                     (PRODUCT_W'(1) <<< (s1_residual_shift - SHIFT_W'(1)));
+    assign prelu_round_offset_w = (s3_prelu_shift == '0) ? '0 :
+                                  (PRODUCT_W'(1) <<< (s3_prelu_shift - SHIFT_W'(1)));
+    assign requant_round_offset_w = (s5_requant_shift == '0) ? '0 :
+                                    (PRODUCT_W'(1) <<< (s5_requant_shift - SHIFT_W'(1)));
+    assign residual_product_rounded_w = s1_residual_product + residual_round_offset_w;
+    assign prelu_product_rounded_w = s3_prelu_product + prelu_round_offset_w;
+    assign requant_product_rounded_w = s5_requant_product + requant_round_offset_w;
+    assign residual_shifted_w = VALUE_W'(residual_product_rounded_w >>> s1_residual_shift);
+    assign residual_work_w = ((s1_mode == MODE_REQUANT) ||
+                              (s1_mode == MODE_PRELU_REQUANT) ||
+                              (s1_mode == MODE_RESIDUAL_REQUANT)) ?
                              (residual_shifted_w <<< BIAS_SHIFT) :
                              residual_shifted_w;
-    assign prelu_shifted_w = VALUE_W'(prelu_product_rounded_w >>> s2_prelu_shift);
-    assign requant_shifted_w = VALUE_W'(requant_product_rounded_w >>> s4_requant_shift);
-    assign final_value_w = requant_shifted_w + s4_output_zero_point;
+    assign prelu_shifted_w = VALUE_W'(prelu_product_rounded_w >>> s3_prelu_shift);
+    assign requant_shifted_w = VALUE_W'(requant_product_rounded_w >>> s5_requant_shift);
+    assign final_value_w = s6_requant_shifted + s6_output_zero_point;
 
     always_ff @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             s0_main_value <= '0;
-            s0_residual_product <= '0;
+            s0_residual_centered <= '0;
+            s0_residual_multiplier <= '0;
             s0_residual_shift <= '0;
             s0_residual_active <= 1'b0;
             s0_mode <= '0;
@@ -191,7 +210,10 @@ module small_output_process #(
             s0_prelu_multiplier <= '0;
             s0_valid <= 1'b0;
 
-            s1_value <= '0;
+            s1_main_value <= '0;
+            s1_residual_product <= '0;
+            s1_residual_shift <= '0;
+            s1_residual_active <= 1'b0;
             s1_mode <= '0;
             s1_requant_shift <= '0;
             s1_prelu_shift <= '0;
@@ -201,41 +223,52 @@ module small_output_process #(
             s1_valid <= 1'b0;
 
             s2_value <= '0;
-            s2_prelu_product <= '0;
-            s2_do_prelu <= 1'b0;
             s2_mode <= '0;
             s2_requant_shift <= '0;
             s2_prelu_shift <= '0;
             s2_output_zero_point <= '0;
             s2_requant_multiplier <= '0;
+            s2_prelu_multiplier <= '0;
             s2_valid <= 1'b0;
 
             s3_value <= '0;
-            s3_requant_en <= 1'b0;
+            s3_prelu_product <= '0;
+            s3_do_prelu <= 1'b0;
             s3_mode <= '0;
             s3_requant_shift <= '0;
+            s3_prelu_shift <= '0;
             s3_output_zero_point <= '0;
             s3_requant_multiplier <= '0;
             s3_valid <= 1'b0;
 
-            s4_requant_product <= '0;
+            s4_value <= '0;
+            s4_requant_en <= 1'b0;
             s4_mode <= '0;
             s4_requant_shift <= '0;
             s4_output_zero_point <= '0;
+            s4_requant_multiplier <= '0;
             s4_valid <= 1'b0;
 
-            s5_value <= '0;
+            s5_requant_product <= '0;
+            s5_requant_en <= 1'b0;
+            s5_requant_shift <= '0;
+            s5_output_zero_point <= '0;
             s5_valid <= 1'b0;
+
+            s6_requant_shifted <= '0;
+            s6_requant_en <= 1'b0;
+            s6_output_zero_point <= '0;
+            s6_valid <= 1'b0;
+
+            s7_value <= '0;
+            s7_valid <= 1'b0;
             data_o <= '0;
             valid_o <= 1'b0;
         end else begin
-            // Stage 0: register psum+bias and start residual fixed-point scale.
+            // Stage 0: cache ROM-fed parameters before any wide multiply.
             s0_main_value <= main_value_w;
-            if (residual_active_w) begin
-                s0_residual_product <= residual_centered_w * residual_multiplier_i;
-            end else begin
-                s0_residual_product <= '0;
-            end
+            s0_residual_centered <= residual_centered_w;
+            s0_residual_multiplier <= residual_multiplier_i;
             s0_residual_shift <= residual_shift_i;
             s0_residual_active <= residual_active_w;
             s0_mode <= mode_i;
@@ -246,12 +279,15 @@ module small_output_process #(
             s0_prelu_multiplier <= prelu_multiplier_i;
             s0_valid <= valid_i;
 
-            // Stage 1: finish residual scale and add it into psum+bias.
+            // Stage 1: start residual fixed-point scale from local registers.
+            s1_main_value <= s0_main_value;
             if (s0_residual_active) begin
-                s1_value <= s0_main_value + residual_work_w;
+                s1_residual_product <= s0_residual_centered * s0_residual_multiplier;
             end else begin
-                s1_value <= s0_main_value;
+                s1_residual_product <= '0;
             end
+            s1_residual_shift <= s0_residual_shift;
+            s1_residual_active <= s0_residual_active;
             s1_mode <= s0_mode;
             s1_requant_shift <= s0_requant_shift;
             s1_prelu_shift <= s0_prelu_shift;
@@ -260,59 +296,81 @@ module small_output_process #(
             s1_prelu_multiplier <= s0_prelu_multiplier;
             s1_valid <= s0_valid;
 
-            // Stage 2: PReLU negative-branch multiply. Non-PReLU modes bypass.
+            // Stage 2: finish residual scale and add it into psum+bias.
+            if (s1_residual_active) begin
+                s2_value <= s1_main_value + residual_work_w;
+            end else begin
+                s2_value <= s1_main_value;
+            end
             s2_mode <= s1_mode;
             s2_requant_shift <= s1_requant_shift;
             s2_prelu_shift <= s1_prelu_shift;
             s2_output_zero_point <= s1_output_zero_point;
             s2_requant_multiplier <= s1_requant_multiplier;
+            s2_prelu_multiplier <= s1_prelu_multiplier;
             s2_valid <= s1_valid;
-            s2_do_prelu <= (s1_mode == MODE_PRELU_REQUANT) && (s1_value < VALUE_W'(0));
-            if ((s1_mode == MODE_PRELU_REQUANT) && (s1_value < VALUE_W'(0))) begin
-                s2_prelu_product <= s1_value * s1_prelu_multiplier;
-            end else begin
-                s2_prelu_product <= {{MUL_W{s1_value[VALUE_W-1]}}, s1_value};
-            end
-            s2_value <= s1_value;
 
-            // Stage 3: finish optional PReLU negative branch.
+            // Stage 3: PReLU negative-branch multiply. Non-PReLU modes bypass.
             s3_mode <= s2_mode;
             s3_requant_shift <= s2_requant_shift;
+            s3_prelu_shift <= s2_prelu_shift;
             s3_output_zero_point <= s2_output_zero_point;
             s3_requant_multiplier <= s2_requant_multiplier;
             s3_valid <= s2_valid;
-            s3_requant_en <= (s2_mode == MODE_REQUANT) ||
-                             (s2_mode == MODE_RESIDUAL_REQUANT) ||
-                             (s2_mode == MODE_PRELU_REQUANT);
-            if (s2_do_prelu) begin
-                s3_value <= prelu_shifted_w;
+            s3_do_prelu <= (s2_mode == MODE_PRELU_REQUANT) && (s2_value < VALUE_W'(0));
+            if ((s2_mode == MODE_PRELU_REQUANT) && (s2_value < VALUE_W'(0))) begin
+                s3_prelu_product <= s2_value * s2_prelu_multiplier;
             end else begin
-                s3_value <= s2_value;
+                s3_prelu_product <= {{MUL_W{s2_value[VALUE_W-1]}}, s2_value};
             end
+            s3_value <= s2_value;
 
-            // Stage 4: requant multiply after residual/PReLU value selection.
+            // Stage 4: finish optional PReLU negative branch.
             s4_mode <= s3_mode;
             s4_requant_shift <= s3_requant_shift;
             s4_output_zero_point <= s3_output_zero_point;
+            s4_requant_multiplier <= s3_requant_multiplier;
             s4_valid <= s3_valid;
-            if (s3_requant_en) begin
-                s4_requant_product <= s3_value * s3_requant_multiplier;
+            s4_requant_en <= (s3_mode == MODE_REQUANT) ||
+                             (s3_mode == MODE_RESIDUAL_REQUANT) ||
+                             (s3_mode == MODE_PRELU_REQUANT);
+            if (s3_do_prelu) begin
+                s4_value <= prelu_shifted_w;
             end else begin
-                s4_requant_product <= {{MUL_W{s3_value[VALUE_W-1]}}, s3_value};
+                s4_value <= s3_value;
             end
 
-            // Stage 5: shift/add zero-point or bypass.
-            if ((s4_mode == MODE_REQUANT) ||
-                (s4_mode == MODE_RESIDUAL_REQUANT) ||
-                (s4_mode == MODE_PRELU_REQUANT)) begin
-                s5_value <= final_value_w;
-            end else begin
-                s5_value <= VALUE_W'(s4_requant_product);
-            end
+            // Stage 5: requant multiply after residual/PReLU value selection.
+            s5_requant_en <= s4_requant_en;
+            s5_requant_shift <= s4_requant_shift;
+            s5_output_zero_point <= s4_output_zero_point;
             s5_valid <= s4_valid;
+            if (s4_requant_en) begin
+                s5_requant_product <= s4_value * s4_requant_multiplier;
+            end else begin
+                s5_requant_product <= {{MUL_W{s4_value[VALUE_W-1]}}, s4_value};
+            end
 
-            data_o <= sat_int8(s5_value);
-            valid_o <= s5_valid;
+            // Stage 6: keep requant round/shift separate from zero-point add.
+            s6_requant_en <= s5_requant_en;
+            s6_output_zero_point <= s5_output_zero_point;
+            s6_valid <= s5_valid;
+            if (s5_requant_en) begin
+                s6_requant_shifted <= requant_shifted_w;
+            end else begin
+                s6_requant_shifted <= VALUE_W'(s5_requant_product);
+            end
+
+            // Stage 7: final zero-point add or bypass value forwarding.
+            if (s6_requant_en) begin
+                s7_value <= final_value_w;
+            end else begin
+                s7_value <= s6_requant_shifted;
+            end
+            s7_valid <= s6_valid;
+
+            data_o <= sat_int8(s7_value);
+            valid_o <= s7_valid;
         end
     end
 

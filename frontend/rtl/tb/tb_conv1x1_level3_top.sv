@@ -248,7 +248,7 @@ module tb_conv1x1_level3_top;
         .gb_wgt_rd_data_i(dut_wgt_rd_data)
     );
 
-    conv1x1_output_postprocess #(
+    conv1x1_wb #(
         .ROW(ROW),
         .COL(COL),
         .ACC_W(ACC_W),
@@ -256,71 +256,42 @@ module tb_conv1x1_level3_top;
         .OUT_W(OUT_W),
         .MULT_W(MULT_W),
         .SHIFT_W(SHIFT_W),
-        .DIM_W(DIM_W)
-    ) u_postprocess (
+        .DIM_W(DIM_W),
+        .GB_DATA_W(GB_DATA_W),
+        .GB_ADDR_W(GB_ADDR_W)
+    ) u_conv1x1_wb (
         .clk(clk),
         .rst_n(rst_n),
         .run_en_i(run_en_i),
         .valid_tile_i(conv_post_valid_tile),
+        .valid_tile_o(post_valid_tile),
         .row_base_i(conv_post_row_base),
         .col_base_i(conv_post_col_base),
         .m_size_i(conv_post_m_size),
         .n_size_i(conv_post_n_size),
+        .mode_i(conv_post_mode),
         .valid_i(conv_post_valid),
         .acc_i(conv_post_acc),
-        .mode_i(conv_post_mode),
+        .residual_i(conv_post_residual),
         .bias_i(conv_post_bias),
         .multiplier_i(conv_post_multiplier),
         .shift_i(conv_post_shift),
         .zero_point_i(conv_post_zero_point),
         .prelu_multiplier_i(conv_post_prelu_multiplier),
         .prelu_shift_i(conv_post_prelu_shift),
-        .residual_i(conv_post_residual),
         .residual_multiplier_i(conv_post_residual_multiplier),
         .residual_shift_i(conv_post_residual_shift),
         .residual_zero_point_i(conv_post_residual_zero_point),
-        .valid_o(post_valid),
-        .valid_tile_o(post_valid_tile),
-        .data_o(post_data)
+        .wb_capture_en_i(conv_wb_capture_en),
+        .wb_done_o(conv_wb_done),
+        .wb_m_size_i(conv_wb_m_size),
+        .wb_n_size_i(conv_wb_n_size),
+        .wb_out_base_addr_i(conv_wb_out_base_addr),
+        .gb_ao_wr_valid_o(dut_ao_wr_valid),
+        .gb_ao_wr_addr_o(dut_ao_wr_addr),
+        .gb_ao_wr_data_o(dut_ao_wr_data),
+        .gb_ao_wr_mask_o(dut_ao_wr_mask)
     );
-
-    wb_buffer #(
-        .ROW(ROW),
-        .COL(COL),
-        .DATA_IN_W(OUT_W),
-        .DATA_OUT_W(GB_DATA_W)
-    ) u_wb_buffer (
-        .aclk(clk),
-        .aresetn(rst_n),
-        .wr_en_i(conv_wb_capture_en),
-        .data_i(post_data),
-        .rd_addr_i(conv_wb_rd_addr),
-        .data_o(conv_wb_data)
-    );
-
-    wr_controller #(
-        .ROW(ROW),
-        .COL(COL),
-        .DATA_OUT_W(GB_DATA_W),
-        .DIM_W(DIM_W),
-        .GB_ADDR_W(GB_ADDR_W)
-    ) u_wr_controller (
-        .aclk(clk),
-        .aresetn(rst_n),
-        .n_size_i(conv_wb_n_size),
-        .m_size_i(conv_wb_m_size),
-        .out_base_addr_i(conv_wb_out_base_addr),
-        .tile_process_done(conv_wb_capture_en),
-        .data_i(conv_wb_data),
-        .rd_addr_o(conv_wb_rd_addr),
-        .ao_addr_o(dut_ao_wr_addr),
-        .ao_wr_en_o(dut_ao_wr_valid),
-        .ao_data_o(dut_ao_wr_data),
-        .busy_o(),
-        .done_o(conv_wb_done)
-    );
-
-    assign dut_ao_wr_mask = {MASK_W{1'b1}};
 
     task automatic check(input bit cond, input string msg);
         if (!cond) begin

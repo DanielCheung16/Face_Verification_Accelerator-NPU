@@ -90,7 +90,9 @@ module tb_top_system_2_2_c_ref;
         .QUANT_RESIDUAL_MULT_INIT_FILE({GOLD_DIR, "/quant_param_residual_mult.hex"}),
         .QUANT_RESIDUAL_SHIFT_INIT_FILE({GOLD_DIR, "/quant_param_residual_shift.hex"}),
         .QUANT_RESIDUAL_ZERO_POINT_INIT_FILE({GOLD_DIR, "/quant_param_residual_zero_point.hex"}),
-        .LAYER_CONFIG_INIT_FILE({GOLD_DIR, "/layer_config.hex"})
+        .LAYER_CONFIG_INIT_FILE({GOLD_DIR, "/layer_config.hex"}),
+        .AO_INIT_FILE(AO_INIT_FILE),
+        .WGT_INIT_FILE(WGT_INIT_FILE)
     ) dut (
         .aclk(clk),
         .aresetn(rst_n),
@@ -122,10 +124,8 @@ module tb_top_system_2_2_c_ref;
     task automatic load_hex_images();
         begin
             $display("[TB] PROFILE=%0d GOLD_DIR=%s", PROFILE, GOLD_DIR);
-            $display("[TB] loading %s", AO_INIT_FILE);
-            $readmemh(AO_INIT_FILE, dut.u_ao_gb.GEN_SDP.u_sram.mem);
-            $display("[TB] loading %s", WGT_INIT_FILE);
-            $readmemh(WGT_INIT_FILE, dut.u_wgt_gb.GEN_SDP.u_sram.mem);
+            $display("[TB] AO SRAM init file %s", AO_INIT_FILE);
+            $display("[TB] WGT SRAM init file %s", WGT_INIT_FILE);
             $display("[TB] loading %s", EXPECTED_FILE);
             $readmemh(EXPECTED_FILE, expected);
         end

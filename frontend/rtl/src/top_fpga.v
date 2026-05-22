@@ -5,11 +5,20 @@ module top_fpga #(
     parameter integer DATA_W = 8,
     parameter integer GB_DATA_W = 128,
     parameter integer AO_DEPTH = 65536,
+    parameter integer AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH),
     parameter integer WGT_DEPTH = 65536,
     parameter integer SPATIAL_WGT_DEPTH = 32,
     parameter integer PARAM_DEPTH = 9792,
 
-    parameter RAM_ROM_DIR = "ram_rom_inputs",
+    parameter QUANT_BIAS_INIT_FILE = "quant_param_bias.mem",
+    parameter QUANT_REQUANT_MULT_INIT_FILE = "quant_param_requant_mult.mem",
+    parameter QUANT_REQUANT_SHIFT_INIT_FILE = "quant_param_requant_shift.mem",
+    parameter QUANT_PRELU_MULT_INIT_FILE = "quant_param_prelu_mult.mem",
+    parameter QUANT_PRELU_SHIFT_INIT_FILE = "quant_param_prelu_shift.mem",
+    parameter QUANT_RESIDUAL_MULT_INIT_FILE = "quant_param_residual_mult.mem",
+    parameter QUANT_RESIDUAL_SHIFT_INIT_FILE = "quant_param_residual_shift.mem",
+    parameter QUANT_RESIDUAL_ZERO_POINT_INIT_FILE = "quant_param_residual_zero_point.mem",
+    parameter LAYER_CONFIG_INIT_FILE = "layer_config.mem",
     parameter AO_INIT_FILE = "system_2_2_ao_init.mem",
     parameter WGT_INIT_FILE = "system_2_2_wgt_init.mem"
 ) (
@@ -17,13 +26,12 @@ module top_fpga #(
     input  wire         rst_n,
     input  wire         start,
     input  wire         ao_rd_en,
-    input  wire [15:0]  ao_rd_addr,
+    input  wire [AO_ADDR_W-1:0] ao_rd_addr,
     output wire [127:0] ao_rd_data,
 
     output wire         done,
     output wire         led_done
 );
-    localparam integer AO_ADDR_W = (AO_DEPTH <= 1) ? 1 : $clog2(AO_DEPTH);
     localparam integer WGT_ADDR_W = (WGT_DEPTH <= 1) ? 1 : $clog2(WGT_DEPTH);
     localparam integer AO_MASK_W = GB_DATA_W / DATA_W;
     localparam integer WGT_MASK_W = GB_DATA_W / DATA_W;
@@ -42,6 +50,7 @@ module top_fpga #(
     wire [127:0] final_vec_w;
     wire [GB_DATA_W-1:0] host_ao_rd_data;
 
+    wire host_ao_rd_en;
     wire host_ao_wr_en;
     wire [AO_ADDR_W-1:0] host_ao_addr;
     wire [GB_DATA_W-1:0] host_ao_wr_data;
@@ -55,7 +64,7 @@ module top_fpga #(
 
     assign host_ao_rd_en = ao_rd_en && sys_done_seen_r;
     assign host_ao_wr_en = 1'b0;
-    assign host_ao_addr = ao_rd_addr[AO_ADDR_W-1:0];
+    assign host_ao_addr = ao_rd_addr;
     assign host_ao_wr_data = {GB_DATA_W{1'b0}};
     assign host_ao_wr_mask = {AO_MASK_W{1'b0}};
 
@@ -115,17 +124,17 @@ module top_fpga #(
         .PRELU_PARAM_DEPTH(PARAM_DEPTH),
         .RESIDUAL_PARAM_DEPTH(PARAM_DEPTH),
         .SPATIAL_WGT_DEPTH(SPATIAL_WGT_DEPTH),
-        .QUANT_BIAS_INIT_FILE({RAM_ROM_DIR, "/quant_param_bias.hex"}),
-        .QUANT_REQUANT_MULT_INIT_FILE({RAM_ROM_DIR, "/quant_param_requant_mult.hex"}),
-        .QUANT_REQUANT_SHIFT_INIT_FILE({RAM_ROM_DIR, "/quant_param_requant_shift.hex"}),
-        .QUANT_PRELU_MULT_INIT_FILE({RAM_ROM_DIR, "/quant_param_prelu_mult.hex"}),
-        .QUANT_PRELU_SHIFT_INIT_FILE({RAM_ROM_DIR, "/quant_param_prelu_shift.hex"}),
-        .QUANT_RESIDUAL_MULT_INIT_FILE({RAM_ROM_DIR, "/quant_param_residual_mult.hex"}),
-        .QUANT_RESIDUAL_SHIFT_INIT_FILE({RAM_ROM_DIR, "/quant_param_residual_shift.hex"}),
-        .QUANT_RESIDUAL_ZERO_POINT_INIT_FILE({RAM_ROM_DIR, "/quant_param_residual_zero_point.hex"}),
-        .LAYER_CONFIG_INIT_FILE({RAM_ROM_DIR, "/layer_config.hex"}),
-        .AO_INIT_FILE({RAM_ROM_DIR, "/", AO_INIT_FILE}),
-        .WGT_INIT_FILE({RAM_ROM_DIR, "/", WGT_INIT_FILE})
+        .QUANT_BIAS_INIT_FILE(QUANT_BIAS_INIT_FILE),
+        .QUANT_REQUANT_MULT_INIT_FILE(QUANT_REQUANT_MULT_INIT_FILE),
+        .QUANT_REQUANT_SHIFT_INIT_FILE(QUANT_REQUANT_SHIFT_INIT_FILE),
+        .QUANT_PRELU_MULT_INIT_FILE(QUANT_PRELU_MULT_INIT_FILE),
+        .QUANT_PRELU_SHIFT_INIT_FILE(QUANT_PRELU_SHIFT_INIT_FILE),
+        .QUANT_RESIDUAL_MULT_INIT_FILE(QUANT_RESIDUAL_MULT_INIT_FILE),
+        .QUANT_RESIDUAL_SHIFT_INIT_FILE(QUANT_RESIDUAL_SHIFT_INIT_FILE),
+        .QUANT_RESIDUAL_ZERO_POINT_INIT_FILE(QUANT_RESIDUAL_ZERO_POINT_INIT_FILE),
+        .LAYER_CONFIG_INIT_FILE(LAYER_CONFIG_INIT_FILE),
+        .AO_INIT_FILE(AO_INIT_FILE),
+        .WGT_INIT_FILE(WGT_INIT_FILE)
     ) u_top (
         .aclk(clk),
         .aresetn(rst_sync_n),

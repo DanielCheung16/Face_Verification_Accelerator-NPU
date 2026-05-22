@@ -46,7 +46,8 @@ module local_byte_buffer #(
     end
 `endif
 
-    logic [WORD_W-1:0] mem [WORD_DEPTH];
+    (* ram_style = "block" *)
+    logic [WORD_W-1:0] mem [0:WORD_DEPTH-1];
     logic [WR_ADDR_W-1:0] wr_ptr_r;
 
     logic [WR_ADDR_W-1:0] wr_addr_w;
@@ -72,17 +73,19 @@ module local_byte_buffer #(
     assign rd_word_addr_w = WR_ADDR_W'(rd_addr_i / LANES);
     assign rd_lane_addr_w = LANE_ADDR_W'(rd_addr_i % LANES);
 
-    always_ff @(posedge clk or negedge rst_n) begin
+    always_ff @(posedge clk) begin
+        if (rst_n && wr_en_i) begin
+            mem[wr_addr_w] <= wr_data_i;
+        end
+    end
+
+    always_ff @(posedge clk) begin
         if (!rst_n) begin
             wr_ptr_r <= '0;
             rd_data_o <= '0;
             rd_valid_o <= 1'b0;
         end else begin
             wr_ptr_r <= clear_i ? (wr_en_i ? wr_ptr_after_write_w : '0) : wr_ptr_after_write_w;
-
-            if (wr_en_i) begin
-                mem[wr_addr_w] <= wr_data_i;
-            end
 
             rd_valid_o <= rd_en_i;
             if (rd_en_i) begin
