@@ -3,6 +3,7 @@ module activation_output_global_buffer #(
     parameter int DEPTH  = 8192,
     parameter int BYTE_W = 8,
     parameter bit TRUE_DUAL_PORT = 1'b0,
+    parameter string INIT_FILE = "none",
     parameter int ADDR_W = (DEPTH <= 1) ? 1 : $clog2(DEPTH),
 
     localparam int WMASK_W = (DATA_W + BYTE_W - 1) / BYTE_W
@@ -36,7 +37,8 @@ module activation_output_global_buffer #(
                 .DATA_W(DATA_W),
                 .DEPTH(DEPTH),
                 .BYTE_W(BYTE_W),
-                .ADDR_W(ADDR_W)
+                .ADDR_W(ADDR_W),
+                .INIT_FILE(INIT_FILE)
             ) u_sram (
                 .clk          (clk),
                 .rst_n        (rst_n),

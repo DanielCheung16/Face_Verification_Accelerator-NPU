@@ -43,6 +43,8 @@ module top #(
     parameter string QUANT_RESIDUAL_SHIFT_INIT_FILE = "",
     parameter string QUANT_RESIDUAL_ZERO_POINT_INIT_FILE = "",
     parameter string LAYER_CONFIG_INIT_FILE = "",
+    parameter string AO_INIT_FILE = "none",
+    parameter string WGT_INIT_FILE = "none",
 
     localparam int AO_MASK_W = GB_DATA_W / DATA_W,
     localparam int WGT_MASK_W = GB_DATA_W / DATA_W,
@@ -306,6 +308,7 @@ module top #(
         .DEPTH(AO_DEPTH),
         .BYTE_W(DATA_W),
         .TRUE_DUAL_PORT(AO_TRUE_DUAL_PORT),
+        .INIT_FILE(AO_INIT_FILE),
         .ADDR_W(AO_ADDR_W)
     ) u_ao_gb (
         .clk(aclk),
@@ -330,6 +333,7 @@ module top #(
         .DEPTH(WGT_DEPTH),
         .BYTE_W(DATA_W),
         .TRUE_DUAL_PORT(WGT_TRUE_DUAL_PORT),
+        .INIT_FILE(WGT_INIT_FILE),
         .ADDR_W(WGT_ADDR_W)
     ) u_wgt_gb (
         .clk(aclk),

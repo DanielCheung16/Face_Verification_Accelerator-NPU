@@ -25,23 +25,6 @@ module quant_param_mem #(
     parameter int MULT_W = 32,
     parameter int SHIFT_W = 6,
 
-    parameter logic [BIAS_W-1:0] INIT_BIAS_0 = '0,
-    parameter logic [BIAS_W-1:0] INIT_BIAS_1 = '0,
-    parameter logic [MULT_W-1:0] INIT_REQUANT_MULT_0 = MULT_W'(1),
-    parameter logic [MULT_W-1:0] INIT_REQUANT_MULT_1 = MULT_W'(1),
-    parameter logic [SHIFT_W-1:0] INIT_REQUANT_SHIFT_0 = '0,
-    parameter logic [SHIFT_W-1:0] INIT_REQUANT_SHIFT_1 = '0,
-    parameter logic [MULT_W-1:0] INIT_PRELU_MULT_0 = MULT_W'(1),
-    parameter logic [MULT_W-1:0] INIT_PRELU_MULT_1 = MULT_W'(1),
-    parameter logic [SHIFT_W-1:0] INIT_PRELU_SHIFT_0 = '0,
-    parameter logic [SHIFT_W-1:0] INIT_PRELU_SHIFT_1 = '0,
-    parameter logic [MULT_W-1:0] INIT_RESIDUAL_MULT_0 = MULT_W'(1),
-    parameter logic [MULT_W-1:0] INIT_RESIDUAL_MULT_1 = MULT_W'(1),
-    parameter logic [SHIFT_W-1:0] INIT_RESIDUAL_SHIFT_0 = '0,
-    parameter logic [SHIFT_W-1:0] INIT_RESIDUAL_SHIFT_1 = '0,
-    parameter logic [BIAS_W-1:0] INIT_RESIDUAL_ZERO_POINT_0 = '0,
-    parameter logic [BIAS_W-1:0] INIT_RESIDUAL_ZERO_POINT_1 = '0,
-
     parameter string BIAS_INIT_FILE = "",
     parameter string REQUANT_MULT_INIT_FILE = "",
     parameter string REQUANT_SHIFT_INIT_FILE = "",
@@ -86,9 +69,7 @@ module quant_param_mem #(
         .DATA_W(BIAS_W),
         .DEPTH(COMMON_PARAM_DEPTH),
         .ADDR_W(COMMON_PARAM_ADDR_W),
-        .INIT_FILE(BIAS_INIT_FILE),
-        .INIT_0(INIT_BIAS_0),
-        .INIT_1(INIT_BIAS_1)
+        .INIT_FILE(BIAS_INIT_FILE)
     ) u_bias_rom (
         .clk(clk),
         .rd_en_i(common_rd_en_i),
@@ -100,9 +81,7 @@ module quant_param_mem #(
         .DATA_W(MULT_W),
         .DEPTH(COMMON_PARAM_DEPTH),
         .ADDR_W(COMMON_PARAM_ADDR_W),
-        .INIT_FILE(REQUANT_MULT_INIT_FILE),
-        .INIT_0(INIT_REQUANT_MULT_0),
-        .INIT_1(INIT_REQUANT_MULT_1)
+        .INIT_FILE(REQUANT_MULT_INIT_FILE)
     ) u_requant_mult_rom (
         .clk(clk),
         .rd_en_i(common_rd_en_i),
@@ -114,9 +93,7 @@ module quant_param_mem #(
         .DATA_W(SHIFT_W),
         .DEPTH(COMMON_PARAM_DEPTH),
         .ADDR_W(COMMON_PARAM_ADDR_W),
-        .INIT_FILE(REQUANT_SHIFT_INIT_FILE),
-        .INIT_0(INIT_REQUANT_SHIFT_0),
-        .INIT_1(INIT_REQUANT_SHIFT_1)
+        .INIT_FILE(REQUANT_SHIFT_INIT_FILE)
     ) u_requant_shift_rom (
         .clk(clk),
         .rd_en_i(common_rd_en_i),
@@ -128,9 +105,7 @@ module quant_param_mem #(
         .DATA_W(MULT_W),
         .DEPTH(PRELU_PARAM_DEPTH),
         .ADDR_W(PRELU_PARAM_ADDR_W),
-        .INIT_FILE(PRELU_MULT_INIT_FILE),
-        .INIT_0(INIT_PRELU_MULT_0),
-        .INIT_1(INIT_PRELU_MULT_1)
+        .INIT_FILE(PRELU_MULT_INIT_FILE)
     ) u_prelu_mult_rom (
         .clk(clk),
         .rd_en_i(prelu_rd_en_i),
@@ -142,9 +117,7 @@ module quant_param_mem #(
         .DATA_W(SHIFT_W),
         .DEPTH(PRELU_PARAM_DEPTH),
         .ADDR_W(PRELU_PARAM_ADDR_W),
-        .INIT_FILE(PRELU_SHIFT_INIT_FILE),
-        .INIT_0(INIT_PRELU_SHIFT_0),
-        .INIT_1(INIT_PRELU_SHIFT_1)
+        .INIT_FILE(PRELU_SHIFT_INIT_FILE)
     ) u_prelu_shift_rom (
         .clk(clk),
         .rd_en_i(prelu_rd_en_i),
@@ -156,9 +129,7 @@ module quant_param_mem #(
         .DATA_W(MULT_W),
         .DEPTH(RESIDUAL_PARAM_DEPTH),
         .ADDR_W(RESIDUAL_PARAM_ADDR_W),
-        .INIT_FILE(RESIDUAL_MULT_INIT_FILE),
-        .INIT_0(INIT_RESIDUAL_MULT_0),
-        .INIT_1(INIT_RESIDUAL_MULT_1)
+        .INIT_FILE(RESIDUAL_MULT_INIT_FILE)
     ) u_residual_mult_rom (
         .clk(clk),
         .rd_en_i(residual_rd_en_i),
@@ -170,9 +141,7 @@ module quant_param_mem #(
         .DATA_W(SHIFT_W),
         .DEPTH(RESIDUAL_PARAM_DEPTH),
         .ADDR_W(RESIDUAL_PARAM_ADDR_W),
-        .INIT_FILE(RESIDUAL_SHIFT_INIT_FILE),
-        .INIT_0(INIT_RESIDUAL_SHIFT_0),
-        .INIT_1(INIT_RESIDUAL_SHIFT_1)
+        .INIT_FILE(RESIDUAL_SHIFT_INIT_FILE)
     ) u_residual_shift_rom (
         .clk(clk),
         .rd_en_i(residual_rd_en_i),
@@ -184,9 +153,7 @@ module quant_param_mem #(
         .DATA_W(BIAS_W),
         .DEPTH(RESIDUAL_PARAM_DEPTH),
         .ADDR_W(RESIDUAL_PARAM_ADDR_W),
-        .INIT_FILE(RESIDUAL_ZERO_POINT_INIT_FILE),
-        .INIT_0(INIT_RESIDUAL_ZERO_POINT_0),
-        .INIT_1(INIT_RESIDUAL_ZERO_POINT_1)
+        .INIT_FILE(RESIDUAL_ZERO_POINT_INIT_FILE)
     ) u_residual_zero_point_rom (
         .clk(clk),
         .rd_en_i(residual_rd_en_i),
