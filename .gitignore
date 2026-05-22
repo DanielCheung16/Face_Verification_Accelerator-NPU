@@ -34,8 +34,12 @@ hardware/frontend/sim2/hex/*.hex
 hardware/frontend/sim3/xcelium.d/
 hardware/frontend/sim3/xcelium_gl.d/
 hardware/frontend/sim3/xcelium_pnr.d/
+hardware/frontend/sim3/xcelium_gl_debug.d/
+hardware/frontend/sim3/xcelium_pnr_debug.d/
+hardware/frontend/sim3/xcelium_top_debug.d/
 hardware/frontend/sim3/INCA_libs/
 hardware/frontend/sim3/xrun*.log
+hardware/frontend/sim3/probe_*.log
 hardware/frontend/sim3/xrun.history
 hardware/frontend/sim3/waves.shm/
 hardware/frontend/sim3/*.key

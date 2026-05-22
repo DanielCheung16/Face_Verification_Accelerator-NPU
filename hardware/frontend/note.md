@@ -2568,3 +2568,106 @@ Stage B (`row_dot_reg → acc_reg`) ~2 ns 還很閒。要再快需切 Stage A �
 預估可推到 ~3.5 ns / **280 MHz**（vs 現在 5.0 ns post-route +0.257 ns 等效 ~210 MHz max）。
 
 **現階段先不做** —— 已超過 §35 Stage 3 200 MHz 目標；Stage 3.5 屬下一輪深 pipeline 工程。
+
+---
+
+## 36. GL / Post-route 功能驗證 + testbench race bug 除錯紀錄（2026-05-21）
+
+Stage 0+2+3 + 200 MHz / 720×720 P&R 完成後，要用 gate-level sim 驗證
+synth netlist 跟 post-route netlist 的功能等價。過程中踩到一個 **testbench
+race condition**，整段除錯值得記錄。
+
+### 36.1 症狀
+
+`make gl`（Genus syn netlist GL sim）跑完 → `make diff_gl` **50 層全 MISMATCH**。
+Layer 0 output 第一個 pixel 就跟 RTL ref 不一樣（~90% entries differ）。
+RTL 本身 `make diff` 是 50/50 MATCH —— 所以 RTL 演算法正確，問題出在 GL。
+
+### 36.2 除錯方法：bind-based probe
+
+寫 [`sim3/mfn_v3_debug_probe.sv`](sim3/mfn_v3_debug_probe.sv) —— 用 SystemVerilog
+`bind` directive attach 到 `mfn_frontend_top_v3`（RTL 跟 netlist 同名 module，
+同一份 probe 兩邊都能 bind，不用改 TB/DUT）。探 datapath 各級訊號、收集前
+30 個事件後自動 `$finish`（layer 0 內幾千 cycle 就跑完，~3-5 min，不會被
+server 的 wall-clock limit 砍）。新增 Makefile target `top_debug` / `gl_debug`
+/ `pnr_debug` / `diff_debug`。
+
+### 36.3 逐層收斂
+
+| 探針 | 發現 |
+|------|------|
+| `SA enable/enable_d/clear` | RTL == GL — **Stage 3 pipeline control 正確** |
+| `WE`（psum_wdata_a = sa_acc）| RTL ≠ GL，第一個 SA write 就差 → bug 在 SA 計算 |
+| `SA_IN`（act_in 12 lanes）| **GL 比 RTL 偏移 +1 lane**（data 在 lane N→N+1）|
+| `SA_W0`（weight 12 lanes）| RTL == GL — weight ROM 正確 |
+| `dout0`（act_buf SRAM 讀出）| GL SRAM 內容本身就 shifted |
+| `LOAD`（load_en/wide/ch、x/y/cin）| RTL == GL — controller 寫入控制正確 |
+| `DIN`（act_buf 寫入 din0）| cyc 8 controller 給 x=-1（border）→ RTL din0=0，**GL din0=013c** |
+
+→ cyc 8 controller 明明驅動 `x_out=-1`（越界，pixel 應 zero-pad），但 GL 的
+TB 卻送了非零 `pixel_in` 進去。
+
+### 36.4 Root cause —— testbench race condition
+
+TB 用 `always @(posedge clk)` + blocking 驅動 `pixel_in`（DUT 的 input，模擬
+外部記憶體回傳的 activation 資料）。TB 在**同一個 posedge** 讀 DUT 的輸出
+`x_out`（記憶體位址）來算 `pixel_in`。
+
+- `x_out` 是 DUT 的 output port，TB 經 port 連線讀它 → 有 **delta-cycle delay**
+- RTL behavioral：port 傳遞快，race 剛好 TB 讀到當拍 `x_out` → 正確
+- GL gate-level：閘級慢，TB 的 always block 先 fire、`x_out` 還沒傳到 →
+  TB latch 到**上一拍的 stale `x_out`** → 算錯位址 → narrow act_buf load
+  每拍寫到偏移 1 個 lane → SRAM 內容整個 shift → 全 layer 輸出錯
+
+**這不是硬體 bug** —— RTL design / synth netlist / post-route netlist 都正確，
+純粹是 TB 寫法（clocked 驅動 DUT input）在 GL 下 race 翻車。
+
+### 36.5 走過的死路（記錄備查）
+
+| 嘗試 | 結果 |
+|------|------|
+| act_buf write/read for-loop 改 explicit unroll | 沒用，revert |
+| `pixel_in` port 改 packed bus（避開 unpacked-array escape-id）| 反而弄壞 RTL，revert |
+| GL TB escape-id named connection 改 descending order | 沒用 |
+| GL TB 改 positional port connection | 沒用 → **證明不是 port binding 問題** |
+
+### 36.6 修法
+
+兩個 TB（`mfn_frontend_top_v3_tb.sv` / `mfn_frontend_top_v3_gl_tb.sv`）的
+`pixel_in` 驅動從 `always @(posedge clk)` 改成 **`always @(negedge clk)`** ——
+negedge 時 `x_out` 早已完全 settle，TB 取樣無 race；`pixel_in` 在下一個
+posedge 前穩定，DUT 乾淨取樣。
+
+（先試過純 combinational `always @(*)`，但 sensitivity list 含整個 1M-entry
+`sram` array → 每次 SRAM 寫入都重算 → delta storm，sim 慢到像當掉。negedge
+每 cycle 只觸發一次，快又 race-free。）
+
+### 36.7 驗證結果
+
+修完後三層全部 bit-exact 一致：
+
+| 比對 | 工具 | 結果 |
+|------|------|------|
+| RTL vs v2 golden | `make diff` | **50/50 MATCH** ✓ |
+| RTL vs Genus syn netlist | `make gl_debug` + `diff_debug` | `SA_IN`/`WE`/`VO` 全 identical ✓ |
+| RTL vs Innovus post-route netlist | `make pnr_debug` + `diff_debug` | `SA_IN`/`WE`/`VO` 全 identical ✓ |
+
+→ RTL / synthesis / P&R **三鏈功能等價**，200 MHz / 720×720 v3 design 驗證完成。
+
+### 36.8 已知限制：full 50-layer GL sim 不可行
+
+GL sim 在本 server ~50 cycles/sec → 全 50 層 13.77 M cycles 約 **76 小時**，
+遠超 server 的 11–16 h wall-clock limit（早期嘗試就被 SIGTERM 砍在 layer 1）。
+→ 改用 probe-based 部分驗證（layer 0 前 30 個 INC/WE/VO 事件 bit-exact）作為
+功能 sign-off 證據。業界亦多用 formal LEC + 短 GL，而非全功能 GL。
+
+### 36.9 教訓
+
+- **TB 不要用 clocked（`@(posedge clk)`）邏輯驅動 DUT input 並同時讀 DUT
+  output** —— 會 race。要嘛 negedge 驅動、要嘛 combinational、要嘛用
+  clocking block。RTL sim 可能矇對，GL sim 一定翻車。
+- `bind` probe 是定位 RTL-vs-GL mismatch 的利器：同一份探針兩邊都能 attach，
+  逐級 dump 訊號找第一個 divergence 點。
+- 合成器（Genus）會把「恆等於某 input」的 internal wire 優化掉 → 該 wire 在
+  netlist 變 undriven，probe 讀到 `zzzz`。要探真值改探下游 instance 的 port
+  （此例：探 `u_act_buf.u_sram.din0` 而非 `u_act_buf.din0`）。

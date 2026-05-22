@@ -39,32 +39,21 @@ module mfn_frontend_top_v3_gl_tb;
     logic [AWIDTH-1:0] pixel_out;
     logic              valid_out;
 
-    // ── DUT: synthesised netlist (escaped-identifier act_buf bus ports) ──────
+    // ── DUT: synthesised netlist ─────────────────────────────────────────────
+    // POSITIONAL port connection — escape-id named binding (.\pixel_in[N])
+    // gave a +1 lane shift in Xcelium 18.09 regardless of connection order.
+    // Positional order MUST match the netlist port list exactly:
+    //   clk, rst_n, start_inference, inference_done,
+    //   \pixel_in[11..0],
+    //   reset_ptr, inc_write, read_res, x_out, y_out, c_in_out,
+    //   pixel_out, valid_out
     mfn_frontend_top_v3 dut (
-        .clk            (clk),
-        .rst_n          (rst_n),
-        .start_inference(start_inference),
-        .inference_done (inference_done),
-        .\pixel_in[0]   (pixel_in[0]),
-        .\pixel_in[1]   (pixel_in[1]),
-        .\pixel_in[2]   (pixel_in[2]),
-        .\pixel_in[3]   (pixel_in[3]),
-        .\pixel_in[4]   (pixel_in[4]),
-        .\pixel_in[5]   (pixel_in[5]),
-        .\pixel_in[6]   (pixel_in[6]),
-        .\pixel_in[7]   (pixel_in[7]),
-        .\pixel_in[8]   (pixel_in[8]),
-        .\pixel_in[9]   (pixel_in[9]),
-        .\pixel_in[10]  (pixel_in[10]),
-        .\pixel_in[11]  (pixel_in[11]),
-        .reset_ptr      (reset_ptr),
-        .inc_write      (inc_write),
-        .read_res       (read_res),
-        .x_out          (x_out),
-        .y_out          (y_out),
-        .c_in_out       (c_in_out),
-        .pixel_out      (pixel_out),
-        .valid_out      (valid_out)
+        clk, rst_n, start_inference, inference_done,
+        pixel_in[11], pixel_in[10], pixel_in[ 9], pixel_in[ 8],
+        pixel_in[ 7], pixel_in[ 6], pixel_in[ 5], pixel_in[ 4],
+        pixel_in[ 3], pixel_in[ 2], pixel_in[ 1], pixel_in[ 0],
+        reset_ptr, inc_write, read_res, x_out, y_out, c_in_out,
+        pixel_out, valid_out
     );
 
     // ── Clock ────────────────────────────────────────────────────────────────
@@ -77,7 +66,13 @@ module mfn_frontend_top_v3_gl_tb;
 
     // ── 12-lane pixel read — layer params decoded from dut.layer_config ──────
     //   in_ch[9:0] out_ch[19:10] w[26:20] h[33:27] rd_buf[61:60] wr_buf[63:62]
-    always @(posedge clk) begin
+    //
+    // Driven on negedge clk (was @(posedge clk)) — a posedge-clocked driver
+    // raced x_out's port propagation and latched a stale address in GL sim,
+    // shifting every narrow act_buf load by one lane.  negedge samples x_out
+    // half a cycle after it has settled, so the DUT gets correct data at the
+    // next posedge with no race.
+    always @(negedge clk) begin
         automatic int rd, wr, rs, W, H, C, C_out, ix, iy, cbase, addr;
         rd    = int'(dut.layer_config[61:60]);
         wr    = int'(dut.layer_config[63:62]);

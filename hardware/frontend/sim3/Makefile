@@ -14,6 +14,11 @@
 #   make pnr        — GL sim with Innovus POST-ROUTE netlist → layer_hex_pnr_v3/
 #   make pnr_gui    — Same as `pnr` but with Xcelium GUI
 #   make diff_pnr   — Compare layer_hex_pnr_v3/  vs RTL layer_hex_v3/
+#   make top_debug  — RTL run with mfn_v3_debug_probe (PROBE printouts,
+#                     self-finishes after first 30 INC/WE/VO events; <1 min)
+#   make gl_debug   — syn-netlist version of top_debug (a few min)
+#   make pnr_debug  — post-route-netlist version of top_debug (a few min)
+#   make diff_debug — diff probe_rtl.log vs probe_gl.log / probe_pnr.log
 #   make clean      — Remove Xcelium artifacts
 # ============================================================
 
@@ -64,7 +69,10 @@ BEH_OVRD     := netlist_beh_v3.sv
 ACT_SRAM     := $(SV3_DIR)/sram_act_buf_1rw0r0w_192_64_freepdk45.sv
 GL_TB        := mfn_frontend_top_v3_gl_tb.sv
 
-.PHONY: sa_test hex top top_gui diff gl gl_gui diff_gl pnr pnr_gui diff_pnr clean
+DEBUG_PROBE  := mfn_v3_debug_probe.sv
+
+.PHONY: sa_test hex top top_gui diff gl gl_gui diff_gl pnr pnr_gui diff_pnr \
+        top_debug gl_debug pnr_debug diff_debug clean
 
 hex/weights.hex:
 	@mkdir -p hex
@@ -147,9 +155,52 @@ r = [subprocess.call(['diff','-q','layer_hex_pnr_v3/rtl_out_layer%d.hex'%i,'laye
 [print('  Layer %d: %s'%(i,'MATCH' if x==0 else 'MISMATCH <<<')) for i,x in enumerate(r)]; \
 print('All 50 layers MATCH (PNR == RTL)' if all(x==0 for x in r) else 'MISMATCH found')"
 
+# ── Debug probe runs ────────────────────────────────────────────────────────
+# mfn_v3_debug_probe.sv binds to mfn_frontend_top_v3 and prints the first 30
+# INC / WE / VO events, then $finish.  Same probe used for RTL and GL so the
+# logs can be diff'd line-by-line to find the first divergent signal.
+top_debug: hex/weights.hex
+	@echo "=== RTL debug run — capturing PROBE events ==="
+	source $(ENV_FILE); xrun $(XFLAGS) -xmlibdirname xcelium_top_debug.d \
+	    $(V3_SRC) $(DEBUG_PROBE) $(TOP_TB) |& tee xrun_top_debug.log
+	@echo "--- PROBE lines from RTL run ---"
+	@grep '^PROBE' xrun_top_debug.log > probe_rtl.log
+	@wc -l probe_rtl.log
+
+gl_debug: hex/weights.hex $(SYN_STRIPPED)
+	@echo "=== GL syn-netlist debug run — capturing PROBE events ==="
+	source $(ENV_FILE); xrun $(GL_FLAGS) $(GL_TOP) +define+GL_NETLIST \
+	    -xmlibdirname xcelium_gl_debug.d \
+	    $(STDCELL_V) $(BEH_OVRD) $(ACT_SRAM) $(DEBUG_PROBE) $(SYN_STRIPPED) $(GL_TB) \
+	    +dumpdir=layer_hex_gl_v3 |& tee xrun_gl_debug.log
+	@echo "--- PROBE lines from GL run ---"
+	@grep '^PROBE' xrun_gl_debug.log > probe_gl.log
+	@wc -l probe_gl.log
+
+# Same probe, bound to the Innovus POST-ROUTE netlist — a fast (~3-5 min)
+# functional sanity check of the backend netlist without the 50-layer run.
+pnr_debug: hex/weights.hex $(PNR_STRIPPED)
+	@echo "=== PNR post-route netlist debug run — capturing PROBE events ==="
+	source $(ENV_FILE); xrun $(GL_FLAGS) $(GL_TOP) +define+GL_NETLIST \
+	    -xmlibdirname xcelium_pnr_debug.d \
+	    $(STDCELL_V) $(BEH_OVRD) $(ACT_SRAM) $(DEBUG_PROBE) $(PNR_STRIPPED) $(GL_TB) \
+	    +dumpdir=layer_hex_pnr_v3 |& tee xrun_pnr_debug.log
+	@echo "--- PROBE lines from PNR run ---"
+	@grep '^PROBE' xrun_pnr_debug.log > probe_pnr.log
+	@wc -l probe_pnr.log
+
+# Side-by-side diff of the probe logs — first non-matching line points at the
+# divergent stage (INC vs WE vs VO).  Compares RTL against GL and PNR.
+diff_debug:
+	@echo "=== diff probe_rtl.log vs probe_gl.log ==="
+	@diff probe_rtl.log probe_gl.log && echo "  GL  == RTL  ✓" || true
+	@echo "=== diff probe_rtl.log vs probe_pnr.log ==="
+	@test -f probe_pnr.log && (diff probe_rtl.log probe_pnr.log && echo "  PNR == RTL  ✓") || echo "  (probe_pnr.log not present — run 'make pnr_debug')"
+
 clean:
-	rm -rf xcelium.d xcelium_gl.d xcelium_pnr.d INCA_libs \
-	       xrun.log xrun.history waves.shm *.key \
+	rm -rf xcelium.d xcelium_gl.d xcelium_pnr.d \
+	       xcelium_top_debug.d xcelium_gl_debug.d xcelium_pnr_debug.d INCA_libs \
+	       xrun.log xrun.history xrun_*.log probe_*.log waves.shm *.key \
 	       layer_hex_v3/ layer_hex_gl_v3/ layer_hex_pnr_v3/ \
 	       $(SYN_STRIPPED) $(PNR_STRIPPED)
 	@echo "Cleaned."

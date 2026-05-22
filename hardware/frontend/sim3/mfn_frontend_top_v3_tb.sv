@@ -35,7 +35,6 @@ module mfn_frontend_top_v3_tb;
     logic [AWIDTH-1:0] pixel_out;
     logic              valid_out;
 
-    // ── DUT ──────────────────────────────────────────────────────────────────
     mfn_frontend_top_v3 #(.DWIDTH(DWIDTH), .AWIDTH(AWIDTH)) dut (.*);
 
     // ── Clock ────────────────────────────────────────────────────────────────
@@ -52,7 +51,15 @@ module mfn_frontend_top_v3_tb;
     //   Residual: sram[BUF_BASE[res_buf] + y*W*C_out + x*C_out + c_in_out + k]
     // Lanes past the channel count (or OOB / border) return 0 — matches the
     // act_buf zero-padding semantics.  Narrow consumers use lane 0.
-    always @(posedge clk) begin
+    //
+    // Driven on negedge clk (was @(posedge clk)).  pixel_in is the external
+    // memory's data for the address the DUT drives on x_out/y_out/c_in_out;
+    // a posedge-clocked driver raced the DUT — it sampled x_out through the
+    // port with a delta delay and in GL sim latched a stale (previous-cycle)
+    // address, shifting every narrow act_buf load by one lane.  Driving on
+    // negedge samples x_out half a cycle after it is fully settled, so the
+    // act_buf gets the correct data at the next posedge with no race.
+    always @(negedge clk) begin
         automatic int rd, wr, rs, W, H, C, C_out, ix, iy, cbase, addr;
         rd    = int'(dut.u_ctrl.layer_rd_buf);
         wr    = int'(dut.u_ctrl.layer_wr_buf);

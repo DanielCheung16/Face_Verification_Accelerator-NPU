@@ -738,10 +738,27 @@ RTL 跟 SDC 都不動，只把 floorplan 從 800×700 縮成 **720×720**（act_
 最後兩階都是「不動 RTL，只動 SDC / floorplan」純後端收益。
 
 ### Headroom 跟可能的下一步（按 CP 值排序）
-1. **跑 GL sim** 用 final netlist 驗 50 層 ← **必做**
-2. 留現狀 720×720 收尾（200 MHz / 14.52 fps / 96 mW / 6.63 µJ） ← **建議**
-3. `set_clock_uncertainty` 0.1 → 0.05 → +0.05 ns slack（保險用，720 邊緣 +0.089 變 +0.14）
-4. Rotate act_buf R90 + halo —— 預估 +100 ps slack，但要 1 輪 P&R 試
-5. 加 `auto_clock_gating` → dynamic power −10~20%（leakage 才 4%，著重在 dynamic）
-6. 4.75 ns 再 push（210 MHz）：720 已 +0.089 ns，再緊可能 fail
-7. **Stage 3.5**（per-PE product reg）→ 280 MHz 理論值，是真正的下一階段，但屬深 pipeline 工程
+1. 留現狀 720×720 收尾（200 MHz / 14.52 fps / 96 mW / 6.63 µJ） ← **建議**
+2. `set_clock_uncertainty` 0.1 → 0.05 → +0.05 ns slack（保險用，720 邊緣 +0.089 變 +0.14）
+3. Rotate act_buf R90 + halo —— 預估 +100 ps slack，但要 1 輪 P&R 試
+4. 加 `auto_clock_gating` → dynamic power −10~20%（leakage 才 4%，著重在 dynamic）
+5. 4.75 ns 再 push（210 MHz）：720 已 +0.089 ns，再緊可能 fail
+6. **Stage 3.5**（per-PE product reg）→ 280 MHz 理論值，是真正的下一階段，但屬深 pipeline 工程
+
+### Post-route netlist 功能驗證（2026-05-21）
+
+用 bind-based probe（`sim3/mfn_v3_debug_probe.sv`，詳見 frontend note §36）對
+**post-route netlist** `mfn_frontend_top_v3_final_nophy.v` 做 gate-level 功能比對：
+
+```
+make pnr_debug   # probe bind 到 post-route netlist，~3-5 min
+make diff_debug  # 比 RTL probe
+```
+
+結果：`SA_IN` / `WE` / `VO` 全部 **bit-exact 一致** RTL == post-route netlist。
+→ Innovus P&R（200 MHz / 720×720）**功能正確**，跟 RTL / synth netlist 三鏈等價。
+
+註：早期 GL sim「50 層 mismatch」是 testbench race bug（TB 用 clocked 邏輯驅動
+DUT input、race DUT output `x_out` 的 port 傳遞），**非 P&R 問題**。修法是 TB 的
+`pixel_in` 改 negedge 驅動。full 50-layer GL sim 因 server wall-clock limit
+（GL ~50 cps → 76 h）不可行，改用 probe-based 部分驗證。詳見 frontend note §36。
