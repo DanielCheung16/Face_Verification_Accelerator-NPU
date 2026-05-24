@@ -53,6 +53,12 @@ module gdconv7x7_core #(
     logic pending_last, pending_last_nxt;
     logic [LANE_W-1:0] pending_lane, pending_lane_nxt;
 
+    logic data_valid, data_valid_nxt;
+    logic data_last, data_last_nxt;
+    logic [LANE_W-1:0] data_lane, data_lane_nxt;
+    logic [GB_DATA_W-1:0] act_data_r, act_data_w;
+    logic [GB_DATA_W-1:0] wgt_data_r, wgt_data_w;
+
     logic [GB_ADDR_W-1:0] ch_word_offset_w;
     logic [LANE_W-1:0] ch_lane_w;
     logic [CHANNEL_W-1:0] next_ch_w;
@@ -73,15 +79,17 @@ module gdconv7x7_core #(
     assign next_ch_w = ch_cnt + CHANNEL_W'(1);
     assign next_ch_word_offset_w = GB_ADDR_W'(next_ch_w >> LANE_W);
 
-    assign act_byte_w = gb_act_rd_data_i[pending_lane*DATA_W +: DATA_W];
-    assign wgt_byte_w = gb_wgt_rd_data_i[pending_lane*DATA_W +: DATA_W];
+    assign act_byte_w = act_data_r[data_lane*DATA_W +: DATA_W];
+    assign wgt_byte_w = wgt_data_r[data_lane*DATA_W +: DATA_W];
     assign product_w = act_byte_w * wgt_byte_w;
     assign product_ext_w = {{(ACC_W-(2*DATA_W)){product_w[(2*DATA_W)-1]}}, product_w};
     assign acc_sum_w = acc + product_ext_w;
 
     assign kpos_last_w = (kpos_cnt == KPOS_W'(KERNEL_ELEMS - 1));
     assign ch_last_w = (ch_cnt == CHANNEL_W'(CHANNELS - 1));
-    assign issue_read_w = (state == RUN) && run_en_i && !(pending_valid && pending_last);
+    assign issue_read_w = (state == RUN) && run_en_i &&
+                          !(pending_valid && pending_last) &&
+                          !(data_valid && data_last);
 
     always_comb begin
         state_nxt = state;
@@ -93,6 +101,11 @@ module gdconv7x7_core #(
         pending_valid_nxt = 1'b0;
         pending_last_nxt = 1'b0;
         pending_lane_nxt = pending_lane;
+        data_valid_nxt = pending_valid;
+        data_last_nxt = pending_last;
+        data_lane_nxt = pending_lane;
+        act_data_w = act_data_r;
+        wgt_data_w = wgt_data_r;
 
         gb_act_rd_valid_o = 1'b0;
         gb_act_rd_addr_o = act_addr;
@@ -103,6 +116,11 @@ module gdconv7x7_core #(
         psum_o = acc_sum_w;
         done_o = 1'b0;
 
+        if (pending_valid) begin
+            act_data_w = gb_act_rd_data_i;
+            wgt_data_w = gb_wgt_rd_data_i;
+        end
+
         case (state)
             IDLE: begin
                 ch_cnt_nxt = '0;
@@ -110,14 +128,20 @@ module gdconv7x7_core #(
                 act_addr_nxt = act_base_addr_i;
                 wgt_addr_nxt = wgt_base_addr_i;
                 acc_nxt = '0;
+                data_valid_nxt = 1'b0;
+                data_last_nxt = 1'b0;
+                data_lane_nxt = '0;
                 if (start_i && run_en_i) begin
                     state_nxt = RUN;
                 end
             end
 
             RUN: begin
-                if (pending_valid) begin
-                    if (pending_last) begin
+                // Consume the registered global-buffer word one cycle after it
+                // returns from layer_switcher. This keeps BRAM data and muxing
+                // out of the same path as byte multiply and accumulator add.
+                if (data_valid) begin
+                    if (data_last) begin
                         psum_valid_o = 1'b1;
                         psum_channel_o = ch_cnt;
                         psum_o = acc_sum_w;
@@ -180,6 +204,11 @@ module gdconv7x7_core #(
             pending_valid <= 1'b0;
             pending_last <= 1'b0;
             pending_lane <= '0;
+            data_valid <= 1'b0;
+            data_last <= 1'b0;
+            data_lane <= '0;
+            act_data_r <= '0;
+            wgt_data_r <= '0;
         end else begin
             state <= state_nxt;
             ch_cnt <= ch_cnt_nxt;
@@ -190,6 +219,11 @@ module gdconv7x7_core #(
             pending_valid <= pending_valid_nxt;
             pending_last <= pending_last_nxt;
             pending_lane <= pending_lane_nxt;
+            data_valid <= data_valid_nxt;
+            data_last <= data_last_nxt;
+            data_lane <= data_lane_nxt;
+            act_data_r <= act_data_w;
+            wgt_data_r <= wgt_data_w;
         end
     end
 
