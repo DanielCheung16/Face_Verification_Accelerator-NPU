@@ -1,0 +1,34 @@
+%% ============================================================================
+%% §6 Engineering Standards  --  joint
+%% ============================================================================
+\section{Engineering Standards}
+\label{sec:standards}
+
+Table~\ref{tab:standards} lists the engineering standards and reference specifications used throughout the design.
+
+\begin{table}[H]
+\centering
+\caption{Engineering Standards Applied}
+\label{tab:standards}
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\headrow \textbf{Domain} & \textbf{Standard} & \textbf{Where used} \\
+\midrule
+HDL                & IEEE 1800-2017 (SystemVerilog)         & All RTL modules (synthesisable subset) \\
+HDL                & IEEE 1364-2005 (Verilog 2005)          & OpenRAM-emitted SRAM behavioural models \\
+Library exchange   & LEF/DEF (Si2 OpenAccess)               & Standard-cell + SRAM physical abstracts; Innovus floorplan import/export \\
+Timing models      & Liberty (.lib, Synopsys-de-facto)      & Cell delays for Genus / Innovus / Xcelium \\
+Delay annotation   & IEEE 1497 (SDF)                        & Post-route SDF backannotation for gate-level signoff \\
+Constraints        & Synopsys SDC                           & \texttt{constraints\_v3.sdc}: clock, IO delay, false paths \\
+Reference floats   & IEEE 754 binary32                      & PyTorch baseline + C-model fp32 reference \\
+Fixed-point        & Q10 (data/weights), Q20 (accumulator)  & internal datapath \\
+Process design kit & NCSU FreePDK45                         & ASIC standard-cell library + DRC rules \\
+Memory IP          & OpenRAM (open-source)                  & 192$\times$64 act\_buf, 512$\times$40 psum SRAMs \\
+% TODO friend FPGA:
+% Bitstream         & AMD/Xilinx Vivado proprietary           & FPGA configuration            \\
+% Interconnect      & ARM AMBA AXI4 / AXI-Stream / AXI-Lite   & host $\leftrightarrow$ accelerator        \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Compliance notes.} The RTL is written in the synthesisable subset of SystemVerilog 2017 (no \texttt{assert}, no \texttt{$dynamic$}, no \texttt{class}, limited use of \texttt{interface}). All cell timing checks (setup/hold/recovery/removal) follow the standard SDF semantics. The LEF patching script \texttt{fix\_sram\_lef.py} preserves the LEF syntax conventions specified in the Si2 LEF/DEF Language Reference; no extension keywords are introduced.

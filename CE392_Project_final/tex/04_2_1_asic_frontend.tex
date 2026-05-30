@@ -1,0 +1,69 @@
+%% ============================================================================
+%% §4.2.1 ASIC Frontend Design  --  Willie
+%% ============================================================================
+\subsubsection{ASIC Frontend (Liao)}
+\label{sec:hw:frontend:asic}
+
+The ASIC RTL is organised into eight modules under \texttt{mfn\_frontend\_top\_v3}. Figure~\ref{fig:asic_block} shows the block-level dataflow.
+
+% TODO: replace with exported PDF/PNG of doc/v3_architecture.html
+\begin{figure}[H]
+  \centering
+  \fbox{\parbox{0.85\textwidth}{\centering\vspace{6pt}\itshape Block diagram placeholder --- export \texttt{doc/v3\_architecture.html} to PNG.\vspace{6pt}}}
+  \caption[ASIC frontend block diagram.]{ ASIC frontend block diagram. Dataflow: pixel input $\rightarrow$ act\_buf SRAM $\rightarrow$ 12$\times$12 systolic array $\rightarrow$ psum SRAM $\rightarrow$ activation $\rightarrow$ next-layer feature map.}
+  \label{fig:asic_block}
+\end{figure}
+
+\paragraph{Compute datapath.} The core compute unit is \texttt{mfn\_sa\_12x12}, a $12\times12 = 144$ processing-element (PE) output-stationary systolic array. Each PE \texttt{mfn\_pe} holds one output channel's 40-bit accumulator and performs a single signed $16\times16 \rightarrow 32$-bit multiply followed by a sign-extended add per cycle. The array supports two dataflow modes selected by \texttt{dw\_mode}:
+\begin{itemize}[nosep]
+\item \textbf{Pointwise / standard mode} (\texttt{dw\_mode=0}): each row computes the 12-tap dot product $\sum_{c=0}^{11}\texttt{act\_in}[c]\cdot\texttt{wgt\_in}[r][c]$. All 144 MACs fire per cycle, parallel across 12 output channels and 12 input channels.
+\item \textbf{Depthwise mode} (\texttt{dw\_mode=1}): each row uses its own activation lane (diagonal mapping) since depthwise convolutions never mix channels. The array degrades to 12 independent MACs per cycle, mirroring the natural parallelism of the operation.
+\end{itemize}
+A pipeline register (\texttt{row\_dot\_reg}, 12$\times$40-bit) between the multiplier-adder tree and the final accumulator update splits the critical path, enabling the 5.0\,ns / 200\,MHz target.
+
+\paragraph{Memory hierarchy.} Three classes of on-chip storage are used:
+
+\begin{table}[H]
+\centering
+\caption{ASIC On-Chip Storage Classification}
+\label{tab:asic_mem}
+\begin{tabularx}{\textwidth}{l l l X}
+\toprule
+\headrow \textbf{Storage} & \textbf{Implementation} & \textbf{Size} & \textbf{Rationale} \\
+\midrule
+Activation buffer  & OpenRAM SRAM (1RW)    & 192\,b $\times$ 64 & 12 channels $\times$ 16-bit per word matches SA column width \\
+Partial-sum buffer & OpenRAM SRAM (1RW+1R) & 40\,b $\times$ 512 & holds up to 512 output-channel partial sums (linear1) \\
+Weight ROM         & Combinational logic   & $\sim$1\,M $\times$ 16-bit & content fixed at synthesis; 12 read ports for SA row \\
+Bias / PReLU ROM   & Combinational logic   & per-channel scalars & small, value-constant \\
+Layer configuration ROM & Combinational logic & 50 $\times$ 64-bit & one 64-bit descriptor per layer \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The choice between SRAM and ROM is driven by access pattern and size: large random-access read/write storage uses SRAM; small read-only constants synthesise more cheaply as gates.
+
+\paragraph{4-stage activation pipeline.} To meet 200\,MHz the path from address generation to PE accumulator update is split into four pipeline stages, summarised in Table~\ref{tab:pipeline_stages}.
+
+\begin{table}[H]
+\centering
+\caption{4-Stage Activation Pipeline (ASIC)}
+\label{tab:pipeline_stages}
+\begin{tabularx}{\textwidth}{l l X}
+\toprule
+\headrow \textbf{Stage} & \textbf{Function} & \textbf{Implementation} \\
+\midrule
+Stage 0 & Address generation             & controller drives (x, y, c\_in) $\rightarrow$ act\_buf read addr \\
+Stage 1 & SRAM access (1-cycle latency) & OpenRAM macro internal read \\
+Stage 2 & Lane select + zero-pad         & \texttt{act\_out\_reg} latches dout on negedge \\
+Stage 3 & SA dot-product register        & \texttt{row\_dot\_reg} (12$\times$40-bit) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Controller FSM.} \texttt{mfn\_controller\_v3} is a 25-state machine partitioned into three sub-paths, one per convolution mode:
+\begin{itemize}[nosep]
+\item Pointwise / standard path (\texttt{S\_ACT\_LOAD} $\rightarrow$ \texttt{S\_BIAS\_LOAD} $\rightarrow$ \texttt{S\_CIN\_COMPUTE} $\rightarrow$ \texttt{S\_WRITEBACK}),
+\item Depthwise path (\texttt{S\_DW\_FETCH} $\rightarrow$ \texttt{S\_DW\_COMPUTE} $\rightarrow$ \texttt{S\_DW\_DRAIN} $\rightarrow$ \texttt{S\_DW\_WRITEBACK}),
+\item Depthwise-12 fast path for layers whose channel count is a multiple of 12 (\texttt{S\_DW12\_BIAS} $\rightarrow$ \texttt{S\_DW12\_COMPUTE} $\rightarrow$ \texttt{S\_DW12\_KP\_NEXT}).
+\end{itemize}
+All address generation, SA enable/clear, and SRAM write enables are driven directly from the FSM; there is no host intervention between layers.

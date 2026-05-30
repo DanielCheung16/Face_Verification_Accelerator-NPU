@@ -1,0 +1,74 @@
+\documentclass[11pt]{article}
+
+\input{preamble}
+
+\begin{document}
+
+% ============================================================================
+%  TITLE PAGE
+% ============================================================================
+\begin{titlepage}
+  \centering
+  \vspace*{2.5cm}
+  {\Huge\bfseries MobileFaceNet Convolutional Frontend Accelerator \par}
+  \vspace{0.4cm}
+  {\Large\itshape ASIC (FreePDK45) and FPGA Co-Implementation\par}
+  \vspace{1.5cm}
+  {\large CE392 VLSI Design Projects --- Final Report\par}
+  \vspace{2.5cm}
+  {\large
+    Willie Liao \quad\textemdash\quad GEL8580 \\[4pt]
+    Peixin Zhang \quad\textemdash\quad JZH2008 \\
+  }
+  \vfill
+  {\large Instructor: Prof.\ David Zaretsky \par}
+  \vspace{0.4cm}
+  {\large Northwestern University \par}
+  \vspace{0.4cm}
+  {\large \today \par}
+\end{titlepage}
+
+% ============================================================================
+%  FRONT MATTER
+% ============================================================================
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\listoffigures
+\listoftables
+\newpage
+\pagenumbering{arabic}
+
+% ============================================================================
+%  EXECUTIVE SUMMARY
+% ============================================================================
+\input{tex/00_exec_summary}
+
+% ============================================================================
+%  BODY
+% ============================================================================
+\input{tex/01_intro}
+\input{tex/02_model}                  % model topology + precision selection
+\input{tex/02_broader}
+\input{tex/03_constraints}
+\input{tex/04_0_hw_architecture}      % parent — includes 4.1, 4.2, 4.3
+\input{tex/05_optimization}
+\input{tex/06_standards}
+\input{tex/07_0_verification}         % parent — includes 7.1, 7.2, 7.3
+\input{tex/08_ethical}
+\input{tex/09_conclusion}
+
+% ============================================================================
+%  REFERENCES
+% ============================================================================
+\bibliographystyle{plain}
+\bibliography{refs}
+
+% ============================================================================
+%  APPENDICES (optional)
+% ============================================================================
+% \appendix
+% \input{tex/A1_layer_config}
+% \input{tex/A2_timing_reports}
+
+\end{document}

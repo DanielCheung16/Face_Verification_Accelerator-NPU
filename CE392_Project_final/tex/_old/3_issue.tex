@@ -1,0 +1,76 @@
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Verification}
+\label{sec:verify}
+%% ─────────────────────────────────────────────────────────────────────────────
+ 
+\subsection{Verification Flow}
+ 
+\[
+  \text{PyTorch (float32)} \;\rightarrow\;
+  \text{C-model (INT16 Q10)} \;\rightarrow\;
+  \text{RTL simulation} \;\rightarrow\;
+  \text{Bit-level comparison}
+\]
+ 
+The C-model serves as the fixed-point golden reference. RTL output is compared against C-model output layer by layer.
+ 
+\subsection{Layer-Level Verification Results}
+ 
+All 50 layers achieved 100.00\% exact match (ExactMatch\%, $\pm1\%$, MeanErr, MaxErr):
+ 
+\begin{table}[H]
+\centering
+\caption{Verification Summary (Selected Layers)}
+\begin{tabular}{lrrrr}
+\toprule
+\textbf{Layer} & \textbf{Exact\%} & \textbf{$\pm$1\%} & \textbf{MeanErr} & \textbf{MaxErr} \\
+\midrule
+L00 & 100.00\% & 100.00\% & 0.000 & 0 \\
+L10 & 100.00\% & 100.00\% & 0.000 & 0 \\
+L20 & 100.00\% & 100.00\% & 0.000 & 0 \\
+L30 & 100.00\% & 100.00\% & 0.000 & 0 \\
+L40 & 100.00\% & 100.00\% & 0.000 & 0 \\
+L49 & 100.00\% & 100.00\% & 0.000 & 0 \\
+\midrule
+\textbf{ALL} & \textbf{100.00\%} & \textbf{100.00\%} & \textbf{0.000} & \textbf{0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+ 
+\textbf{Status: \textcolor{green}{ALL PASS}}
+ 
+\subsection{End-to-End Embedding Verification}
+ 
+RTL-generated 128-d embeddings were compared against C-model embeddings on the self-prepared dataset:
+ 
+\begin{table}[H]
+\centering
+\caption{RTL vs C-Model Embedding Exact Match}
+\begin{tabular}{lrrr}
+\toprule
+\textbf{Image} & \textbf{Match} & \textbf{MaxDiff} & \textbf{MeanAbsErr} \\
+\midrule
+dan\_1.jpg    & 128/128 & 0 & 0.0000 \\
+elon\_1.jpg   & 128/128 & 0 & 0.0000 \\
+trump\_1.jpg  & 128/128 & 0 & 0.0000 \\
+wil\_1.jpg    & 128/128 & 0 & 0.0000 \\
+(all 13 images) & 128/128 & 0 & 0.0000 \\
+\bottomrule
+\end{tabular}
+\end{table}
+ 
+\begin{table}[H]
+\centering
+\caption{Similarity Summary Comparison: C Fixed-Point vs RTL}
+\begin{tabular}{lrr}
+\toprule
+\textbf{Metric} & \textbf{C Fixed} & \textbf{RTL} \\
+\midrule
+Intra avg & 0.5270 & 0.5270 \\
+Inter avg & 0.0783 & 0.0783 \\
+Gap       & +0.4487 & +0.4487 \\
+\bottomrule
+\end{tabular}
+\end{table}
+ 
+RTL output is bit-exact with the C-model, confirming the hardware correctly implements the fixed-point datapath.

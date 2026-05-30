@@ -1,0 +1,152 @@
+%% ============================================================================
+%% §4.3.1 ASIC Backend (Liao)  --  Genus + Innovus
+%% ============================================================================
+\subsubsection{ASIC Backend (Liao): Genus Synthesis and Innovus P\&R}
+\label{sec:hw:backend:asic}
+
+The v3 RTL is synthesised with Cadence Genus against the FreePDK45 standard-cell library. The two OpenRAM SRAMs (\texttt{sram\_act\_buf\_1rw0r0w\_192\_64} and \texttt{sram\_psum\_a\_1rw1r0w\_40\_512}) are treated as black boxes via their Liberty and LEF views; weights, biases, and PReLU coefficients remain combinational ROMs. Synthesis runs at a 5.0\,ns target period to align with the final P\&R signoff. Results are in Table~\ref{tab:syn_results}.
+
+\begin{table}[H]
+\centering
+\caption{Genus Synthesis Results (ASIC, v3)}
+\label{tab:syn_results}
+\begin{tabularx}{0.85\textwidth}{l X}
+\toprule
+\textbf{Metric} & \textbf{Value} \\
+\midrule
+Target clock period   & 5.0\,ns (200\,MHz) \\
+Worst slack (WNS)     & +0.177\,ns \\
+Total cells           & 88{,}018 \\
+Total area (cells only) & 334{,}956\,$\mu$m$^2$ \\
+SRAM macros           & 2 (act\_buf 97\,K\,$\mu$m$^2$ + psum\_a 66\,K\,$\mu$m$^2$) \\
+Critical path         & \texttt{u\_act\_buf/act\_out\_reg} $\rightarrow$ \texttt{u\_sa/mul\_55\_31 (16$\times$16)} $\rightarrow$ CSA tree $\rightarrow$ \texttt{u\_sa/acc\_reg[0][39]} \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The netlist is then placed and routed in Cadence Innovus (\texttt{run\_innovus\_3.tcl}) on a 720$\times$720\,$\mu$m$^2$ floorplan, shrunk from an initial 800$\times$700 once timing closed. The two SRAM macros are placed manually so the SA dataflow stays compact, and the clock tree uses non-default routing (\texttt{CTS\_2W1S} on leaf nets, \texttt{CTS\_2W2S} on trunks with VSS shielding) to hold skew under 70\,ps. Before LEF import, \texttt{fix\_sram\_lef.py} strips the over-conservative M3/M4 obstructions from the OpenRAM LEF and snaps off-grid pin coordinates to the 0.005\,$\mu$m manufacturing grid; without this step the SRAM dout pins on M3 have no legal via3/M4 escape and the router produces $\sim$480 DRC SHORT/SPACING violations. The final post-route metrics are in Table~\ref{tab:pnr_results} and the layout in Figure~\ref{fig:asic_floorplan}.
+
+\begin{table}[H]
+\centering
+\caption{Innovus Post-Route Results (ASIC, v3 final)}
+\label{tab:pnr_results}
+\begin{tabularx}{\textwidth}{l X}
+\toprule
+\textbf{Category} & \textbf{Result} \\
+\midrule
+Core floorplan        & 720$\times$720 $\mu$m$^2$ (518{,}400 $\mu$m$^2$) \\
+Placement density     & 59.5\,\% \\
+Setup WNS             & +0.089\,ns (MET) \\
+Hold WNS              & +0.437\,ns (MET) \\
+Setup / Hold TNS      & 0 / 0 \\
+DRC violations        & 0 \\
+Connectivity          & no problems or warnings \\
+Antenna               & no violations \\
+Total power           & 96.32\,mW (Switching 43.76, Internal 24.6, Leakage 3.0, Macro 24.9) \\
+Cycles per inference  & 13{,}773{,}428 \\
+Throughput            & 14.52 FPS @ 200 MHz on 112$\times$96 input \\
+Energy per inference  & 6.63\,$\mu$J \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{Fig/mfn_v3_pr.png}
+    \caption{Full die view (720$\times$720 $\mu$m$^2$).}
+    \label{fig:asic_v3_full}
+  \end{subfigure}
+\hfill
+  \begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{Fig/mfn_v3_pr_part.png}
+    \caption{Detail view: SA + SRAM macros + controller cells.}
+    \label{fig:asic_v3_detail}
+  \end{subfigure}
+  \caption[Final v3 Innovus post-route layout.]{Final v3 Innovus post-route layout. Two OpenRAM SRAM macros (activation buffer left, partial-sum buffer right) bracket the central 144-MAC systolic-array placement.}
+  \label{fig:asic_floorplan}
+\end{figure}
+
+The CTS report (Figure~\ref{fig:asic_cts}) shows balanced clock arrival times across the die with insertion-delay $\mu = 0.348$\,ns, $\sigma = 0.009$\,ns and skew 0.067\,ns.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.8\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{Fig/mfn_v3_pr_postCTS.png}
+    \caption{Post-CTS placement and clock buffers.}
+    \label{fig:asic_postcts}
+  \end{subfigure} \\[8pt]
+  \begin{subfigure}{0.8\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{Fig/mfn_v3_pr_clocks_tree.png}
+    \caption{Clock-tree topology and balanced fanout.}
+    \label{fig:asic_clk_tree}
+  \end{subfigure}
+  \caption[Clock-tree synthesis result.]{Clock-tree synthesis result. Skew 0.067\,ns, insertion-delay $\mu = 0.348$\,ns, $\sigma = 0.009$\,ns.}
+  \label{fig:asic_cts}
+\end{figure}
+
+With WNS $= +0.089$\,ns on the 5.0\,ns target, the critical path measures $T_\text{crit} = 4.911$\,ns. The achievable frequency and the resulting throughput and energy are then
+
+\begin{equation}
+F_\text{max} \;=\; \frac{1}{T_\text{crit}} \;=\; \frac{1}{4.911~\text{ns}} \;\approx\; 203.6~\text{MHz},
+\label{eq:fmax}
+\end{equation}
+\begin{equation}
+\text{FPS} \;=\; \frac{F_\text{clk}}{C_\text{inf}} \;=\; \frac{200{,}000{,}000}{13{,}773{,}428} \;\approx\; 14.52~\text{frames/s},
+\label{eq:fps}
+\end{equation}
+\begin{equation}
+T_\text{inf} \;=\; \frac{C_\text{inf}}{F_\text{clk}} \;\approx\; 68.87~\text{ms}, \quad E_\text{inf} = P_\text{total}\cdot T_\text{inf} \;\approx\; 6.63~\mu\text{J}.
+\label{eq:energy}
+\end{equation}
+
+The Innovus reports (Figures~\ref{fig:asic_timing_pair} and \ref{fig:asic_route_area}) confirm these numbers and show the 720$\times$720 die routes without congestion hotspots at 59.5\,\% placement density. The power breakdown (Figure~\ref{fig:asic_power}) is dominated by switching activity in the 144-MAC SA, as expected when 144 multipliers toggle every cycle at 200\,MHz.
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{Fig/mfn_v3_pr_timing.png}
+    \caption{Innovus \texttt{report\_timing}: setup WNS +0.089\,ns.}
+    \label{fig:asic_timing}
+  \end{subfigure}
+\hfill
+  \begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{Fig/mfn_v3_pr_clocks.png}
+    \caption{Per-clock summary: 200\,MHz domain.}
+    \label{fig:asic_clocks}
+  \end{subfigure}
+  \caption[Post-route timing and clock-domain reports.]{Post-route timing and clock-domain reports.}
+  \label{fig:asic_timing_pair}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{Fig/mfn_v3_pr_opstRoute.png}
+    \caption{Post-route view (\texttt{optsRoute}).}
+    \label{fig:asic_optroute}
+  \end{subfigure}
+\hfill
+  \begin{subfigure}{0.48\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{Fig/mfn_v3_pr_area.png}
+    \caption{Area / utilisation report.}
+    \label{fig:asic_area}
+  \end{subfigure}
+  \caption[Routing and area utilisation.]{Routing and area utilisation: zero DRC violations, 59.5\,\% density.}
+  \label{fig:asic_route_area}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.7\textwidth]{Fig/mfn_v3_pr_power.png}
+  \caption[Innovus post-route power report.]{Innovus post-route power report: total 96.32\,mW, dominated by switching power in the 144-MAC SA at 200\,MHz.}
+  \label{fig:asic_power}
+\end{figure}

@@ -1,0 +1,103 @@
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Model Design \& Precision Selection}
+%% ─────────────────────────────────────────────────────────────────────────────
+ 
+\subsection{MobileFaceNet Architecture}
+
+We target the MobileFaceNet variant with input size $3 \times 112 \times 96$.
+The original MobileFaceNet paper~\cite{chen2018mobilefacenetsefficientcnnsaccurate}
+and the hardware implementation in~\cite{7738524} use a square input of
+$3 \times 112 \times 112$ with a $7\times7$ global depthwise convolution.
+In this work, we adopt the non-square variant from~\cite{Linjun_SUN20202019EDL8103},
+which replaces the GDConv kernel with $7\times6$ to match the reduced horizontal
+resolution, as summarized in Table~\ref{tab:mobile}.
+
+\begin{table}[H]
+\centering
+\caption{MobileFaceNet Layer Configuration ($3\times112\times96$ input)}
+\label{tab:mobile}
+\begin{tabular}{lllrrrr}
+\toprule
+\textbf{Input Shape} & \textbf{Operator} & & \textbf{t} & \textbf{c} & \textbf{n} & \textbf{s} \\
+\midrule
+$3\times112\times96$   & Conv $3\times3$        & & --  & 64  & 1 & 2 \\
+$64\times56\times48$   & DW Conv $3\times3$     & & --  & 64  & 1 & 1 \\
+$64\times56\times48$   & Bottleneck             & & 2   & 64  & 5 & 2 \\
+$64\times28\times24$   & Bottleneck             & & 4   & 128 & 1 & 2 \\
+$128\times14\times12$  & Bottleneck             & & 2   & 128 & 6 & 1 \\
+$128\times14\times12$  & Bottleneck             & & 4   & 128 & 1 & 2 \\
+$128\times7\times6$    & Bottleneck             & & 2   & 128 & 2 & 1 \\
+$128\times7\times6$    & Conv $1\times1$        & & --  & 512 & 1 & 1 \\
+$512\times7\times6$    & GDConv $7\times6$      & & --  & 512 & 1 & 1 \\
+$512\times1\times1$    & Linear (PW $1\times1$) & & --  & 128 & 1 & 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+When each Bottleneck is expanded into its three constituent sub-layers
+(PW1, DW, PW2), the full model comprises \textbf{50 layers} (L0--L49).
+Figure~\ref{fig:MFN_visual} visualizes the complete architecture, and
+Figure~\ref{fig:bottleneck_diagram} illustrates the internal structure of
+the first Bottleneck block.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.85\linewidth]{Fig/mobile_face_net_visualize.png}
+    \caption{MobileFaceNet architecture visualization.}
+    \label{fig:MFN_visual}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.65\linewidth]{Fig/model_diagram_block1.png}
+    \caption{Internal structure of MobileFaceNet Bottleneck Block 0
+             (PW1 $\rightarrow$ DW $\rightarrow$ PW2).}
+    \label{fig:bottleneck_diagram}
+\end{figure}
+
+\subsection{Precision Selection}
+
+We evaluated four precision formats --- PyTorch float32, C float32, C INT16,
+and C INT8 --- by comparing pairwise cosine similarity scores against the
+PyTorch reference on a face verification task.
+
+\begin{table}[H]
+\centering
+\caption{Precision Comparison Summary}
+\label{tab:precision}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Format} & \textbf{Max Error vs.\ PyTorch} & \textbf{Verdict} \\
+\midrule
+C Float32 & $\approx 0$                         & Reference    \\
+C INT16   & $< 0.003$ (most pairs: OK)          & \textbf{Selected} \\
+C INT8    & Up to $0.34$ (many pairs: WARN)     & Rejected     \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+C Float32 closely matches PyTorch, confirming the floating-point implementation is correct. C INT16 (Q10 fixed-point) introduces only negligible error across most pairs, while C INT8 exhibits significantly larger deviations, particularly on negative pairs where the similarity scores are already close to zero. We therefore select \textbf{INT16 Q10} as the final representation, as it provides the best balance between hardware efficiency and numerical accuracy.
+
+\subsection{Model Evaluation}
+
+To validate the selected INT16 Q10 model, we measured intra-person and
+inter-person cosine similarity on two datasets. Results are summarized in
+Table~\ref{tab:eval}.
+
+\begin{table}[H]
+\centering
+\caption{Face Verification Evaluation (C INT16 Q10)}
+\label{tab:eval}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Dataset} & \textbf{Intra avg} & \textbf{Inter avg} & \textbf{Gap} \\
+\midrule
+Original (6 persons, 3 images each)   & 0.5575 & 0.0673 & \textbf{+0.4903} \\
+Self-prepared (Dan, Elon, Trump, Wil) & 0.5270 & 0.0783 & \textbf{+0.4487} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Both datasets show a large separability gap (intra $\gg$ inter), confirming
+that the INT16 Q10 quantization preserves the model's discriminative capability
+with negligible accuracy loss relative to the floating-point reference.

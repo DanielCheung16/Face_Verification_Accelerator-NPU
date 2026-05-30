@@ -1,0 +1,10 @@
+\contentsline {figure}{\numberline {1}{\ignorespaces MobileFaceNet topology overview.}}{2}{figure.caption.12}
+\contentsline {figure}{\numberline {2}{\ignorespaces ASIC frontend block diagram.}}{6}{figure.caption.21}
+\contentsline {figure}{\numberline {3}{\ignorespaces FPGA accelerator block diagram.}}{8}{figure.caption.28}
+\contentsline {figure}{\numberline {4}{\ignorespaces Final v3 Innovus post-route layout.}}{10}{figure.caption.34}
+\contentsline {figure}{\numberline {5}{\ignorespaces Clock-tree synthesis result.}}{11}{figure.caption.35}
+\contentsline {figure}{\numberline {6}{\ignorespaces Post-route timing and clock-domain reports.}}{12}{figure.caption.36}
+\contentsline {figure}{\numberline {7}{\ignorespaces Routing and area utilisation.}}{12}{figure.caption.37}
+\contentsline {figure}{\numberline {8}{\ignorespaces Innovus post-route power report.}}{13}{figure.caption.38}
+\contentsline {figure}{\numberline {9}{\ignorespaces Post-route floorplan evolution v1 $\to $ v2 $\to $ v3.}}{13}{figure.caption.39}
+\contentsline {figure}{\numberline {10}{\ignorespaces Macro placement evolution v2 $\to $ v3.}}{14}{figure.caption.40}

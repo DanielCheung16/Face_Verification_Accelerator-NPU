@@ -1,0 +1,44 @@
+%% ============================================================================
+%% §7.1 Verification Flow Overview  --  joint
+%% ============================================================================
+\subsection{Verification Flow}
+\label{sec:verify:flow}
+
+A single golden reference is used to verify both implementation paths:
+\begin{center}
+\begin{tabular}{r c l}
+PyTorch (float32) & $\rightarrow$ & C-model (INT16 Q10) \\
+& $\rightarrow$ & per-layer golden hex vectors \\
+& $\rightarrow$ & implementation under test \\
+& $\rightarrow$ & bit-level diff
+\end{tabular}
+\end{center}
+
+The C-model is bit-exact against the chosen Q10/Q20 fixed-point arithmetic and is the canonical reference: any RTL, gate-level, or FPGA output is compared against it layer by layer. End-to-end face verification (intra/inter-person cosine similarity gap) is also measured to confirm the 128-d embedding quality is preserved.
+
+\paragraph{Coverage.} Verification coverage is defined at three levels:
+\begin{itemize}[nosep]
+\item \textbf{Functional}: each of the 50 MobileFaceNet layers must produce an output that matches the C-model golden hex file exactly (zero bits different across all output pixels).
+\item \textbf{End-to-end}: the 128-d embedding vector for a set of face images must match the C-model embedding bit-exactly.
+\item \textbf{Timing} (ASIC only): the post-route netlist with SDF backannotation must complete the same simulation with no setup/hold timing-check violations.
+\end{itemize}
+
+Table~\ref{tab:verify_matrix} shows the verification matrix for both paths.
+
+\begin{table}[H]
+\centering
+\caption{Verification Coverage Matrix}
+\label{tab:verify_matrix}
+\begin{tabularx}{\textwidth}{l c c X}
+\toprule
+\headrow \textbf{Level} & \textbf{ASIC} & \textbf{FPGA} & \textbf{Method} \\
+\midrule
+RTL functional (50-layer)              & \checkmark & \checkmark & Xcelium / Vivado simulator vs C-model \\
+Synthesised netlist (gate-level)       & \checkmark & -- & Xcelium GL vs C-model golden \\
+Post-route netlist (gate-level)        & \checkmark & -- & Xcelium GL on Innovus netlist vs C-model \\
+SDF-annotated (timing)                 & \checkmark & -- & Xcelium GL + SDF, check timing violations \\
+On-board                               & --         & \checkmark & Zynq board capture + AXI-Stream readback \\
+End-to-end embedding                   & \checkmark & \checkmark & 128-d cosine vs C-model \\
+\bottomrule
+\end{tabularx}
+\end{table}

@@ -1,0 +1,83 @@
+% xcolor must be loaded with [table] BEFORE any package (graphicx, tikz, ...)
+% that auto-loads xcolor without options.
+\PassOptionsToPackage{table}{xcolor}
+
+% ====== Geometry / Header ======
+\usepackage[a4paper,margin=0.8in]{geometry}
+\usepackage{fancyhdr}
+\pagestyle{fancy}
+\usepackage{graphicx}
+\DeclareGraphicsExtensions{.pdf,.png,.jpg,.jpeg,.svg.png}
+\DeclareGraphicsRule{.svg.png}{png}{.svg.png}{}
+\usepackage{eso-pic}
+\usepackage{transparent}
+\usepackage{url}
+\usepackage{hyperref}
+\fancyhf{}
+\lhead{CE392 VLSI DESIGN PROJECTS}
+% \rhead{\includegraphics[height=0.9cm]{Fig/Northwestern_University_seal.svg.png}}
+\cfoot{\thepage}
+
+% ====== Math / Symbols ======
+\usepackage{amsmath,amssymb,mathtools}
+\usepackage{tabularx}
+
+% ====== Figures / Captions ======
+\usepackage{float}
+\usepackage{subcaption}
+
+% ====== Lists ======
+\usepackage{enumitem}
+\setlist[enumerate]{leftmargin=*, itemsep=6pt, topsep=6pt}
+
+% ====== Circuit / TikZ (keep what you need) ======
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric}
+
+% ====== Hyperref ======
+\usepackage{hyperref}
+
+% ====== Optional: nice "Answer:" command ======
+\newcommand{\Answer}{\par\smallskip\noindent\textbf{Answer: }\ignorespaces}
+
+% ====== Watermark ======
+\newcommand{\NorthwesternWatermarkFile}{Fig/old/Northwestern_University_seal.svg.png}
+\newcommand{\NorthwesternWatermark}{%
+    \AddToShipoutPictureBG{%
+        \begin{tikzpicture}[remember picture,overlay]
+            \node[
+                anchor=north east,
+                xshift=-8mm,
+                yshift=-8mm,
+                opacity=0.15
+            ] at (current page.north east) {%
+                \IfFileExists{\NorthwesternWatermarkFile}{%
+                    \includegraphics[width=0.16\paperwidth,keepaspectratio]{\NorthwesternWatermarkFile}%
+                }{%
+                    {\sffamily\bfseries\fontsize{24}{24}\selectfont Northwestern}%
+                }%
+            };
+        \end{tikzpicture}%
+    }%
+}
+\NorthwesternWatermark
+
+
+% ====== Table ======
+
+\usepackage{xcolor}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{colortbl}
+\usepackage{multirow}
+
+\definecolor{softgreen}{RGB}{34,139,34}
+\definecolor{softred}{RGB}{200,40,40}
+
+\newcommand{\statusdone}{\textbf{Completed}}
+\newcommand{\statusremain}{\textbf{Remaining}}
+
+% IEEE-style table conventions: booktabs only, bold headers, no colors.
+% \headrow is a no-op kept for backwards compatibility with section files.
+\newcommand{\headrow}{}

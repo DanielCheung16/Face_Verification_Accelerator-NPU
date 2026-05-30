@@ -1,0 +1,57 @@
+%% ============================================================================
+%% §9 Conclusions  --  joint
+%% ============================================================================
+\section{Conclusions}
+\label{sec:conclusion}
+
+This project delivered a MobileFaceNet convolution frontend accelerator along two complementary paths: an ASIC in FreePDK45 and an FPGA on Zynq, both verified against the same C-model golden reference. Table~\ref{tab:final_summary} consolidates the headline metrics against the original constraints from Section~\ref{sec:constraints}.
+
+\begin{table}[H]
+\centering
+\caption{Final Metrics vs Design Constraints}
+\label{tab:final_summary}
+\begin{tabularx}{\textwidth}{l c c c c}
+\toprule
+\headrow \textbf{Metric} & \textbf{Constraint} & \textbf{ASIC} & \textbf{FPGA} & \textbf{Met?} \\
+\midrule
+Clock frequency       & $\geq$100\,MHz (200 stretch) & 200\,MHz       & & \checkmark / \checkmark \\
+Throughput            & $\geq$10\,FPS (target)       & 14.5\,FPS      & & \checkmark \\
+Power                 & $<$100\,mW                   & 96.3\,mW       & & \checkmark \\
+Core area             & $<$1\,mm$^2$                 & 0.518\,mm$^2$  & --      & \checkmark \\
+DRC / antenna         & 0 violations                 & 0 / 0          & --      & \checkmark \\
+50-layer MATCH        & required                     & 50/50 (RTL+syn+pnr) & & \checkmark \\
+Timing signoff        & WNS $>$ 0                    & +0.089\,ns     & & \checkmark \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Did the design meet spec?} Yes. All hard constraints were met; both soft constraints (power, area) cleared with margin. The ASIC path delivered 2$\times$ the stretch frequency target and stayed under the 100\,mW envelope. The functional correctness goal (50/50 layer MATCH against the C-model) was satisfied at every implementation stage, including post-route with SDF backannotation.
+
+\paragraph{What was not delivered.}
+\begin{itemize}[nosep]
+\item No tape-out: the ASIC is design-kit-only.
+\item No formal LEC: we used full GL simulation instead.
+\item Single typical-PVT corner; no SI / cross-talk analysis.
+\end{itemize}
+
+\paragraph{Future work.}
+
+\begin{table}[H]
+\centering
+\caption{Suggested Follow-on Work}
+\label{tab:future}
+\begin{tabularx}{\textwidth}{l X}
+\toprule
+\headrow \textbf{Priority} & \textbf{Task} \\
+\midrule
+High   & Multi-corner timing closure (slow / fast / typ); add signal-integrity-aware STA when tools allow. \\
+High   & Formal LEC pass (Conformal / Formality) against RTL: seconds of run time replace days of GL simulation. \\
+Medium & Integrate a small DMA / AXI shim and tape out a test chip on an MPW shuttle (FreePDK45 educational; real foundry would substitute its own PDK). \\
+Medium & Replace combinational weight ROM with an external high-bandwidth weight SRAM + AXI-Lite write port for runtime model updates. \\
+Low    & Mixed-precision exploration: INT8 activations + INT16 weights could roughly halve switching power while preserving the cosine-similarity gap. \\
+% TODO friend: any FPGA-specific follow-on?
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\paragraph{Lessons learned.} Verification took longer than RTL design. Two specific items dominated the schedule: (i) the gate-level testbench race that required \texttt{bind}-based probes to localise (Section~\ref{sec:opt:asic}), and (ii) the OpenRAM LEF patching needed to clean up DRC. Both would have been easier with deterministic instrumentation in place from day one.

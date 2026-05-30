@@ -1,0 +1,33 @@
+%% ============================================================================
+%% §7.2 ASIC Verification  --  Willie
+%% ============================================================================
+\subsection{ASIC Verification (Liao): Three-Tier + SDF Signoff}
+\label{sec:verify:asic}
+
+The ASIC path is verified at four progressively stricter levels; results are summarised in Table~\ref{tab:asic_verify_results}.
+
+\begin{table}[H]
+\centering
+\caption{ASIC Verification Results}
+\label{tab:asic_verify_results}
+\begin{tabular}{clcc}
+\toprule
+\textbf{Level} & \textbf{Stimulus} & \textbf{Delay model} & \textbf{Result} \\
+\midrule
+L1 & RTL                & zero-delay & 50 / 50 MATCH \\
+L2 & Genus syn netlist  & zero-delay & 50 / 50 MATCH \\
+L3 & Innovus post-route & zero-delay & 50 / 50 MATCH \\
+L4 & Innovus post-route & SDF annotated & 0 violations \\
+\midrule
+\multicolumn{4}{l}{End-to-end embedding (RTL, 13 face images): 128 / 128 exact, MaxDiff = 0} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Levels~L1--L3 collectively establish that the design behaves identically at the RTL, synthesised, and post-route stages. A formal Logic Equivalence Checker (Conformal LEC, Formality) would normally produce this result in seconds; without one available we substitute a full 50-layer gate-level simulation against the C-model golden hex vectors. The trade-off is wall-clock time. The zero-delay post-route run takes about 84\,h, with roughly half of that spent on layers 0--2 alone because of their high spatial resolution.
+
+L4 uses the Innovus-exported SDF (\texttt{mfn\_frontend\_top\_v3\_final.sdf}, 117\,MB) backannotated into the same gate-level simulation. The post-route netlist completes the run with zero \texttt{TCHK\_VIOL}, setup-violation, and hold-violation events. In the absence of PrimeTime SI this is the strongest signoff we can produce: the netlist runs MobileFaceNet correctly at 200\,MHz with real cell and wire delays and live setup/hold checks.
+
+The verification flow itself had one early failure worth recording. The first gate-level run reported 50/50 mismatches even though RTL was 50/50 MATCH. A SystemVerilog \texttt{bind}-based probe traced the cause to a testbench race: \texttt{pixel\_in} was driven on \texttt{@(posedge clk)} from the DUT's \texttt{x\_out} output, but the gate-level netlist has delta-cycle delay on port outputs, so the testbench was latching the previous-cycle address. Moving the drive to \texttt{@(negedge clk)} (after \texttt{x\_out} has settled) restored all 50 layers. The same testbench is now used for every gate-level and SDF run.
+
+Limitations to keep in mind: this is a single typical-corner signoff (FreePDK45 does not ship multi-corner Liberty), there is no signal-integrity or cross-talk analysis, and the equivalence is shown by simulation rather than formal proof.

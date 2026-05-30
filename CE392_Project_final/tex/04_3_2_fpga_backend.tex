@@ -1,0 +1,48 @@
+%% ============================================================================
+%% §4.3.2 FPGA Backend  --  FRIEND (Zhang)
+%% Placeholder — please fill in with Vivado/Quartus synthesis + impl results.
+%% ============================================================================
+\subsubsection{FPGA Backend (Zhang): Synthesis and Implementation}
+\label{sec:hw:backend:fpga}
+
+% TODO friend: replace this placeholder.
+% Suggested structure / what to fill in:
+%   - Toolchain (Vivado / Quartus / version)
+%   - Target device (e.g. Zynq-7000 XC7Z020, Zynq UltraScale+ ?)
+%   - Synthesis & implementation strategy used
+%   - Resource utilisation table (LUT / FF / BRAM / DSP / URAM)
+%   - Achieved Fmax, slack, WNS
+%   - Power estimate (Vivado Power Report)
+%   - On-board frame rate measurement
+%   - Any timing/resource issues you had to work around
+
+\noindent\fbox{\parbox{\textwidth}{\itshape \textbf{Placeholder} --- Zhang's FPGA backend results go here. Should mirror the ASIC backend (Section~\ref{sec:hw:backend:asic}): toolchain, target device, resource utilisation, timing closure result, power estimate, and on-board measurement.}}
+
+% Example skeleton:
+%
+% \paragraph{Toolchain and target.}
+% Vivado 2023.x targeting Zynq-7000 XC7Z020-1CLG484C.
+%
+% \begin{table}[H]
+% \centering
+% \caption{FPGA Resource Utilisation (Vivado Implementation)}
+% \begin{tabularx}{0.85\textwidth}{l r r r}
+% \toprule
+% \headrow Resource & Used & Available & Util.\% \\
+% \midrule
+% LUT  & ? & 53200 & ? \\
+% FF   & ? & 106400 & ? \\
+% BRAM & ? & 140 & ? \\
+% DSP  & ? & 220 & ? \\
+% \bottomrule
+% \end{tabularx}
+% \end{table}
+%
+% \paragraph{Timing.}
+% Target 100 MHz, achieved Fmax = ?, WNS = ?.
+%
+% \paragraph{Power.} Vivado XPE estimate: ? W total.
+%
+% \paragraph{On-board measurement.}
+% Measured frame rate using AXI-Stream input image stream + ILA capture
+% of \texttt{inference\_done}: ? FPS.

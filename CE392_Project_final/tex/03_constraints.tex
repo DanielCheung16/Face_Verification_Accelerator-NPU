@@ -1,0 +1,38 @@
+%% ============================================================================
+%% §3 Design Constraints & Requirements  --  joint
+%% ============================================================================
+\section{Design Constraints and Requirements}
+\label{sec:constraints}
+
+Table~\ref{tab:constraints} summarises the hard and soft constraints that drove the architectural and implementation decisions.
+
+\begin{table}[H]
+\centering
+\caption{Design Constraints and Requirements}
+\label{tab:constraints}
+\begin{tabularx}{\textwidth}{lXl}
+\toprule
+\headrow \textbf{Category} & \textbf{Constraint / Requirement} & \textbf{Type} \\
+\midrule
+Functional       & Execute 50 MobileFaceNet layers autonomously                 & Hard \\
+Functional       & Produce 128-d float-equivalent embedding within $<$0.001 of C-model & Hard \\
+Numerics         & INT16 Q10 weights/activations, Q20 accumulators              & Hard \\
+Process (ASIC)   & FreePDK45 standard-cell library (NCSU PDK)                   & Hard \\
+Memory IP        & No commercial SRAM IP; must use OpenRAM open-source generator & Hard \\
+Clock target     & $\geq$ 100 MHz baseline; 200 MHz stretch goal                & Soft \\
+Power budget     & $<$ 100 mW (edge battery-powered use case)                   & Soft \\
+Area target      & $<$ 1\,mm$^2$ core area (educational-PDK norm)               & Soft \\
+DRC / antenna    & Zero violations at signoff                                   & Hard \\
+Timing signoff   & Setup/hold WNS $>$ 0 at all corners run                      & Hard \\
+Verification     & 50/50 layer bit-exact match against C-model                  & Hard \\
+Toolchain        & Cadence Genus (synthesis), Innovus (P\&R), Xcelium (simulation)& Hard \\
+FPGA target      & & Hard \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Process and IP Availability}
+The FreePDK45 educational PDK provides only standard-cell timing and LEF/Liberty data; no foundry SRAM compiler is included. We therefore generated all on-chip SRAM macros via the OpenRAM open-source SRAM compiler, which produces synthesizable behavioural models for simulation and LEF/Liberty/GDS views for physical implementation. This constraint shaped the memory subsystem: we use only two SRAM macros (activation buffer and partial-sum buffer) and keep small constant storage (weights, biases, PReLU $\alpha$, layer configuration) as combinational ROMs that the synthesizer maps to standard-cell mux trees.
+
+\subsection{Verification Capability}
+The lab environment does not provide a commercial formal-equivalence checker (Conformal LEC / Formality), nor signal-integrity-aware static timing (PrimeTime SI). We therefore replace formal LEC with full 50-layer gate-level simulation against the C-model golden vectors, and replace SI timing with SDF-annotated gate-level simulation using the Innovus-extracted SDF. These substitutions are slower than the commercial flows (a single full SDF run takes several days) but provide functionally equivalent coverage for non-tape-out signoff.

@@ -1,0 +1,248 @@
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Hardware Architecture}
+%% ─────────────────────────────────────────────────────────────────────────────
+ 
+\textbf{Design Positioning:} A fixed-point, MobileFaceNet-specific convolution frontend accelerator with ROM-based layer configuration. The design targets 50-layer sequential execution without software intervention between layers.
+ 
+The architecture is organized into three subsystems:
+ 
+\subsection{Supported Operation Types}
+ 
+\begin{itemize}[nosep]
+  \item Standard $3\times3$ Conv (with PReLU)
+  \item $3\times3$ Depthwise Conv (with PReLU)
+  \item $1\times1$ Pointwise Conv (with/without PReLU)
+  \item $7\times6$ Global Depthwise Conv (linear7, no PReLU)
+  \item Residual Shortcut Add
+\end{itemize}
+ 
+\subsection{Datapath}
+ 
+The datapath performs the core convolution computation:
+ 
+\begin{enumerate}[nosep]
+  \item \textbf{Sliding Window Buffer} (\texttt{mfn\_sliding\_window}): 9-entry pixel buffer providing $3\times3$ patch or 9-channel slice to the MAC array.
+  \item \textbf{MAC Array} (\texttt{mfn\_mac\_array}): 9 parallel 16-bit signed multipliers, producing a 40-bit dot product per cycle.
+  \item \textbf{Activation Module} (\texttt{mfn\_activation}): 2-stage pipeline.
+        Stage 1: Q20 $\rightarrow$ Q10 right-shift + int16 clamp.
+        Stage 2: PReLU multiplication + residual add + final clamp.
+\end{enumerate}
+ 
+Fixed-point format summary:
+ 
+\begin{table}[H]
+\centering
+\caption{Fixed-Point Format}
+\begin{tabular}{lll}
+\toprule
+\textbf{Data} & \textbf{Format} & \textbf{Width} \\
+\midrule
+Activation   & Q10 & int16 \\
+Weight       & Q10 & int16 \\
+Bias         & Q20 & int32 \\
+Accumulator  & Q20 & int40 \\
+PReLU alpha  & Q10 & int16 \\
+\bottomrule
+\end{tabular}
+\end{table}
+ 
+\subsection{Control Path}
+ 
+\begin{itemize}[nosep]
+  \item \textbf{Controller FSM} (\texttt{mfn\_controller}): Sequences layer
+        execution via a nested loop: \texttt{layer $\rightarrow$ y,x $\rightarrow$ c\_out $\rightarrow$ c\_in}.
+  \item \textbf{Address Generator} (\texttt{mfn\_addr\_gen}): 2-stage pipelined
+        HWC address computation. \\
+        Stage 1: \texttt{pixel\_offset = y$\times$W+x}.\\
+        Stage 2: \texttt{addr = pixel\_offset $\times$ C + c + buf\_base}.
+  \item \textbf{Layer Config ROM}: 50 $\times$ 64-bit entries, one per layer, loaded via \texttt{\$readmemh}. Encodes all layer parameters
+        (see Section~\ref{sec:config}).
+\end{itemize}
+ 
+\subsection{Memory Subsystem}
+ 
+\begin{itemize}[nosep]
+  \item \textbf{Feature Map SRAM}: 1~MB, 20-bit address, 16-bit word width. Partitioned into three ping-pong buffers (B0/B1/B2), each 344,064 words ($= 64 \times 56 \times 48 \times 2$, the maximum feature map size).
+  \item \textbf{Weight ROM}: 20-bit address, 9 $\times$ int16 per read cycle.
+  \item \textbf{Bias ROM}: 14-bit address, int32 Q20 output.
+  \item \textbf{PReLU ROM}: 14-bit address (shared with Bias ROM index), int16 Q10 alpha per output channel.
+\end{itemize}
+ 
+\paragraph{HWC Memory Layout.}
+Feature maps are stored in HWC (Height-Width-Channel) order:
+\[
+  \text{addr} = (y \times W + x) \times C + c + \text{buf\_base}
+\]
+This ensures all channels at a given spatial position $(y, x)$ are stored contiguously, matching the sliding-window access pattern and enabling sequential burst reads with no address striding.
+ 
+\paragraph{Triple-Buffer Residual Management.}
+Each layer config specifies \texttt{rd\_buf} and \texttt{wr\_buf}.
+The residual buffer is computed as:
+\[
+  \text{res\_buf} = 3 - \text{rd\_buf} - \text{wr\_buf}
+\]
+Since buffer indices $\{0,1,2\}$ always sum to 3, this guarantees no conflicts without any stall logic.
+ 
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Layer Configuration ROM}
+\label{sec:config}
+%% ─────────────────────────────────────────────────────────────────────────────
+ 
+Each layer is described by a single 64-bit configuration word:
+ 
+\begin{table}[H]
+\centering
+\caption{64-bit Config Word Fields}
+\begin{tabular}{lll}
+\toprule
+\textbf{Field} & \textbf{Bits} & \textbf{Description} \\
+\midrule
+\texttt{in\_ch}    & [9:0]    & Input channel count (up to 512) \\
+\texttt{out\_ch}   & [19:10]  & Output channel count \\
+\texttt{w}         & [26:20]  & Feature map width \\
+\texttt{h}         & [33:27]  & Feature map height \\
+\texttt{stride}    & [35:34]  & Stride (1 or 2) \\
+\texttt{has\_prelu}& [36]     & Apply PReLU activation \\
+\texttt{is\_res}   & [37]     & Add residual shortcut \\
+\texttt{is\_pw}    & [38]     & Pointwise ($1\times1$) conv \\
+\texttt{is\_dw}    & [39]     & Depthwise conv \\
+\texttt{wgt\_base} & [59:40]  & Weight ROM base address (20-bit) \\
+\texttt{rd\_buf}   & [61:60]  & SRAM read buffer select (0/1/2) \\
+\texttt{wr\_buf}   & [63:62]  & SRAM write buffer select (0/1/2) \\
+\bottomrule
+\end{tabular}
+\end{table}
+ 
+The \texttt{is\_dw=1, is\_pw=1} combination (normally impossible) is repurposed as the Global DW mode signal for the linear7 layer, requiring no additional config bits.
+ 
+\paragraph{Example Config Words:}
+ 
+\begin{table}[H]
+\centering
+\caption{Selected Layer Config Examples}
+\begin{tabular}{llrrrrrrrrl}
+\toprule
+\textbf{Layer} & \textbf{Hex} & \textbf{in} & \textbf{out} & \textbf{w} & \textbf{h} & \textbf{s} & \textbf{dw} & \textbf{pw} & \textbf{res} & \textbf{rd$\to$wr} \\
+\midrule
+L0 Conv1  & \texttt{4000001b86010003} & 3   & 64  & 96 & 112 & 2 & 0 & 0 & 0 & 0$\to$1 \\
+L1 DW1    & \texttt{9006c095c3010040} & 64  & 64  & 48 & 56  & 1 & 1 & 0 & 0 & 1$\to$2 \\
+L2 PW1    & \texttt{60090055c3020040} & 64  & 128 & 48 & 56  & 1 & 0 & 1 & 0 & 2$\to$1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+ 
+All 50 config words are generated by \texttt{gen\_hex.py} and loaded via \texttt{\$readmemh} at simulation time.
+ 
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Controller FSM \& Execution Order}
+%% ─────────────────────────────────────────────────────────────────────────────
+ 
+\subsection{FSM States}
+ 
+The controller executes the following state sequence per layer:
+ 
+\begin{enumerate}[nosep]
+  \item \textbf{LOAD\_CFG}: Read 64-bit config from ROM at \texttt{layer\_idx}.
+  \item \textbf{WAIT\_CFG}: Decode all fields; compute \texttt{wgt\_step}.
+  \item \textbf{INIT\_PSUM}: Load bias from Bias ROM into accumulator.
+  \item \textbf{FETCH\_PIXELS}: Load 9 values into sliding window (spatial neighbors for DW/Conv; 9 channels for PW).
+  \item \textbf{CALC\_PSUM}: 9-MAC parallel dot product, accumulate PSUM.
+  \item \textbf{MAC\_FLUSH}: Drain 2-cycle pipeline.
+  \item \textbf{CH\_IN\_LOOP}: If c\_in not done $\rightarrow$ back to FETCH\_PIXELS.
+  \item \textbf{READ\_RESIDUAL}: If \texttt{is\_res=1}, read shortcut from res\_buf.
+  \item \textbf{WRITE\_BACK}: Q20$\to$Q10, clamp, PReLU, (+residual), write to SRAM.
+  \item \textbf{SPATIAL\_LOOP}: If $(x,y)$ not done $\rightarrow$ back to INIT\_PSUM.
+  \item \textbf{NEXT\_LAYER}: \texttt{layer\_idx++}, check done $\rightarrow$ IDLE or LOAD\_CFG.
+\end{enumerate}
+ 
+\subsection{Nested Loop Structure}
+ 
+The hardware executes the following nested loop autonomously:
+ 
+\subsection{Pointwise Conv Optimization}
+ 
+For $1\times1$ PW conv (\texttt{is\_pw=1}), the sliding window slides over \emph{channel dimension} rather than spatial. Nine input channels are read at once and fed into all 9 MAC lanes simultaneously, greatly improving throughput for PW-heavy layers.
+ 
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Bottleneck Execution}
+%% ─────────────────────────────────────────────────────────────────────────────
+ 
+A Bottleneck block is executed as \textbf{three consecutive layer iterations} in hardware, each reading a different Config ROM entry:
+ 
+\begin{enumerate}[nosep]
+  \item \textbf{PW1} (\texttt{is\_pw=1, has\_prelu=1}): Channel expansion.
+  \item \textbf{DW} (\texttt{is\_dw=1, has\_prelu=1}): Spatial filtering, stride 1 or 2.
+  \item \textbf{PW2} (\texttt{is\_pw=1, has\_prelu=0}): Linear channel projection. If \texttt{is\_res=1}: add shortcut from \texttt{res\_buf} before write-back.
+\end{enumerate}
+ 
+The residual condition is: $\text{stride}=1$ \textbf{AND} $\text{in\_ch}=\text{out\_ch}$.
+ 
+\begin{table}[H]
+\centering
+\caption{Sliding Window Behavior: DW vs PW}
+\begin{tabular}{lll}
+\toprule
+                      & \textbf{3$\times$3 Depthwise} & \textbf{1$\times$1 Pointwise} \\
+\midrule
+Window content        & 9 spatial neighbors     & 9 input channels \\
+Slides over           & spatial $(y,x)$         & channel $c\_\text{in}$ \\
+c\_in loop            & $= c\_\text{out}$ (1:1) & \texttt{ceil(C/9)} steps \\
+Address jump          & 3$\times$3 neighborhood & sequential $+1$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+ 
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Global Depthwise Conv (linear7)}
+%% ─────────────────────────────────────────────────────────────────────────────
+ 
+The final global depthwise layer uses a $7\times6$ kernel (42 taps), but the MAC array only has 9 lanes. The solution splits the 42 taps into 5 groups of 9:
+ 
+\begin{align*}
+  \text{Group 0:} &\quad \text{tap } 0\text{--}8 \quad\rightarrow \text{psum}_0 \\
+  \text{Group 1:} &\quad \text{tap } 9\text{--}17 \quad\rightarrow \text{psum}_1 \\
+  \text{Group 2:} &\quad \text{tap } 18\text{--}26 \rightarrow \text{psum}_2 \\
+  \text{Group 3:} &\quad \text{tap } 27\text{--}35 \rightarrow \text{psum}_3 \\
+  \text{Group 4:} &\quad \text{tap } 36\text{--}41 + \text{3 zeros} \rightarrow \text{psum}_4
+\end{align*}
+\[
+  \text{output} = \sum_{i=0}^{4} \text{psum}_i \quad \text{per channel, } \times 512 \text{ channels}
+\]
+ 
+\textbf{Key Insight:} The MAC array, sliding window, and accumulator are
+\emph{unchanged}. Only the controller runs 5 MAC passes instead of 1. Zero hardware redesign needed. The \texttt{is\_dw=1, is\_pw=1} config encoding (normally invalid) is repurposed as the Global DW mode signal. 
+
+
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Systolic Array Implementation}
+%% ─────────────────────────────────────────────────────────────────────────────
+\subsection{Current Progress}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\linewidth]{Fig/top_version1.png}
+    \caption{System-level architecture of the current systolic-array accelerator}
+    \label{fig:systolic_system}
+\end{figure}
+
+Figure~\ref{fig:systolic_system} shows the current closed-loop accelerator system. The design is organized around shared global buffers, a layer switcher, one layer device, a shared postprocess unit, and a shared write-back path.
+
+\begin{enumerate}[nose]
+  \item \textbf{A/O SRAM}: Stores input activations and intermediate/final layer outputs.
+  \item \textbf{Weight SRAM}: Stores quantized weights for all supported layers.
+  \item \textbf{Switcher}: Selects the active layer device and routes SRAM read/write channels.
+  \item \textbf{Layer device}: Currently supports the \texttt{conv1x1} datapath, including preload, systolic-array computation, residual read, and tile-level control.
+  \item \textbf{Postprocess}: Converts 32-bit partial sums to 8-bit activations. It supports bias, requantization, residual add, and PReLU modes.
+  \item \textbf{Write-back buffer / WR controller}: Packs processed 8-bit outputs into SRAM words and generates NHWC write-back addresses.
+\end{enumerate}
+
+The current implementation has completed closed-loop verification for the \texttt{conv1x1} layer. The global buffers are not instantiated inside the layer device; instead, they are shared at the system level. The \texttt{conv1x1} device is also decoupled from postprocess and write-back. It only outputs a raw MAC tile and tile metadata through a common interface. Therefore, future layer devices can reuse the same switcher, postprocess unit, and write-back path. Figure~\ref{fig:syn_timing} shows the preliminary synthesis timing result.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.7\linewidth]{Fig/syn_timing.png}
+    \caption{Preliminary synthesis timing result of the current system}
+    \label{fig:syn_timing}
+\end{figure}
+
+\subsection{Next Step}
+The next step is to add more layer devices, starting from depthwise convolution and regular convolution. Each new layer will implement its own internal controller and computation datapath, while reusing the existing switcher, shared postprocess unit, and write-back path. After that, the full MobileFaceNet layer schedule can be mapped into the layer configuration ROM and verified against the C golden model.

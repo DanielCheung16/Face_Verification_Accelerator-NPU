@@ -1,0 +1,27 @@
+%% ============================================================================
+%% Executive Summary  --  joint, ~1 page
+%% ============================================================================
+\section*{Executive Summary}
+\addcontentsline{toc}{section}{Executive Summary}
+
+\paragraph{Problem.} Edge face verification needs a 50-layer CNN to run under $\sim$100\,mW at real-time frame rates. General-purpose CPUs and GPUs are too power-hungry to fit that envelope.
+
+\paragraph{Approach.} We build a MobileFaceNet-specific convolution accelerator with INT16 Q10 fixed-point arithmetic and run it as a complete 50-layer pipeline along two implementation paths:
+\begin{itemize}[nosep]
+\item \textbf{ASIC path (Liao)}: a 12$\times$12 = 144-MAC output-stationary systolic array in FreePDK45, with two OpenRAM SRAM macros (activation buffer and partial-sum SRAM) and a 4-stage activation pipeline. Full RTL$\rightarrow$Genus$\rightarrow$Innovus flow with SDF-annotated gate-level signoff.
+\item \textbf{FPGA path (Zhang)}: a systolic-array CNN accelerator on Zynq FPGA with the same MobileFaceNet workload.
+\end{itemize}
+
+\paragraph{Key Results.}
+\begin{itemize}[nosep]
+\item ASIC: \textbf{200~MHz}, \textbf{14.5~FPS} @ 720$\times$720~$\mu$m$^2$, \textbf{96.3~mW}, \textbf{6.63~$\mu$J/inference}, DRC/connectivity/antenna 0.
+\item Functional verification: \textbf{three-tier 50/50 layer MATCH} (RTL $\equiv$ Genus syn netlist $\equiv$ Innovus post-route netlist), plus zero SDF timing violations.
+\item FPGA:
+\end{itemize}
+
+\paragraph{Limitations.}
+\begin{itemize}[nosep]
+\item No commercial formal LEC tool (Conformal/Formality) was available; equivalence is shown by full 50-layer gate-level simulation rather than mathematical proof.
+\item Single-corner timing signoff (typical PVT only); no SI/CRPR analysis.
+\item ASIC path is design-kit physical implementation only, not taped out.
+\end{itemize}

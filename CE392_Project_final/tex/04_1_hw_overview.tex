@@ -1,0 +1,31 @@
+%% ============================================================================
+%% §4.1 Architecture Overview & ASIC vs FPGA Comparison  --  joint
+%% ============================================================================
+\subsection{Architecture Overview}
+\label{sec:hw:overview}
+
+Both implementations share the same algorithmic specification (MobileFaceNet INT16 Q10, 50-layer sequential execution, residual shortcuts, mixed standard / depthwise / pointwise convolutions) but realise the compute and memory subsystems differently to suit the target technology. Table~\ref{tab:asic_vs_fpga} contrasts the two paths.
+
+\begin{table}[H]
+\centering
+\caption{ASIC vs FPGA Implementation Comparison}
+\label{tab:asic_vs_fpga}
+\begin{tabularx}{\textwidth}{l X X}
+\toprule
+\headrow & \textbf{ASIC path (Liao)} & \textbf{FPGA path (Zhang)} \\
+\midrule
+Technology      & FreePDK45 (45\,nm)              & \\
+Compute fabric  & 12$\times$12 = 144-MAC output-stationary systolic array & \\
+Activation memory & OpenRAM SRAM macro (192-bit $\times$ 64, 1RW) & \\
+Partial-sum memory & OpenRAM SRAM macro (40-bit $\times$ 512, 1RW+1R) & \\
+Weight storage  & Combinational ROM (synthesised mux tree) & \\
+Target clock    & 5.0\,ns (200\,MHz)              & \\
+Achieved metric & 14.5\,FPS, 96.3\,mW             & \\
+Verification    & RTL + Genus syn + Innovus post-route + SDF & \\
+Implementation tools & Cadence Genus + Innovus     & \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The two implementations are complementary: the ASIC path quantifies the lower bound on power and the upper bound on frequency achievable in 45\,nm silicon, while the FPGA path provides on-board functional validation and rapid bring-up.
+% TODO joint: 1--2 sentences summarising what each path uniquely contributes

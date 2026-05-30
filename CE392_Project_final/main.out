@@ -1,0 +1,28 @@
+\BOOKMARK [1][-]{section*.4}{Executive Summary}{}% 1
+\BOOKMARK [1][-]{section.1}{Introduction}{}% 2
+\BOOKMARK [1][-]{section.2}{Model and Numerical Design}{}% 3
+\BOOKMARK [2][-]{subsection.2.1}{MobileFaceNet Topology}{section.2}% 4
+\BOOKMARK [2][-]{subsection.2.2}{Precision Selection}{section.2}% 5
+\BOOKMARK [2][-]{subsection.2.3}{Model Evaluation}{section.2}% 6
+\BOOKMARK [1][-]{section.3}{Broader Considerations}{}% 7
+\BOOKMARK [1][-]{section.4}{Design Constraints and Requirements}{}% 8
+\BOOKMARK [2][-]{subsection.4.1}{Process and IP Availability}{section.4}% 9
+\BOOKMARK [2][-]{subsection.4.2}{Verification Capability}{section.4}% 10
+\BOOKMARK [1][-]{section.5}{Hardware Architecture}{}% 11
+\BOOKMARK [2][-]{subsection.5.1}{Architecture Overview}{section.5}% 12
+\BOOKMARK [2][-]{subsection.5.2}{Frontend Design \(RTL Architecture\)}{section.5}% 13
+\BOOKMARK [3][-]{subsubsection.5.2.1}{ASIC Frontend \(Liao\)}{subsection.5.2}% 14
+\BOOKMARK [3][-]{subsubsection.5.2.2}{FPGA Frontend \(Zhang\)}{subsection.5.2}% 15
+\BOOKMARK [2][-]{subsection.5.3}{Backend Design \(Physical Implementation\)}{section.5}% 16
+\BOOKMARK [3][-]{subsubsection.5.3.1}{ASIC Backend \(Liao\): Genus Synthesis and Innovus P\046R}{subsection.5.3}% 17
+\BOOKMARK [3][-]{subsubsection.5.3.2}{FPGA Backend \(Zhang\): Synthesis and Implementation}{subsection.5.3}% 18
+\BOOKMARK [1][-]{section.6}{Design Optimizations}{}% 19
+\BOOKMARK [2][-]{subsection.6.1}{ASIC Optimization Journey \(Liao\)}{section.6}% 20
+\BOOKMARK [2][-]{subsection.6.2}{FPGA Optimization \(Zhang\)}{section.6}% 21
+\BOOKMARK [1][-]{section.7}{Engineering Standards}{}% 22
+\BOOKMARK [1][-]{section.8}{Testing / Verification}{}% 23
+\BOOKMARK [2][-]{subsection.8.1}{Verification Flow}{section.8}% 24
+\BOOKMARK [2][-]{subsection.8.2}{ASIC Verification \(Liao\): Three-Tier + SDF Signoff}{section.8}% 25
+\BOOKMARK [2][-]{subsection.8.3}{FPGA Verification \(Zhang\): Simulation and On-Board}{section.8}% 26
+\BOOKMARK [1][-]{section.9}{Ethical Considerations}{}% 27
+\BOOKMARK [1][-]{section.10}{Conclusions}{}% 28

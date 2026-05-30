@@ -1,0 +1,77 @@
+\section{Response to Midterm Feedback}
+
+\subsection{Grayscale Input Reduction}
+
+The suggestion to reduce the input from RGB to grayscale is noted. While converting the input from 3-channel RGB to single-channel grayscale would reduce the weight count of the first convolutional layer by a factor of 3, the practical impact on the overall model size is negligible. The first layer (Conv1, $3\times64\times3\times3$) contains only 1,728 weights, whereas the total model weight count is approximately 1,000,000. The reduction from 1,728 to 576 weights represents less than \textbf{0.1\%} of the total parameter budget, as shown in Table~\ref{tab:weight_dist}.
+
+\begin{table}[H]
+\centering
+\caption{Weight Distribution Across Major Layer Groups}
+\label{tab:weight_dist}
+\begin{tabular}{lrr}
+\toprule
+\textbf{Layer Group} & \textbf{Weight Count} & \textbf{Fraction} \\
+\midrule
+Conv1 (RGB, $3\times64\times3\times3$)     & 1,728   & 0.17\% \\
+Conv1 (GS, $1\times64\times3\times3$)      & 576     & 0.06\% \\
+All Bottleneck layers (L2--L46)            & $\sim$890,000 & $\sim$89\% \\
+Conv2 ($128\times512\times1\times1$)       & 65,536  & 6.5\%  \\
+linear1 ($512\times128\times1\times1$)     & 65,536  & 6.5\%  \\
+linear7 (GDConv $512\times7\times6$)       & 21,504  & 2.1\%  \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Furthermore, the existing model weights were trained on RGB face images. Switching to grayscale input would require \textbf{retraining the entire model} from scratch on a grayscale face dataset, as the learned weight distributions in Conv1 are specific to three-channel input statistics. Grayscale conversion also discards color information (skin tone, makeup, lighting cues) that may contribute to face verification accuracy. Given the minimal memory savings and the significant retraining cost, we conclude that grayscale reduction is not beneficial for this design.
+
+\subsection{Task Definition: Face Verification, Not Classification}
+
+MobileFaceNet performs \textbf{face verification} determining whether two face images belong to the same person, rather than face classification (assigning an identity label from a fixed set) or face detection (localizing a face region within an image).
+
+The model takes a pre-cropped, aligned face image as input and produces a \textbf{128-dimensional embedding vector}. Two images are considered to belong to the same person if the cosine similarity between their embeddings exceeds a threshold:
+\[
+  \text{same person} \iff
+  \frac{\mathbf{e}_1 \cdot \mathbf{e}_2}{\|\mathbf{e}_1\|\,\|\mathbf{e}_2\|} > \tau
+\]
+
+The model does not maintain an identity database or classify among a closed set of known persons. Instead, it maps any face image into a metric space where intra-person distances are small and inter-person distances are large.
+
+In our evaluation, the INT16 Q10 model achieves an intra-person similarity average of 0.5270 and an inter-person average of 0.0783, yielding a separability gap of \textbf{+0.4487}, which confirms the embedding space is well-structured for reliable verification.
+
+\subsection{Hardware Verification}
+
+We have implemented and verified the complete RTL at two levels: \textbf{layer-level} verification against the fixed-point C-model golden reference, and \textbf{end-to-end} embedding verification on real face images shown in Section~\ref{sec:verify}.
+
+\paragraph{Verified Modules.}
+The following RTL modules have been individually exercised through the top-level simulation:
+
+\begin{table}[H]
+\centering
+\caption{Hardware Modules and Verification Status}
+\label{tab:hw_verify}
+\begin{tabular}{lll}
+\toprule
+\textbf{Module} & \textbf{Function} & \textbf{Status} \\
+\midrule
+\texttt{mfn\_controller}      & Main FSM, nested loop scheduling     & \checkmark\ Verified \\
+\texttt{mfn\_addr\_gen}       & HWC address generation, ping-pong    & \checkmark\ Verified \\
+\texttt{mfn\_sliding\_window} & 3$\times$3 pixel buffer, zero-pad    & \checkmark\ Verified \\
+\texttt{mfn\_mac\_array}      & 9-lane 16-bit parallel MAC           & \checkmark\ Verified \\
+\texttt{mfn\_activation}      & Q20$\to$Q10, clamp, PReLU, residual  & \checkmark\ Verified \\
+\texttt{mfn\_layer\_config\_rom} & 64-bit config word decode          & \checkmark\ Verified \\
+\texttt{mfn\_frontend\_top}   & Full system integration (L0--L49)    & \checkmark\ Verified \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Layer-Level Results.}
+All 50 layers (L0--L49) were verified against C-model golden vectors.
+Every layer achieved \textbf{100.00\% exact match} with zero mean error
+and zero maximum error across all output pixels.
+
+\paragraph{End-to-End Results.}
+The RTL-generated 128-dimensional embeddings were compared against C-model embeddings for 13 face images (Dan, Elon, Trump, Wil). All images achieved \textbf{128/128 exact match} (MaxDiff = 0, MeanAbsErr = 0.0000), and the cosine similarity matrix was identical between RTL and C-model.
+
+\paragraph{Pending Verification.}
+Synthesis-level (gate-level) simulation and FPGA integration remain as
+future work, as described in the project roadmap (Section~\ref{sec:todo}).

@@ -1,0 +1,37 @@
+%% ============================================================================
+%% §7.3 FPGA Verification  --  FRIEND (Zhang)
+%% ============================================================================
+\subsection{FPGA Verification (Zhang): Simulation and On-Board}
+\label{sec:verify:fpga}
+
+% TODO friend: replace placeholder.
+% Suggested coverage:
+%   - Vivado / Quartus simulator setup, testbench source (same C-model golden?)
+%   - RTL simulation results (50/50 layer MATCH? include table)
+%   - Post-synthesis simulation (functional vs timing)
+%   - On-board verification: how the host loads weights + image,
+%     how the FPGA reports the 128-d embedding, capture mechanism
+%     (ILA / AXI-Stream readback / UART), wall-clock for one
+%     inference, FPS measurement
+%   - Any divergence from the C-model (rounding, saturation differences)
+%   - Limitations / what was not covered
+
+\noindent\fbox{\parbox{\textwidth}{\itshape \textbf{Placeholder} --- Zhang's FPGA verification results go here. Should at minimum cover: simulator results (vs same C-model golden), on-board measurement methodology and result, and any deviations from the C-model.}}
+
+% Example skeleton:
+%
+% \paragraph{Simulation.}
+% Vivado simulator was run on the synthesised RTL against the C-model
+% golden hex vectors for all 50 layers. Result: ?/50 exact match.
+%
+% \paragraph{On-board measurement.}
+% The bitstream was loaded onto Zynq-? via JTAG. A host program (?)
+% transferred the 112$\times$96 input image via AXI-Stream DMA and
+% read back the 128-d embedding via AXI-Lite. Total wall-clock time
+% per inference: ?\,ms (= ? FPS). Embedding cosine similarity vs
+% C-model: ?.
+%
+% \paragraph{Limitations.}
+% \begin{itemize}
+%   \item ...
+% \end{itemize}

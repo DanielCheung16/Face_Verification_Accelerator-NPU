@@ -1,0 +1,13 @@
+%% ============================================================================
+%% §2 Broader Considerations  --  joint
+%% ============================================================================
+\section{Broader Considerations}
+\label{sec:broader}
+
+Face verification is one of the most widely deployed biometric modalities, shipping in hundreds of millions of units a year through smartphones, smart locks, doorbell cameras, point-of-sale terminals, and access gates. Almost all of those products use edge inference: the embedding network runs on the device, and only the 128-dimensional vector or a match decision leaves the chip. An accelerator that fits the sub-100\,mW envelope of a battery-powered device at real-time frame rates is a direct commercial fit for that segment.
+
+The clearest integration target is as a small NPU sub-system inside a larger SoC, sharing the host AXI bus and memory hierarchy. Concrete uses we considered were mobile face unlock with an always-on camera, smart doorbells and cameras that recognise locally instead of streaming to the cloud, badge-less building access running offline, and in-vehicle driver identification where cloud round-trip latency is unacceptable.
+
+Pushing face recognition to the edge has both privacy benefits and risks. On the positive side, raw images and templates never leave the device, so there is no centralised database for attackers or governments to compel. On the negative side, the same drop in cost and power makes mass deployment in surveillance contexts much easier; the same chip that unlocks a private user's phone can identify a stranger on a public street. The technology is dual-use, and deployment policy decides which outcome dominates. Specific safeguards are in Section~\ref{sec:ethics}.
+
+Several legal frameworks already constrain how this kind of accelerator can be productised. Face data is special-category personal data under EU GDPR Article~9, with similar provisions in California's CCPA and other jurisdictions. The EU AI Act (Articles 5 and 6) classifies real-time remote biometric identification in public spaces as either prohibited or high-risk depending on context. A commercial product built on this accelerator therefore needs consent capture, purpose limitation, on-device template storage, and a documented opt-out path. These obligations shape the chip interface in concrete ways: only the 128-d embedding is exposed off-die, the raw image stays inside, and in a production SoC the embedding storage would sit inside a hardware-isolated enclave.

@@ -1,0 +1,32 @@
+%% ============================================================================
+%% §8 Ethical Considerations  --  joint
+%% ============================================================================
+\section{Ethical Considerations}
+\label{sec:ethics}
+
+Face recognition is a sensitive application, and an accelerator that lowers its power and cost is not neutral. Three concerns shape what we built and what we left out: who can be identified, whether the system performs equally across people, and what happens to the biometric data.
+
+Table~\ref{tab:abuse} lists the abuse vectors we considered when choosing the interface. We expose only the 128-d embedding and a match/no-match decision; the raw image is never readable through the chip's pins. That decision rules out the cheapest forms of mass surveillance (you cannot screenshot people from this hardware) but does not prevent a system integrator from logging the embeddings themselves. The hardware can only constrain the worst options; deployment policy decides the rest.
+
+\begin{table}[H]
+\centering
+\caption{Abuse Vectors and Mitigations}
+\label{tab:abuse}
+\begin{tabularx}{\textwidth}{l X X}
+\toprule
+\textbf{Vector} & \textbf{Risk} & \textbf{Mitigation} \\
+\midrule
+Mass surveillance & Cheap edge inference makes installation in public spaces economically trivial. & Hardware cannot self-mitigate. EU AI Act prohibits real-time remote biometric identification in most public contexts. \\
+Coercive unlock & A phone unlocked by face can be opened by pointing it at the owner. & Out of scope; addressed by the OS via liveness detection. \\
+Template leak & Embedding vectors are permanent; unlike passwords they cannot be revoked once exposed. & Embedding-only output; templates stored in a hardware-isolated enclave in a production SoC. \\
+Presentation attack & A photo, mask, or deepfake can fool an embedding-only pipeline. & Requires a separate liveness stage; this accelerator does not address spoofing. \\
+Model substitution & Replacing the bitstream or netlist could bias the accelerator toward specific identities. & Weights loaded from a signed image in OTP or secure flash. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Demographic bias is a known property of face-recognition networks. NIST FRVT 2019 and Buolamwini and Gebru's 2018 audit both found higher error rates on darker-skinned and female subjects, and quantising to INT16 Q10 does not remove that bias because it is in the trained weights. A deployment built on this accelerator should measure per-demographic error rates on its actual user population, tune the verification threshold to that population, and always offer a non-biometric fallback authentication path.
+
+Privacy compliance is a system-level requirement, not a chip-level one. GDPR Article~9 treats biometric data as special-category personal data, and CCPA has similar provisions. Exposing only the embedding helps but does not satisfy these regulations on its own. The integrator still needs consent capture, purpose limitation, template storage controls, and a documented opt-out path. We treat the chip as necessary but not sufficient.
+
+Putting these together, the deployment patterns we consider acceptable are verification (am I who I claim to be?) rather than identification (who is this stranger?), with user-controlled enrolment, on-device template storage, and an audit trail the user can inspect. Anything broader requires regulatory review that is outside the scope of a hardware project.

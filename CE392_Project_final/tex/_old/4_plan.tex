@@ -1,0 +1,34 @@
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{TODO \& Future Work}
+\label{sec:todo}
+%% ─────────────────────────────────────────────────────────────────────────────
+ 
+\begin{table}[H]
+\centering
+\caption{Project Roadmap}
+\begin{tabularx}{\textwidth}{llX}
+\toprule
+\textbf{Priority} & \textbf{Phase} & \textbf{Task} \\
+\midrule
+\textcolor{red}{\textbf{Now}}      & Synthesis          & Run Design Compiler; check timing report at 100~MHz \\
+\textcolor{red}{\textbf{Now}}      & Synthesis          & Fix critical path: addr\_gen 2-stage pipeline + activation PReLU register \\
+\textcolor{orange}{\textbf{Near}} & System Integration & Replace Weight ROM $\rightarrow$ SRAM + AXI-Lite write interface \\
+\textcolor{orange}{\textbf{Near}} & System Integration & AXI-Stream DMA interface for feature map I/O \\
+\textcolor{orange}{\textbf{Near}} & Verification       & FPGA integration on Zynq \\
+\textcolor{blue}{\textbf{Mid}}    & Datapath Upgrade   & Replace $1\times1$ PW datapath with Systolic Array \\
+\textcolor{blue}{\textbf{Long}}   & Backend            & Innovus ASIC backend flow (floorplan $\rightarrow$ routing $\rightarrow$ GDSII) \\
+\bottomrule
+\end{tabularx}
+\end{table}
+ 
+\subsection{Synthesis Critical Paths}
+ 
+Three predicted critical paths in the current RTL:
+\begin{enumerate}[nosep]
+  \item \textbf{addr\_gen}: Two sequential multiplications (\texttt{y$\times$W+x},
+        then \texttt{$\times$C+c}) in one cycle $\rightarrow$ split into 2-stage pipeline.
+  \item \textbf{mfn\_activation}: PReLU multiplier between two combinational
+        stages $\rightarrow$ insert pipeline register after multiplier.
+  \item \textbf{mfn\_controller}: Large FSM combinational block
+        $\rightarrow$ register outputs.
+\end{enumerate}

@@ -1,0 +1,45 @@
+%% ============================================================================
+%% §4.2.2 FPGA Frontend Design  --  Zhang
+%% Initial content drafted from midterm §8 (closed-loop conv1x1 SA prototype).
+%% Friend: please update with the final, multi-operator version actually
+%%         brought up on Zynq, the on-board top-level, and any AXI bring-up
+%%         changes.  TODOs are flagged inline.
+%% ============================================================================
+\subsubsection{FPGA Frontend (Zhang)}
+\label{sec:hw:frontend:fpga}
+
+The FPGA path implements the same MobileFaceNet workload using a distinct microarchitecture suited to LUT/BRAM/DSP resources on Zynq. The design is organised as a closed-loop accelerator: global SRAM buffers feed a switchable layer device, whose outputs are routed through a shared post-process unit and a write-back path that returns activations to SRAM for the next layer.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.95\textwidth]{Fig/old/systolic_arr_block_diagram.png}
+  \caption[FPGA accelerator block diagram.]{System-level architecture of the closed-loop FPGA systolic-array accelerator.}
+  \label{fig:fpga_block}
+\end{figure}
+
+The major sub-blocks visible in Figure~\ref{fig:fpga_block} are:
+
+\begin{enumerate}[nosep]
+\item \textbf{A/O SRAM}: stores input activations and the intermediate/final layer outputs.
+\item \textbf{Weight SRAM}: stores quantised weights for all supported layers.
+\item \textbf{Switcher}: selects the active layer device and routes SRAM read/write channels.
+\item \textbf{Layer device}: contains the systolic-array datapath for the operator currently being executed (preload, SA compute, residual read, tile-level control).
+\item \textbf{Post-process}: converts the wide partial sums to 8-bit activations and applies bias, requantisation, residual add, and PReLU as required.
+\item \textbf{Write-back buffer / controller}: packs processed outputs into SRAM words and generates the next-layer write addresses.
+\end{enumerate}
+
+The system was first brought up with a \texttt{conv1$\times$1} layer device, which exercises every shared resource (switcher, post-process, write-back path) end to end. The decoupled interface means subsequent layer devices (depthwise, $3\times3$ standard convolution) can reuse the switcher, post-process, and write-back path without modification.
+% TODO friend: confirm which layer devices are present in the final
+%              bitstream and describe how they coexist behind the
+%              switcher (parallel instantiation vs. time-multiplexed).
+
+\paragraph{Compute datapath.} The layer device's SA performs $1\times1$ pointwise multiplications with a tile-granular preload + compute schedule.
+% TODO friend: state SA dimensions (rows $\times$ cols), data widths,
+%              dataflow (weight/output/row-stationary), and DSP usage.
+
+\paragraph{Memory subsystem.}
+% TODO friend: BRAM / URAM / distributed RAM split, depth, ports.
+
+\paragraph{Host interface.}
+% TODO friend: AXI-Lite for control registers, AXI-Stream / DMA for
+%              image+embedding streaming, interrupt sources.

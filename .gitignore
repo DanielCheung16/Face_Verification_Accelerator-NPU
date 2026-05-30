@@ -34,6 +34,16 @@ hardware/frontend/sim2/hex/*.hex
 hardware/frontend/sim3/xcelium.d/
 hardware/frontend/sim3/xcelium_gl.d/
 hardware/frontend/sim3/xcelium_pnr.d/
+hardware/frontend/sim3/xcelium_gl_sdf.d/
+hardware/frontend/sim3/xcelium_gl_sdf_debug.d/
+hardware/frontend/sim3/xcelium_pnr_sdf.d/
+hardware/frontend/sim3/xcelium_pnr_sdf_debug.d/
+hardware/frontend/sim3/gl_sdf.cmd
+hardware/frontend/sim3/pnr_sdf.cmd
+hardware/frontend/sim3/*_sdf_annotate.log
+hardware/frontend/sim3/*.sdf.X
+hardware/frontend/sim3/layer_hex_gl_sdf_v3/*.hex
+hardware/frontend/sim3/layer_hex_pnr_sdf_v3/*.hex
 hardware/frontend/sim3/xcelium_gl_debug.d/
 hardware/frontend/sim3/xcelium_pnr_debug.d/
 hardware/frontend/sim3/xcelium_top_debug.d/

@@ -1,0 +1,14 @@
+%% ─────────────────────────────────────────────────────────────────────────────
+\section{Deliverables}
+%% ─────────────────────────────────────────────────────────────────────────────
+ 
+\begin{itemize}[nosep]
+  \item Top-level architecture and block diagrams of the MobileFaceNet frontend accelerator
+  \item RTL design of the main accelerator modules, including convolution datapath, control FSM, address generator, and memory subsystem
+  \item Fixed-point C reference model and bit-level functional verification against PyTorch golden output
+  \item Simulation results with 100\% exact match across all 50 layers of MobileFaceNet ($112\times96$ input)
+  \item Synthesis results and timing analysis targeting 100~MHz (Design Compiler)
+  \item Runtime weight update support via writable weight SRAM and AXI-Lite interface
+  \item Final report and presentation
+\end{itemize}
+ 
