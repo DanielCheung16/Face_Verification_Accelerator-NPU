@@ -19,7 +19,15 @@
 #   make gl_debug   — syn-netlist version of top_debug (a few min)
 #   make pnr_debug  — post-route-netlist version of top_debug (a few min)
 #   make diff_debug — diff probe_rtl.log vs probe_gl.log / probe_pnr.log
-#   make clean      — Remove Xcelium artifacts
+#
+#   SDF-annotated runs (real cell delays + setup/hold timing checks):
+#   make gl_sdf         — full 50-layer GL sim with syn SDF (prereq: syn.sdf)
+#   make gl_sdf_debug   — probe version of gl_sdf (~10 min)
+#   make pnr_sdf        — full 50-layer GL sim with POST-ROUTE SDF
+#   make pnr_sdf_debug  — probe version of pnr_sdf (~10 min) — best CP-value
+#   make diff_gl_sdf    — diff layer_hex_gl_sdf_v3/  vs RTL
+#   make diff_pnr_sdf   — diff layer_hex_pnr_sdf_v3/ vs RTL
+#   make clean          — Remove Xcelium artifacts
 # ============================================================
 
 SV3_DIR := ../sv3
@@ -71,8 +79,19 @@ GL_TB        := mfn_frontend_top_v3_gl_tb.sv
 
 DEBUG_PROBE  := mfn_v3_debug_probe.sv
 
+# ── SDF-annotated GL flow ───────────────────────────────────────────────────
+# SDF flags drop +notimingchecks so setup/hold timing checks DO fire when the
+# SDF supplies real cell delays.  This is the "post-route timing-aware" sim
+# (proper signoff flavour), as opposed to functional GL which is only
+# functional equivalence with zero-delay cells.
+SDF_FLAGS    := $(XFLAGS)
+SYN_SDF      := ../syn/mfn_frontend_top_v3_syn.sdf
+PNR_SDF      := ../../backend/mfn_frontend_top_v3_final.sdf
+
 .PHONY: sa_test hex top top_gui diff gl gl_gui diff_gl pnr pnr_gui diff_pnr \
-        top_debug gl_debug pnr_debug diff_debug clean
+        top_debug gl_debug pnr_debug diff_debug \
+        gl_sdf gl_sdf_debug diff_gl_sdf pnr_sdf pnr_sdf_debug diff_pnr_sdf \
+        clean
 
 hex/weights.hex:
 	@mkdir -p hex
@@ -197,10 +216,96 @@ diff_debug:
 	@echo "=== diff probe_rtl.log vs probe_pnr.log ==="
 	@test -f probe_pnr.log && (diff probe_rtl.log probe_pnr.log && echo "  PNR == RTL  ✓") || echo "  (probe_pnr.log not present — run 'make pnr_debug')"
 
+# ── SDF-annotated GL / PNR runs ─────────────────────────────────────────────
+# SDF gives the cells their real delays (post-synth or post-route).  Drop
+# +notimingchecks so setup/hold checks actually fire.  An sdf_cmd_file tells
+# xrun which SDF to load and into which hierarchy.
+#
+# Prereq for gl_sdf*: Genus must emit the syn SDF.  Add this line to
+# synthesis_v3.tcl right after write_hdl:
+#     write_sdf > mfn_frontend_top_v3_syn.sdf
+# pnr_sdf* uses the SDF Innovus already emits at end of P&R (write_sdf step
+# in run_innovus_3.tcl): hardware/backend/mfn_frontend_top_v3_final.sdf.
+gl_sdf.cmd:
+	@echo '  SDF_FILE = "$(SYN_SDF)",' > gl_sdf.cmd
+	@echo '  SCOPE = mfn_frontend_top_v3_gl_tb.dut,' >> gl_sdf.cmd
+	@echo '  LOG_FILE = "gl_sdf_annotate.log",' >> gl_sdf.cmd
+	@echo '  MTM_CONTROL = "TYPICAL",' >> gl_sdf.cmd
+	@echo '  SCALE_TYPE = "FROM_MTM",' >> gl_sdf.cmd
+	@echo '  SCALE_FACTORS = "1.0:1.0:1.0";' >> gl_sdf.cmd
+
+pnr_sdf.cmd:
+	@echo '  SDF_FILE = "$(PNR_SDF)",' > pnr_sdf.cmd
+	@echo '  SCOPE = mfn_frontend_top_v3_gl_tb.dut,' >> pnr_sdf.cmd
+	@echo '  LOG_FILE = "pnr_sdf_annotate.log",' >> pnr_sdf.cmd
+	@echo '  MTM_CONTROL = "TYPICAL",' >> pnr_sdf.cmd
+	@echo '  SCALE_TYPE = "FROM_MTM",' >> pnr_sdf.cmd
+	@echo '  SCALE_FACTORS = "1.0:1.0:1.0";' >> pnr_sdf.cmd
+
+# ── SDF-annotated Genus syn netlist runs ────────────────────────────────────
+gl_sdf: hex/weights.hex $(SYN_STRIPPED) gl_sdf.cmd
+	@test -f $(SYN_SDF) || (echo "ERROR: $(SYN_SDF) missing — add 'write_sdf > mfn_frontend_top_v3_syn.sdf' to synthesis_v3.tcl and re-synth"; exit 1)
+	@mkdir -p layer_hex_gl_sdf_v3
+	source $(ENV_FILE); xrun $(SDF_FLAGS) $(GL_TOP) -xmlibdirname xcelium_gl_sdf.d \
+	    -sdf_cmd_file gl_sdf.cmd \
+	    $(STDCELL_V) $(BEH_OVRD) $(ACT_SRAM) $(SYN_STRIPPED) $(GL_TB) \
+	    +dumpdir=layer_hex_gl_sdf_v3 |& tee xrun_gl_sdf.log
+
+gl_sdf_debug: hex/weights.hex $(SYN_STRIPPED) gl_sdf.cmd
+	@test -f $(SYN_SDF) || (echo "ERROR: $(SYN_SDF) missing — add 'write_sdf > mfn_frontend_top_v3_syn.sdf' to synthesis_v3.tcl and re-synth"; exit 1)
+	@mkdir -p layer_hex_gl_sdf_v3
+	source $(ENV_FILE); xrun $(SDF_FLAGS) $(GL_TOP) +define+GL_NETLIST \
+	    -xmlibdirname xcelium_gl_sdf_debug.d \
+	    -sdf_cmd_file gl_sdf.cmd \
+	    $(STDCELL_V) $(BEH_OVRD) $(ACT_SRAM) $(DEBUG_PROBE) $(SYN_STRIPPED) $(GL_TB) \
+	    +dumpdir=layer_hex_gl_sdf_v3 |& tee xrun_gl_sdf_debug.log
+	@grep '^PROBE' xrun_gl_sdf_debug.log > probe_gl_sdf.log
+	@wc -l probe_gl_sdf.log
+
+diff_gl_sdf:
+	@echo "=== Comparing GL-SDF layer_hex_gl_sdf_v3/ vs RTL layer_hex_v3/ ==="
+	@python3 -c "\
+import subprocess; \
+r = [subprocess.call(['diff','-q','layer_hex_gl_sdf_v3/rtl_out_layer%d.hex'%i,'layer_hex_v3/rtl_out_layer%d.hex'%i],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL) for i in range(50)]; \
+[print('  Layer %d: %s'%(i,'MATCH' if x==0 else 'MISMATCH <<<')) for i,x in enumerate(r)]; \
+print('All 50 layers MATCH (GL-SDF == RTL)' if all(x==0 for x in r) else 'MISMATCH found')"
+
+# ── SDF-annotated Innovus post-route netlist runs ───────────────────────────
+pnr_sdf: hex/weights.hex $(PNR_STRIPPED) pnr_sdf.cmd
+	@test -f $(PNR_SDF) || (echo "ERROR: $(PNR_SDF) missing — re-run run_innovus_3.tcl"; exit 1)
+	@mkdir -p layer_hex_pnr_sdf_v3
+	source $(ENV_FILE); xrun $(SDF_FLAGS) $(GL_TOP) -xmlibdirname xcelium_pnr_sdf.d \
+	    -sdf_cmd_file pnr_sdf.cmd \
+	    $(STDCELL_V) $(BEH_OVRD) $(ACT_SRAM) $(PNR_STRIPPED) $(GL_TB) \
+	    +dumpdir=layer_hex_pnr_sdf_v3 |& tee xrun_pnr_sdf.log
+
+pnr_sdf_debug: hex/weights.hex $(PNR_STRIPPED) pnr_sdf.cmd
+	@test -f $(PNR_SDF) || (echo "ERROR: $(PNR_SDF) missing — re-run run_innovus_3.tcl"; exit 1)
+	@mkdir -p layer_hex_pnr_sdf_v3
+	source $(ENV_FILE); xrun $(SDF_FLAGS) $(GL_TOP) +define+GL_NETLIST \
+	    -xmlibdirname xcelium_pnr_sdf_debug.d \
+	    -sdf_cmd_file pnr_sdf.cmd \
+	    $(STDCELL_V) $(BEH_OVRD) $(ACT_SRAM) $(DEBUG_PROBE) $(PNR_STRIPPED) $(GL_TB) \
+	    +dumpdir=layer_hex_pnr_sdf_v3 |& tee xrun_pnr_sdf_debug.log
+	@grep '^PROBE' xrun_pnr_sdf_debug.log > probe_pnr_sdf.log
+	@wc -l probe_pnr_sdf.log
+
+diff_pnr_sdf:
+	@echo "=== Comparing PNR-SDF layer_hex_pnr_sdf_v3/ vs RTL layer_hex_v3/ ==="
+	@python3 -c "\
+import subprocess; \
+r = [subprocess.call(['diff','-q','layer_hex_pnr_sdf_v3/rtl_out_layer%d.hex'%i,'layer_hex_v3/rtl_out_layer%d.hex'%i],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL) for i in range(50)]; \
+[print('  Layer %d: %s'%(i,'MATCH' if x==0 else 'MISMATCH <<<')) for i,x in enumerate(r)]; \
+print('All 50 layers MATCH (PNR-SDF == RTL)' if all(x==0 for x in r) else 'MISMATCH found')"
+
 clean:
 	rm -rf xcelium.d xcelium_gl.d xcelium_pnr.d \
-	       xcelium_top_debug.d xcelium_gl_debug.d xcelium_pnr_debug.d INCA_libs \
+	       xcelium_top_debug.d xcelium_gl_debug.d xcelium_pnr_debug.d \
+	       xcelium_gl_sdf.d xcelium_gl_sdf_debug.d \
+	       xcelium_pnr_sdf.d xcelium_pnr_sdf_debug.d INCA_libs \
 	       xrun.log xrun.history xrun_*.log probe_*.log waves.shm *.key \
+	       gl_sdf.cmd pnr_sdf.cmd *_sdf_annotate.log \
 	       layer_hex_v3/ layer_hex_gl_v3/ layer_hex_pnr_v3/ \
+	       layer_hex_gl_sdf_v3/ layer_hex_pnr_sdf_v3/ \
 	       $(SYN_STRIPPED) $(PNR_STRIPPED)
 	@echo "Cleaned."

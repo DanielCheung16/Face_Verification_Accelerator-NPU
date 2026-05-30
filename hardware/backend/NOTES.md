@@ -745,7 +745,7 @@ RTL 跟 SDC 都不動，只把 floorplan 從 800×700 縮成 **720×720**（act_
 5. 4.75 ns 再 push（210 MHz）：720 已 +0.089 ns，再緊可能 fail
 6. **Stage 3.5**（per-PE product reg）→ 280 MHz 理論值，是真正的下一階段，但屬深 pipeline 工程
 
-### Post-route netlist 功能驗證（2026-05-21）
+### Post-route netlist 功能驗證（2026-05-21 ~ 2026-05-25）
 
 用 bind-based probe（`sim3/mfn_v3_debug_probe.sv`，詳見 frontend note §36）對
 **post-route netlist** `mfn_frontend_top_v3_final_nophy.v` 做 gate-level 功能比對：
@@ -755,10 +755,30 @@ make pnr_debug   # probe bind 到 post-route netlist，~3-5 min
 make diff_debug  # 比 RTL probe
 ```
 
-結果：`SA_IN` / `WE` / `VO` 全部 **bit-exact 一致** RTL == post-route netlist。
+結果：
+
+| 驗證範圍 | 工具 | 結果 |
+|---------|------|------|
+| RTL vs syn netlist（probe，layer 0）| `gl_debug`/`diff_debug` | `SA_IN`/`WE`/`VO` bit-exact ✓ |
+| RTL vs post-route netlist（probe，layer 0）| `pnr_debug`/`diff_debug` | `SA_IN`/`WE`/`VO` bit-exact ✓ |
+| **RTL vs syn netlist（全 50 層）** | **`make gl`/`diff_gl`** | **All 50 layers MATCH ✓** |
+| **RTL vs post-route netlist（全 50 層）** | **`make pnr`/`diff_pnr`** | **All 50 layers MATCH ✓** |
+
 → Innovus P&R（200 MHz / 720×720）**功能正確**，跟 RTL / synth netlist 三鏈等價。
+**syn 跟 post-route 兩個 netlist 都完整 50/50 MATCH** —— 全 50 層 inference output
+bit-exact 一致 RTL，等同業界 signoff 規格。
 
 註：早期 GL sim「50 層 mismatch」是 testbench race bug（TB 用 clocked 邏輯驅動
 DUT input、race DUT output `x_out` 的 port 傳遞），**非 P&R 問題**。修法是 TB 的
-`pixel_in` 改 negedge 驅動。full 50-layer GL sim 因 server wall-clock limit
-（GL ~50 cps → 76 h）不可行，改用 probe-based 部分驗證。詳見 frontend note §36。
+`pixel_in` 改 negedge 驅動。詳見 frontend note §36。
+
+GL sim 在本 server ~50 cps 平均，但層分布極不均（layer 0–2 各 5–6 h、後段
+30 min–幾分鐘）。實測 wall-clock：
+
+| Netlist | Layer 0 dump | Layer 49 dump | wall-clock |
+|---------|--------------|---------------|------------|
+| Genus syn | 2026-05-21 23:09 | 2026-05-25 05:34 | **~78 h** |
+| Innovus post-route | 2026-05-22 14:08 | 2026-05-26 02:03 | **~84 h** |
+
+post-route 略慢，多了 filler / hold-buffer / CTS cells。早期一次嘗試被 SIGTERM
+砍在 layer 1；分段續跑（hex 已 dump 的 layer 不再重算）累積完成全 50 層。
