@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.14159265-2.6-1.40.19 (TeX Live 2018) (preloaded format=pdflatex 2026.3.9)  30 MAY 2026 12:47
+This is pdfTeX, Version 3.14159265-2.6-1.40.19 (TeX Live 2018) (preloaded format=pdflatex 2026.3.9)  2 JUN 2026 10:44
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -884,7 +884,7 @@ ntenna
  []
 
 ) (./tex/01_intro.tex
-<Fig/old/mobile_face_net_visualize.png, id=235, 568.1225pt x 294.09875pt>
+<Fig/old/mobile_face_net_visualize.png, id=237, 568.1225pt x 294.09875pt>
 File: Fig/old/mobile_face_net_visualize.png Graphic file (type png)
 <use Fig/old/mobile_face_net_visualize.png>
 Package pdftex.def Info: Fig/old/mobile_face_net_visualize.png  used on input l
@@ -1032,7 +1032,7 @@ input line 42. on input line 42.
 Package pdftex.def Info: Requested size: 95.60344pt x 95.60106pt on input line 
 42.
 [6]) (./tex/04_2_2_fpga_frontend.tex
-<Fig/old/systolic_arr_block_diagram.png, id=304, 499.8675pt x 288.07625pt>
+<Fig/old/systolic_arr_block_diagram.png, id=306, 499.8675pt x 288.07625pt>
 File: Fig/old/systolic_arr_block_diagram.png Graphic file (type png)
 <use Fig/old/systolic_arr_block_diagram.png>
 Package pdftex.def Info: Fig/old/systolic_arr_block_diagram.png  used on input 
@@ -1066,14 +1066,14 @@ input line 8. on input line 8.
 Package pdftex.def Info: Requested size: 95.60344pt x 95.60106pt on input line 
 8.
 [8 <./Fig/old/systolic_arr_block_diagram.png>]
-<Fig/mfn_v3_pr.png, id=330, 694.595pt x 690.58pt>
+<Fig/mfn_v3_pr.png, id=332, 694.595pt x 690.58pt>
 File: Fig/mfn_v3_pr.png Graphic file (type png)
 <use Fig/mfn_v3_pr.png>
 Package pdftex.def Info: Fig/mfn_v3_pr.png  used on input line 57. on input lin
 e 57.
 Package pdftex.def Info: Requested size: 231.29816pt x 229.95743pt on input lin
 e 57.
-<Fig/mfn_v3_pr_part.png, id=331, 695.59875pt x 683.55376pt>
+<Fig/mfn_v3_pr_part.png, id=333, 695.59875pt x 683.55376pt>
 File: Fig/mfn_v3_pr_part.png Graphic file (type png)
 <use Fig/mfn_v3_pr_part.png>
 Package pdftex.def Info: Fig/mfn_v3_pr_part.png  used on input line 64. on inpu
@@ -1094,14 +1094,14 @@ input line 71. on input line 71.
 Package pdftex.def Info: Requested size: 95.60344pt x 95.60106pt on input line 
 71.
 [9]
-<Fig/mfn_v3_pr_postCTS.png, id=337, 568.1225pt x 640.3925pt>
+<Fig/mfn_v3_pr_postCTS.png, id=339, 568.1225pt x 640.3925pt>
 File: Fig/mfn_v3_pr_postCTS.png Graphic file (type png)
 <use Fig/mfn_v3_pr_postCTS.png>
 Package pdftex.def Info: Fig/mfn_v3_pr_postCTS.png  used on input line 78. on i
 nput line 78.
 Package pdftex.def Info: Requested size: 385.50183pt x 434.55238pt on input lin
 e 78.
-<Fig/mfn_v3_pr_clocks_tree.png, id=338, 1573.88pt x 434.62375pt>
+<Fig/mfn_v3_pr_clocks_tree.png, id=340, 1573.88pt x 434.62375pt>
 File: Fig/mfn_v3_pr_clocks_tree.png Graphic file (type png)
 <use Fig/mfn_v3_pr_clocks_tree.png>
 Package pdftex.def Info: Fig/mfn_v3_pr_clocks_tree.png  used on input line 84. 
@@ -1135,35 +1135,35 @@ input line 105. on input line 105.
 Package pdftex.def Info: Requested size: 95.60344pt x 95.60106pt on input line 
 105.
 [11 <./Fig/mfn_v3_pr_postCTS.png> <./Fig/mfn_v3_pr_clocks_tree.png>]
-<Fig/mfn_v3_pr_timing.png, id=358, 655.44875pt x 434.62375pt>
+<Fig/mfn_v3_pr_timing.png, id=360, 655.44875pt x 434.62375pt>
 File: Fig/mfn_v3_pr_timing.png Graphic file (type png)
 <use Fig/mfn_v3_pr_timing.png>
 Package pdftex.def Info: Fig/mfn_v3_pr_timing.png  used on input line 113. on i
 nput line 113.
 Package pdftex.def Info: Requested size: 231.29816pt x 153.374pt on input line 
 113.
-<Fig/mfn_v3_pr_clocks.png, id=359, 711.65875pt x 312.16624pt>
+<Fig/mfn_v3_pr_clocks.png, id=361, 711.65875pt x 312.16624pt>
 File: Fig/mfn_v3_pr_clocks.png Graphic file (type png)
 <use Fig/mfn_v3_pr_clocks.png>
 Package pdftex.def Info: Fig/mfn_v3_pr_clocks.png  used on input line 120. on i
 nput line 120.
 Package pdftex.def Info: Requested size: 231.29816pt x 101.45758pt on input lin
 e 120.
-<Fig/mfn_v3_pr_opstRoute.png, id=360, 587.19376pt x 622.325pt>
+<Fig/mfn_v3_pr_opstRoute.png, id=362, 587.19376pt x 622.325pt>
 File: Fig/mfn_v3_pr_opstRoute.png Graphic file (type png)
 <use Fig/mfn_v3_pr_opstRoute.png>
 Package pdftex.def Info: Fig/mfn_v3_pr_opstRoute.png  used on input line 132. o
 n input line 132.
 Package pdftex.def Info: Requested size: 231.29816pt x 245.13672pt on input lin
 e 132.
-<Fig/mfn_v3_pr_area.png, id=361, 413.545pt x 242.9075pt>
+<Fig/mfn_v3_pr_area.png, id=363, 413.545pt x 242.9075pt>
 File: Fig/mfn_v3_pr_area.png Graphic file (type png)
 <use Fig/mfn_v3_pr_area.png>
 Package pdftex.def Info: Fig/mfn_v3_pr_area.png  used on input line 139. on inp
 ut line 139.
 Package pdftex.def Info: Requested size: 231.29816pt x 135.86047pt on input lin
 e 139.
-<Fig/mfn_v3_pr_power.png, id=362, 498.86375pt x 130.4875pt>
+<Fig/mfn_v3_pr_power.png, id=364, 498.86375pt x 130.4875pt>
 File: Fig/mfn_v3_pr_power.png Graphic file (type png)
 <use Fig/mfn_v3_pr_power.png>
 Package pdftex.def Info: Fig/mfn_v3_pr_power.png  used on input line 149. on in
@@ -1191,14 +1191,14 @@ Overfull \hbox (6.79999pt too wide) in paragraph at lines 19--20
  []
 
 ))) (./tex/05_optimization.tex
-<Fig/mfn_v1_pr.png, id=375, 696.6025pt x 678.535pt>
+<Fig/mfn_v1_pr.png, id=377, 696.6025pt x 678.535pt>
 File: Fig/mfn_v1_pr.png Graphic file (type png)
 <use Fig/mfn_v1_pr.png>
 Package pdftex.def Info: Fig/mfn_v1_pr.png  used on input line 16. on input lin
 e 16.
 Package pdftex.def Info: Requested size: 149.3802pt x 145.4991pt on input line 
 16.
-<Fig/mfn_v2_pr.png, id=376, 737.75626pt x 668.4975pt>
+<Fig/mfn_v2_pr.png, id=378, 737.75626pt x 668.4975pt>
 File: Fig/mfn_v2_pr.png Graphic file (type png)
 <use Fig/mfn_v2_pr.png>
 Package pdftex.def Info: Fig/mfn_v2_pr.png  used on input line 23. on input lin
@@ -1211,7 +1211,7 @@ Package pdftex.def Info: Fig/mfn_v3_pr.png  used on input line 30. on input lin
 e 30.
 Package pdftex.def Info: Requested size: 149.3802pt x 148.51395pt on input line
  30.
-<Fig/mfn_v2_pr_part.png, id=377, 740.7675pt x 671.50874pt>
+<Fig/mfn_v2_pr_part.png, id=379, 740.7675pt x 671.50874pt>
 File: Fig/mfn_v2_pr_part.png Graphic file (type png)
 <use Fig/mfn_v2_pr_part.png>
 Package pdftex.def Info: Fig/mfn_v2_pr_part.png  used on input line 42. on inpu
@@ -1343,34 +1343,48 @@ Package pdftex.def Info: Fig/old/Northwestern_University_seal.svg.png  used on
 input line 4. on input line 4.
 Package pdftex.def Info: Requested size: 95.60344pt x 95.60106pt on input line 
 4.
-[16]) (./tex/07_3_fpga_verify.tex
+[16]
+
+Package Fancyhdr Warning: \headheight is too small (12.0pt): 
+ Make it at least 13.59999pt.
+ We now make it that large for the rest of the document.
+ This may cause the page layout to be inconsistent, however.
+
+File: Fig/old/Northwestern_University_seal.svg.png Graphic file (type png)
+<use Fig/old/Northwestern_University_seal.svg.png>
+Package pdftex.def Info: Fig/old/Northwestern_University_seal.svg.png  used on 
+input line 49. on input line 49.
+Package pdftex.def Info: Requested size: 95.60344pt x 95.60106pt on input line 
+49.
+[17]) (./tex/07_3_fpga_verify.tex
 Overfull \hbox (6.79999pt too wide) in paragraph at lines 19--20
 [] 
  []
 
 )) (./tex/08_ethical.tex
-
-Package Fancyhdr Warning: \headheight is too small (12.0pt): 
- Make it at least 13.59999pt.
- We now make it that large for the rest of the document.
- This may cause the page layout to be inconsistent, however.
-
-File: Fig/old/Northwestern_University_seal.svg.png Graphic file (type png)
-<use Fig/old/Northwestern_University_seal.svg.png>
-Package pdftex.def Info: Fig/old/Northwestern_University_seal.svg.png  used on 
-input line 8. on input line 8.
-Package pdftex.def Info: Requested size: 95.60344pt x 95.60106pt on input line 
-8.
-[17]
 Underfull \hbox (badness 1975) in paragraph at lines 25--25
 \OT1/cmr/m/n/10.95 this ac-cel-er-a-tor does not ad-dress
  []
 
 ) (./tex/09_conclusion.tex
+
+Package Fancyhdr Warning: \headheight is too small (12.0pt): 
+ Make it at least 13.59999pt.
+ We now make it that large for the rest of the document.
+ This may cause the page layout to be inconsistent, however.
+
+File: Fig/old/Northwestern_University_seal.svg.png Graphic file (type png)
+<use Fig/old/Northwestern_University_seal.svg.png>
+Package pdftex.def Info: Fig/old/Northwestern_University_seal.svg.png  used on 
+input line 4. on input line 4.
+Package pdftex.def Info: Requested size: 95.60344pt x 95.60106pt on input line 
+4.
+[18]
 Underfull \hbox (badness 10000) in alignment at lines 25--25
 [][][][][] 
  []
 
+) (./main.bbl
 
 Package Fancyhdr Warning: \headheight is too small (12.0pt): 
  Make it at least 13.59999pt.
@@ -1380,22 +1394,9 @@ Package Fancyhdr Warning: \headheight is too small (12.0pt):
 File: Fig/old/Northwestern_University_seal.svg.png Graphic file (type png)
 <use Fig/old/Northwestern_University_seal.svg.png>
 Package pdftex.def Info: Fig/old/Northwestern_University_seal.svg.png  used on 
-input line 27. on input line 27.
+input line 1. on input line 1.
 Package pdftex.def Info: Requested size: 95.60344pt x 95.60106pt on input line 
-27.
-[18]) (./main.bbl
-
-Package Fancyhdr Warning: \headheight is too small (12.0pt): 
- Make it at least 13.59999pt.
- We now make it that large for the rest of the document.
- This may cause the page layout to be inconsistent, however.
-
-File: Fig/old/Northwestern_University_seal.svg.png Graphic file (type png)
-<use Fig/old/Northwestern_University_seal.svg.png>
-Package pdftex.def Info: Fig/old/Northwestern_University_seal.svg.png  used on 
-input line 19. on input line 19.
-Package pdftex.def Info: Requested size: 95.60344pt x 95.60106pt on input line 
-19.
+1.
 [19])
 
 Package Fancyhdr Warning: \headheight is too small (12.0pt): 
@@ -1420,13 +1421,13 @@ Package rerunfilecheck Info: File `main.out' has not changed.
 Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 74.
  ) 
 Here is how much of TeX's memory you used:
- 19995 strings out of 494917
- 374996 string characters out of 6180700
- 458977 words of memory out of 5000000
- 22745 multiletter control sequences out of 15000+600000
+ 19997 strings out of 494917
+ 375028 string characters out of 6180700
+ 459053 words of memory out of 5000000
+ 22746 multiletter control sequences out of 15000+600000
  14704 words of font info for 57 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 57i,18n,67p,1023b,797s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 57i,18n,67p,1023b,722s stack positions out of 5000i,500n,10000p,200000b,80000s
 </usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></us
 r/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx12.pfb></usr/shar
 e/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmbxti10.pfb></usr/share/te
@@ -1442,10 +1443,10 @@ m/cmr8.pfb></usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10
 /usr/share/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmti12.pfb></usr/s
 hare/texlive/texmf-dist/fonts/type1/public/amsfonts/cm/cmtt10.pfb></usr/share/t
 exlive/texmf-dist/fonts/type1/public/amsfonts/symbols/msam10.pfb>
-Output written on main.pdf (23 pages, 2370912 bytes).
+Output written on main.pdf (23 pages, 2371696 bytes).
 PDF statistics:
- 513 PDF objects out of 1000 (max. 8388607)
- 437 compressed objects within 5 object streams
- 118 named destinations out of 1000 (max. 500000)
+ 516 PDF objects out of 1000 (max. 8388607)
+ 440 compressed objects within 5 object streams
+ 119 named destinations out of 1000 (max. 500000)
  312 words of extra memory for PDF output out of 10000 (max. 10000000)
 

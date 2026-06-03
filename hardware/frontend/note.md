@@ -2660,10 +2660,15 @@ inference 50 層 output bit-exact 一致）—— 等同業界 signoff 規格。
 
 ### 36.8 Full 50-layer GL/PNR sim 跑時間實測
 
-| Netlist | 起 layer 0 dump | 終 layer 49 dump | wall-clock |
-|---------|----------------|------------------|------------|
-| Genus syn (`mfn_frontend_top_v3_syn.v`) | 2026-05-21 23:09 | 2026-05-25 05:34 | **~78 h** |
-| Innovus post-route (`mfn_frontend_top_v3_final_nophy.v`) | 2026-05-22 14:08 | 2026-05-26 02:03 | **~84 h** |
+| Netlist | Delay model | 起 layer 0 dump | 終 layer 49 dump | wall-clock | vs GL |
+|---------|-------------|-----------------|------------------|------------|-------|
+| Genus syn (`mfn_frontend_top_v3_syn.v`) | zero-delay | 2026-05-21 23:09 | 2026-05-25 05:34 | **~78 h** | 1.00× |
+| Innovus post-route (`mfn_frontend_top_v3_final_nophy.v`) | zero-delay | 2026-05-22 14:08 | 2026-05-26 02:03 | **~84 h** | 1.08× |
+| Innovus post-route + SDF (`mfn_frontend_top_v3_final.sdf`, 117 MB) | SDF backannotated, all timing checks ON | 2026-05-26 14:00 | 2026-06-02 05:43 | **~163 h** (6 d 19 h) | **1.94×** |
+
+→ 三條全跑出 **50/50 layer MATCH vs RTL**，PNR-SDF 額外是 **0 setup/hold violation**。
+post-route SDF 比 zero-delay PNR 慢約 2×，吻合 SDF event 數 +50% × per-event cost
++30% 的理論預估。前 3 層（spatial 56×56）佔 SDF 總時間的 ~30%，是主要 bottleneck。
 
 post-route 略慢，合理 —— P&R 後 netlist 多了 filler / hold-fix buffer / clock-tree
 buffer 等 cells，閘級事件多。

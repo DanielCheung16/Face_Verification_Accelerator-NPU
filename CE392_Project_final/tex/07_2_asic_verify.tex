@@ -17,16 +17,33 @@ The ASIC path is verified at four progressively stricter levels; results are sum
 L1 & RTL                & zero-delay & 50 / 50 MATCH \\
 L2 & Genus syn netlist  & zero-delay & 50 / 50 MATCH \\
 L3 & Innovus post-route & zero-delay & 50 / 50 MATCH \\
-L4 & Innovus post-route & SDF annotated & 0 violations \\
+L4 & Innovus post-route & SDF annotated & 50 / 50 MATCH, 0 violations \\
 \midrule
 \multicolumn{4}{l}{End-to-end embedding (RTL, 13 face images): 128 / 128 exact, MaxDiff = 0} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-Levels~L1--L3 collectively establish that the design behaves identically at the RTL, synthesised, and post-route stages. A formal Logic Equivalence Checker (Conformal LEC, Formality) would normally produce this result in seconds; without one available we substitute a full 50-layer gate-level simulation against the C-model golden hex vectors. The trade-off is wall-clock time. The zero-delay post-route run takes about 84\,h, with roughly half of that spent on layers 0--2 alone because of their high spatial resolution.
+Levels~L1--L3 collectively establish that the design behaves identically at the RTL, synthesised, and post-route stages. A formal Logic Equivalence Checker (Conformal LEC, Formality) would normally produce this result in seconds; without one available we substitute a full 50-layer gate-level simulation against the C-model golden hex vectors. The trade-off is wall-clock time. Table~\ref{tab:gl_runtime} summarises how long each of the three gate-level variants took on the same machine.
 
-L4 uses the Innovus-exported SDF (\texttt{mfn\_frontend\_top\_v3\_final.sdf}, 117\,MB) backannotated into the same gate-level simulation. The post-route netlist completes the run with zero \texttt{TCHK\_VIOL}, setup-violation, and hold-violation events. In the absence of PrimeTime SI this is the strongest signoff we can produce: the netlist runs MobileFaceNet correctly at 200\,MHz with real cell and wire delays and live setup/hold checks.
+\begin{table}[H]
+\centering
+\caption{Gate-Level Simulation Wall-Clock Comparison}
+\label{tab:gl_runtime}
+\begin{tabular}{lllcr}
+\toprule
+\textbf{Run} & \textbf{Netlist} & \textbf{Delay model} & \textbf{Layers done} & \textbf{Wall-clock} \\
+\midrule
+\texttt{make gl}      & Genus syn         & zero-delay      & 50 / 50 & $\sim$78\,h \\
+\texttt{make pnr}     & Innovus post-route & zero-delay     & 50 / 50 & $\sim$84\,h \\
+\texttt{make pnr\_sdf} & Innovus post-route & SDF annotated & 50 / 50 & $\sim$163\,h \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Post-route simulation runs about $1.1\times$ slower than synthesised because of the added CTS buffers, filler cells, and hold-fix buffers in the post-route netlist. SDF backannotation adds another $1.8\times$ on top: every net carries an RC delay and every flop fires four timing checks (setup, hold, recovery, removal). High-resolution early layers (0--2) dominate all three runs and account for roughly half the wall-clock time.
+
+L4 uses the Innovus-exported SDF (\texttt{mfn\_frontend\_top\_v3\_final.sdf}, 117\,MB) backannotated into the same gate-level simulation. After 163\,h of wall-clock time the full 50-layer run completed with all 50 layers bit-exact against the C-model and zero \texttt{TCHK\_VIOL}, setup-violation, or hold-violation events. In the absence of PrimeTime SI this is the strongest signoff we can produce: the netlist runs MobileFaceNet correctly at 200\,MHz with real cell and wire delays and live setup/hold checks.
 
 The verification flow itself had one early failure worth recording. The first gate-level run reported 50/50 mismatches even though RTL was 50/50 MATCH. A SystemVerilog \texttt{bind}-based probe traced the cause to a testbench race: \texttt{pixel\_in} was driven on \texttt{@(posedge clk)} from the DUT's \texttt{x\_out} output, but the gate-level netlist has delta-cycle delay on port outputs, so the testbench was latching the previous-cycle address. Moving the drive to \texttt{@(negedge clk)} (after \texttt{x\_out} has settled) restored all 50 layers. The same testbench is now used for every gate-level and SDF run.
 
