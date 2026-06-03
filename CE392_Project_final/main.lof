@@ -1,10 +1,15 @@
 \contentsline {figure}{\numberline {1}{\ignorespaces MobileFaceNet topology overview.}}{2}{figure.caption.12}
-\contentsline {figure}{\numberline {2}{\ignorespaces ASIC frontend block diagram.}}{6}{figure.caption.21}
-\contentsline {figure}{\numberline {3}{\ignorespaces FPGA accelerator block diagram.}}{8}{figure.caption.28}
-\contentsline {figure}{\numberline {4}{\ignorespaces Final v3 Innovus post-route layout.}}{10}{figure.caption.34}
-\contentsline {figure}{\numberline {5}{\ignorespaces Clock-tree synthesis result.}}{11}{figure.caption.35}
-\contentsline {figure}{\numberline {6}{\ignorespaces Post-route timing and clock-domain reports.}}{12}{figure.caption.36}
-\contentsline {figure}{\numberline {7}{\ignorespaces Routing and area utilisation.}}{12}{figure.caption.37}
-\contentsline {figure}{\numberline {8}{\ignorespaces Innovus post-route power report.}}{13}{figure.caption.38}
-\contentsline {figure}{\numberline {9}{\ignorespaces Post-route floorplan evolution v1 $\to $ v2 $\to $ v3.}}{13}{figure.caption.39}
-\contentsline {figure}{\numberline {10}{\ignorespaces Macro placement evolution v2 $\to $ v3.}}{14}{figure.caption.40}
+\contentsline {figure}{\numberline {2}{\ignorespaces NPU top-level architecture.}}{6}{figure.caption.18}
+\contentsline {figure}{\numberline {3}{\ignorespaces $1\times 1$ Conv engine and slide direction.}}{7}{figure.caption.24}
+\contentsline {figure}{\numberline {4}{\ignorespaces $3\times 3$ Layer engine and direction.}}{7}{figure.caption.26}
+\contentsline {figure}{\numberline {5}{\ignorespaces Why systolic array.}}{8}{figure.caption.28}
+\contentsline {figure}{\numberline {6}{\ignorespaces Innovus post-route layout.}}{10}{figure.caption.34}
+\contentsline {figure}{\numberline {7}{\ignorespaces Clock-tree synthesis result.}}{11}{figure.caption.35}
+\contentsline {figure}{\numberline {8}{\ignorespaces Post-route timing and clock-domain reports.}}{12}{figure.caption.36}
+\contentsline {figure}{\numberline {9}{\ignorespaces Routing and area utilisation.}}{12}{figure.caption.37}
+\contentsline {figure}{\numberline {10}{\ignorespaces Innovus post-route power report.}}{13}{figure.caption.38}
+\contentsline {figure}{\numberline {11}{\ignorespaces FPGA block design (Vivado IP integrator).}}{13}{figure.caption.39}
+\contentsline {figure}{\numberline {12}{\ignorespaces Post-route floorplan evolution v1 $\to $ v2 $\to $ v3.}}{14}{figure.caption.44}
+\contentsline {figure}{\numberline {13}{\ignorespaces Macro placement evolution v2 $\to $ v3.}}{15}{figure.caption.45}
+\contentsline {figure}{\numberline {14}{\ignorespaces QuantFace face-verification benchmark suite.}}{18}{figure.caption.51}
+\contentsline {figure}{\numberline {15}{\ignorespaces FPGA on-board embedding readback vs reference.}}{20}{figure.caption.57}

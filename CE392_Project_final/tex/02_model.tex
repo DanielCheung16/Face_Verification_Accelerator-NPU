@@ -1,8 +1,7 @@
 %% ============================================================================
 %% §2 Model and Numerical Design  --  joint
 %%   2.1 MobileFaceNet topology
-%%   2.2 Precision selection (PyTorch float32 vs C float32/INT16/INT8)
-%%   2.3 Model evaluation (face-verification cosine similarity)
+%%   2.2 Quantization (INT8 w8a8, asymmetric activation + symmetric weight)
 %% ============================================================================
 \section{Model and Numerical Design}
 \label{sec:model}
@@ -12,105 +11,59 @@ Before any hardware is built, the model topology and the numerical format must b
 \subsection{MobileFaceNet Topology}
 \label{sec:model:topology}
 
-We target the MobileFaceNet variant with input size $3\times112\times96$. The original MobileFaceNet paper~\cite{chen2018mobilefacenetsefficientcnnsaccurate} and the Eyeriss-style accelerator in~\cite{7738524} use a square $3\times112\times112$ input with a $7\times7$ global depthwise convolution. We instead adopt the non-square variant from~\cite{Linjun_SUN20202019EDL8103}, which replaces the GDConv kernel with $7\times6$ to match the reduced horizontal resolution. The complete layer schedule is shown in Table~\ref{tab:mobile}. When each Bottleneck is expanded into its three constituent sub-layers (PW1, DW, PW2), the full model comprises \textbf{50 layers} (L0--L49).
+We target the original MobileFaceNet topology~\cite{chen2018mobilefacenetsefficientcnnsaccurate} with a square $3\times112\times112$ input and a $7\times7$ global depthwise convolution, as also adopted by the Eyeriss-style accelerator in~\cite{7738524}. The complete layer schedule is shown in Table~\ref{tab:mobile}. When each Bottleneck is expanded into its three constituent sub-layers (PW1, DW, PW2), the full model comprises \textbf{50 layers} (L0--L49).
 
 \begin{table}[H]
 \centering
-\caption{MobileFaceNet Layer Configuration ($3\times112\times96$ input)}
+\caption{MobileFaceNet Layer Configuration ($3\times112\times112$ input)}
 \label{tab:mobile}
 \begin{tabular}{lllrrrr}
 \toprule
 \textbf{Input shape} & \textbf{Operator} & & \textbf{t} & \textbf{c} & \textbf{n} & \textbf{s} \\
 \midrule
-$3\times112\times96$   & Conv $3\times3$        & & --  & 64  & 1 & 2 \\
-$64\times56\times48$   & DW Conv $3\times3$     & & --  & 64  & 1 & 1 \\
-$64\times56\times48$   & Bottleneck             & & 2   & 64  & 5 & 2 \\
-$64\times28\times24$   & Bottleneck             & & 4   & 128 & 1 & 2 \\
-$128\times14\times12$  & Bottleneck             & & 2   & 128 & 6 & 1 \\
-$128\times14\times12$  & Bottleneck             & & 4   & 128 & 1 & 2 \\
-$128\times7\times6$    & Bottleneck             & & 2   & 128 & 2 & 1 \\
-$128\times7\times6$    & Conv $1\times1$        & & --  & 512 & 1 & 1 \\
-$512\times7\times6$    & GDConv $7\times6$      & & --  & 512 & 1 & 1 \\
-$512\times1\times1$    & Linear (PW $1\times1$) & & --  & 128 & 1 & 1 \\
+$3\times112\times112$   & Conv $3\times3$        & & --  & 64  & 1 & 2 \\
+$64\times56\times56$    & DW Conv $3\times3$     & & --  & 64  & 1 & 1 \\
+$64\times56\times56$    & Bottleneck             & & 2   & 64  & 5 & 2 \\
+$64\times28\times28$    & Bottleneck             & & 4   & 128 & 1 & 2 \\
+$128\times14\times14$   & Bottleneck             & & 2   & 128 & 6 & 1 \\
+$128\times14\times14$   & Bottleneck             & & 4   & 128 & 1 & 2 \\
+$128\times7\times7$     & Bottleneck             & & 2   & 128 & 2 & 1 \\
+$128\times7\times7$     & Conv $1\times1$        & & --  & 512 & 1 & 1 \\
+$512\times7\times7$     & GDConv $7\times7$      & & --  & 512 & 1 & 1 \\
+$512\times1\times1$     & Linear (PW $1\times1$) & & --  & 128 & 1 & 1 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Precision Selection}
+The recurring spatial dimensions across the network are $H = W \in \{7, 14, 28, 56\}$ and the channel dimensions are $C_\text{in}, C_\text{out} \in \{64, 128, 256, 512\}$. These ranges drive the array-size choice in Section~\ref{sec:hw:frontend}.
+
+\subsection{Quantization}
 \label{sec:model:precision}
 
-A face-verification network must preserve its embedding's discriminative property under quantisation: the gap between intra-person and inter-person cosine similarity must remain large. We evaluated four precision formats (PyTorch float32, a plain-C float32 reference, C INT16 Q10, and C INT8 Q4) by computing pairwise cosine similarities on a face-verification task and comparing the largest absolute error against the PyTorch reference. Results are in Table~\ref{tab:precision}.
+The reference model is trained in INT8 via the QuantFace flow~\cite{9955645} and the hardware mirrors that representation directly. All weights, activations, and partial sums use 8-bit fixed-point storage, with 32-bit accumulators inside each MAC. Weights are stored with a symmetric scheme ($\textit{zp}_w = 0$) and activations with an asymmetric scheme (non-zero $\textit{zp}_a$). The MAC operation expands as
+
+\begin{equation}
+(act - zp_a)(wgt - zp_w) = act \cdot wgt - zp_w \cdot act - zp_a \cdot wgt + zp_a \cdot zp_w.
+\label{eq:quant}
+\end{equation}
+
+Because $\textit{zp}_w = 0$ for symmetric weights, the last two terms in Eq.~\eqref{eq:quant} vanish; the runtime cost of asymmetric activation reduces to one $-zp_a \cdot wgt$ correction per output channel, which is absorbed into the bias and applied once per layer. The final hardware bit-widths are summarised in Table~\ref{tab:fixed_point}.
 
 \begin{table}[H]
 \centering
-\caption{Precision Comparison Summary}
-\label{tab:precision}
-\begin{tabular}{lcc}
-\toprule
-\textbf{Format} & \textbf{Max error vs PyTorch} & \textbf{Verdict} \\
-\midrule
-C float32 & $\approx 0$                                      & Reference \\
-C INT16   & $<0.003$ (most pairs: OK)                        & \textbf{Selected} \\
-C INT8    & up to $0.34$ (many pairs: WARN)                  & Rejected \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-The C float32 path closely matches the PyTorch reference, confirming the floating-point implementation. C INT16 (Q10 fixed-point) introduces only negligible error on the majority of pairs, while C INT8 has significantly larger deviations, especially on pairs whose similarity is already near zero (the regime that decides match/no-match). We therefore select \textbf{INT16 Q10} as the hardware representation: best trade-off between hardware cost and numerical accuracy for this workload.
-
-Table~\ref{tab:fixed_point} fixes the bit-widths used downstream by all hardware modules.
-
-\begin{table}[H]
-\centering
-\caption{Fixed-Point Format Selected for Hardware}
+\caption{Quantized Hardware Datatypes}
 \label{tab:fixed_point}
 \begin{tabular}{lll}
 \toprule
-\textbf{Quantity} & \textbf{Format} & \textbf{Width} \\
+\textbf{Quantity} & \textbf{Scheme} & \textbf{Width} \\
 \midrule
-Activation     & Q10 & \texttt{int16} \\
-Weight         & Q10 & \texttt{int16} \\
-Bias           & Q20 & \texttt{int32} \\
-Accumulator    & Q20 & \texttt{int40} \\
-PReLU $\alpha$ & Q10 & \texttt{int16} \\
+Activation     & asymmetric (non-zero $zp_a$) & \texttt{int8} \\
+Weight         & symmetric ($zp_w = 0$)       & \texttt{int8} \\
+MAC accumulator& signed                       & \texttt{int32} \\
+Bias           & signed, pre-folded with $-zp_a \cdot \sum wgt$ & \texttt{int32} \\
+PReLU $\alpha$ & signed                       & \texttt{int8} \\
 \bottomrule
 \end{tabular}
 \end{table}
 
-\subsection{Model Evaluation}
-\label{sec:model:eval}
-
-To validate the selected INT16 Q10 model end-to-end, intra-person and inter-person cosine similarities were measured on two datasets: a 6-person / 3-images-each public set and a self-prepared set containing four well-known individuals (Dan, Elon, Trump, Wil). Results in Table~\ref{tab:face_eval} show a large separability gap (intra $\gg$ inter) on both datasets, confirming that INT16 Q10 quantisation preserves the model's discriminative ability with negligible loss against the floating-point reference.
-
-\begin{table}[H]
-\centering
-\caption{Face-Verification Evaluation (C INT16 Q10)}
-\label{tab:face_eval}
-\begin{tabular}{lccc}
-\toprule
-\textbf{Dataset} & \textbf{Intra avg} & \textbf{Inter avg} & \textbf{Gap} \\
-\midrule
-Original (6 persons, 3 images each)       & 0.5575 & 0.0673 & $+0.4903$ \\
-Self-prepared (Dan, Elon, Trump, Wil)     & 0.5270 & 0.0783 & $+0.4487$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-Finally, Table~\ref{tab:sim_compare} compares the C fixed-point reference against the RTL output on the self-prepared dataset. The two are bit-identical, confirming that the hardware datapath faithfully implements the chosen fixed-point arithmetic.
-
-\begin{table}[H]
-\centering
-\caption{Similarity Summary: C Fixed-Point vs RTL}
-\label{tab:sim_compare}
-\begin{tabular}{lcc}
-\toprule
-\textbf{Metric} & \textbf{C fixed} & \textbf{RTL} \\
-\midrule
-Intra avg & 0.5270 & 0.5270 \\
-Inter avg & 0.0783 & 0.0783 \\
-Gap       & $+0.4487$ & $+0.4487$ \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-This bit-exactness against the C-model golden is the foundation for all subsequent verification at the RTL, synthesised, and post-route levels (Section~\ref{sec:verify}).
+The accuracy of this INT8 representation against the floating-point QuantFace baseline is presented in Section~\ref{sec:verify:flow}, alongside the broader face-verification benchmark suite.

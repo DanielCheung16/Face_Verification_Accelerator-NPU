@@ -1,20 +1,19 @@
-\contentsline {table}{\numberline {1}{\ignorespaces MobileFaceNet Layer Configuration ($3\times 112\times 96$ input)\relax }}{3}{table.caption.14}
-\contentsline {table}{\numberline {2}{\ignorespaces Precision Comparison Summary\relax }}{3}{table.caption.15}
-\contentsline {table}{\numberline {3}{\ignorespaces Fixed-Point Format Selected for Hardware\relax }}{3}{table.caption.16}
-\contentsline {table}{\numberline {4}{\ignorespaces Face-Verification Evaluation (C INT16 Q10)\relax }}{4}{table.caption.17}
-\contentsline {table}{\numberline {5}{\ignorespaces Similarity Summary: C Fixed-Point vs RTL\relax }}{4}{table.caption.18}
-\contentsline {table}{\numberline {6}{\ignorespaces Design Constraints and Requirements\relax }}{5}{table.caption.19}
-\contentsline {table}{\numberline {7}{\ignorespaces ASIC vs FPGA Implementation Comparison\relax }}{6}{table.caption.20}
-\contentsline {table}{\numberline {8}{\ignorespaces ASIC On-Chip Storage Classification\relax }}{7}{table.caption.24}
-\contentsline {table}{\numberline {9}{\ignorespaces 4-Stage Activation Pipeline (ASIC)\relax }}{7}{table.caption.26}
-\contentsline {table}{\numberline {10}{\ignorespaces Genus Synthesis Results (ASIC, v3)\relax }}{9}{table.caption.32}
-\contentsline {table}{\numberline {11}{\ignorespaces Innovus Post-Route Results (ASIC, v3 final)\relax }}{9}{table.caption.33}
-\contentsline {table}{\numberline {12}{\ignorespaces ASIC Architecture Evolution: v1 $\to $ v2 $\to $ v3\relax }}{14}{table.caption.41}
-\contentsline {table}{\numberline {13}{\ignorespaces v3 Cumulative Micro-Optimizations\relax }}{15}{table.caption.42}
-\contentsline {table}{\numberline {14}{\ignorespaces Engineering Standards Applied\relax }}{16}{table.caption.43}
-\contentsline {table}{\numberline {15}{\ignorespaces Verification Coverage Matrix\relax }}{17}{table.caption.46}
-\contentsline {table}{\numberline {16}{\ignorespaces ASIC Verification Results\relax }}{17}{table.caption.47}
-\contentsline {table}{\numberline {17}{\ignorespaces Gate-Level Simulation Wall-Clock Comparison\relax }}{17}{table.caption.48}
-\contentsline {table}{\numberline {18}{\ignorespaces Abuse Vectors and Mitigations\relax }}{18}{table.caption.49}
-\contentsline {table}{\numberline {19}{\ignorespaces Final Metrics vs Design Constraints\relax }}{19}{table.caption.50}
-\contentsline {table}{\numberline {20}{\ignorespaces Suggested Follow-on Work\relax }}{19}{table.caption.54}
+\contentsline {table}{\numberline {1}{\ignorespaces MobileFaceNet Layer Configuration ($3\times 112\times 112$ input)\relax }}{3}{table.caption.14}
+\contentsline {table}{\numberline {2}{\ignorespaces Quantized Hardware Datatypes\relax }}{3}{table.caption.15}
+\contentsline {table}{\numberline {3}{\ignorespaces Design Constraints and Requirements\relax }}{4}{table.caption.16}
+\contentsline {table}{\numberline {4}{\ignorespaces Implementation Comparison: FPGA and ASIC Tracks\relax }}{5}{table.caption.17}
+\contentsline {table}{\numberline {5}{\ignorespaces NPU Global Memory Hierarchy\relax }}{6}{table.caption.20}
+\contentsline {table}{\numberline {6}{\ignorespaces Genus Synthesis Results\relax }}{9}{table.caption.32}
+\contentsline {table}{\numberline {7}{\ignorespaces Innovus Post-Route Results\relax }}{9}{table.caption.33}
+\contentsline {table}{\numberline {8}{\ignorespaces FPGA Resource Utilisation (Vivado Implementation)\relax }}{13}{table.caption.41}
+\contentsline {table}{\numberline {9}{\ignorespaces FPGA Throughput Comparison (one inference, $112\times 96$ image)\relax }}{14}{table.caption.43}
+\contentsline {table}{\numberline {10}{\ignorespaces ASIC Architecture Evolution: v1 $\to $ v2 $\to $ v3\relax }}{15}{table.caption.46}
+\contentsline {table}{\numberline {11}{\ignorespaces v3 Cumulative Micro-Optimizations\relax }}{16}{table.caption.47}
+\contentsline {table}{\numberline {12}{\ignorespaces Engineering Standards Applied\relax }}{17}{table.caption.48}
+\contentsline {table}{\numberline {13}{\ignorespaces Hardware-Spec Fixed-Point vs QuantFace PyTorch Reference\relax }}{18}{table.caption.52}
+\contentsline {table}{\numberline {14}{\ignorespaces Verification Coverage Matrix\relax }}{18}{table.caption.54}
+\contentsline {table}{\numberline {15}{\ignorespaces ASIC Verification Results\relax }}{19}{table.caption.55}
+\contentsline {table}{\numberline {16}{\ignorespaces Gate-Level Simulation Wall-Clock Comparison\relax }}{19}{table.caption.56}
+\contentsline {table}{\numberline {17}{\ignorespaces Abuse Vectors and Mitigations\relax }}{21}{table.caption.58}
+\contentsline {table}{\numberline {18}{\ignorespaces Final Metrics vs Design Constraints\relax }}{22}{table.caption.59}
+\contentsline {table}{\numberline {19}{\ignorespaces Suggested Follow-on Work\relax }}{22}{table.caption.63}

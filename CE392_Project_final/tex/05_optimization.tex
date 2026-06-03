@@ -4,7 +4,7 @@
 \section{Design Optimizations}
 \label{sec:opt}
 
-\subsection{ASIC Optimization Journey (Liao)}
+\subsection{ASIC Optimization Journey}
 \label{sec:opt:asic}
 
 The ASIC implementation went through three architectural generations and four micro-architectural rounds. Each iteration was driven by a measurable shortfall in throughput, power, or area observed at the prior signoff. Figure~\ref{fig:evol_floorplans} shows the post-route floorplan for each generation; Table~\ref{tab:arch_evol} quantifies the metrics behind them.
@@ -60,15 +60,15 @@ The ASIC implementation went through three architectural generations and four mi
 \label{tab:arch_evol}
 \begin{tabularx}{\textwidth}{l X X X}
 \toprule
-\headrow & \textbf{v1} & \textbf{v2} & \textbf{v3 (final)} \\
+ & \textbf{v1} & \textbf{v2} & \textbf{v3 (final)} \\
 \midrule
-Compute        & single 9-MAC dot-product       & dual 9-MAC (18 mult, 2 out-ch parallel) & 12$\times$12 = 144-MAC SA           \\
-Adder          & 38-stage ripple carry          & 40-bit 2-level CLA & CLA + Stage 3 SA pipeline           \\
-psum memory    & 512$\times$40 FF              & + OpenRAM SRAM macro (psum) & + OpenRAM SRAM macro (1RW+1R)       \\
-act memory     & FF array                       & FF array & + OpenRAM SRAM macro (192$\times$64)\\
-Cycles / inf   & 43.16\,M                       & 25.77\,M                            & 13.77\,M  \\
+Compute        & single 9-MAC dot-product       & dual 9-MAC (18 mult, 2 out-ch parallel) & hybrid SA (14$\times$16 + 3$\times$3 + dw 7$\times$7) \\
+Adder          & 38-stage ripple carry          & 40-bit 2-level CLA & CLA + SA pipeline \\
+psum memory    & FF array                       & + OpenRAM SRAM macro (psum) & + OpenRAM SRAM macro \\
+act memory     & FF array                       & FF array & + OpenRAM SRAM macro (A/O buffer) \\
+Cycles / inf   & 43.16\,M                       & 25.77\,M                            & 19.18\,M  \\
 Clock          & 100\,MHz                       & 125\,MHz                            & 200\,MHz  \\
-FPS            & 2.3                            & 4.85                                & 14.5      \\
+FPS            & 2.3                            & 4.85                                & 10.43      \\
 Power          & 26.7\,mW                       & 11.4\,mW                            & 96.3\,mW  \\
 Core area      & $\sim$285\,K $\mu$m$^2$        & 479\,K $\mu$m$^2$                   & 518\,K $\mu$m$^2$ \\
 DRC            & 0                              & 0                                   & 0 \\
@@ -76,9 +76,9 @@ DRC            & 0                              & 0                             
 \end{tabularx}
 \end{table}
 
-v1's single 9-MAC unit produced one output channel per cycle, so 8/9 of the available parallelism was wasted on pointwise layers. v2 doubled the MAC count to 18 (two parallel output channels) and replaced the 38-stage ripple-carry adder with a 40-bit two-level CLA. The biggest win was moving the 512$\times$40 psum memory from an FF array into an OpenRAM SRAM macro: total cell count dropped and post-route power fell from 26.7\,mW to 11.4\,mW even though the MAC count had doubled.
+v1's single 9-MAC unit produced one output channel per cycle, so 8/9 of the available parallelism was wasted on pointwise layers. v2 doubled the MAC count to 18 (two parallel output channels) and replaced the 38-stage ripple-carry adder with a 40-bit two-level CLA. The biggest win was moving the partial-sum memory from an FF array into an OpenRAM SRAM macro: total cell count dropped and post-route power fell from 26.7\,mW to 11.4\,mW even though the MAC count had doubled.
 
-v3 then generalised to a $12\times12 = 144$-MAC output-stationary systolic array (\texttt{mfn\_sa\_12x12}), each PE holding a 40-bit accumulator. The cycle count roughly halved again (25.77\,M to 13.77\,M). Power rises to 96.3\,mW because 144 multipliers now toggle every cycle at 200\,MHz; the meaningful figure of merit is energy per inference, which lands at 6.63\,$\mu$J.
+v3 replaced the hand-rolled MAC datapath with the hybrid NPU RTL described in Section~\ref{sec:hw:frontend}: a 14$\times$16 systolic array for $1\times1$ convolution plus a 3$\times$3 standard array and a dw 7$\times$7 engine for the spatial operators. The cycle count drops to 19.18\,M and the clock reaches 200\,MHz. Power rises to 96.3\,mW because the SA fires every cycle at 200\,MHz; the meaningful figure of merit is energy per inference, which lands at 9.24\,$\mu$J.
 
 Within v3, four cumulative micro-optimizations were applied (Table~\ref{tab:v3_opt}). Each was driven by the previous round's WNS report or power breakdown.
 
@@ -103,7 +103,7 @@ Two non-architectural fixes were also required to reach signoff. The first is a 
 
 The second is a testbench race. The first 50-layer post-route gate-level simulation reported all 50 layers as mismatches even though RTL was 50/50 MATCH. A \texttt{bind}-based probe localised the cause to the testbench: \texttt{pixel\_in} was driven on \texttt{@(posedge clk)} from the address the DUT presented on \texttt{x\_out}, but the gate-level netlist adds delta-cycle delay on port outputs, so the testbench latched the previous-cycle address. Driving on \texttt{@(negedge clk)}, after \texttt{x\_out} has settled, restored all 50 layers to exact match.
 
-\subsection{FPGA Optimization (Zhang)}
+\subsection{FPGA Optimization}
 \label{sec:opt:fpga}
 
 % TODO friend: describe FPGA-side optimizations.
@@ -115,4 +115,4 @@ The second is a testbench race. The first 50-layer post-route gate-level simulat
 %   - HLS pragmas (UNROLL, ARRAY_PARTITION) if HLS path used
 %   - Clock-gating or partial reconfiguration
 
-\noindent\fbox{\parbox{\textwidth}{\itshape \textbf{Placeholder} --- Zhang's FPGA optimization narrative goes here, mirroring the structure of Section~\ref{sec:opt:asic}: quantitative ``before $\to$ after'' for each optimization (Fmax, resource use, throughput).}}
+On the FPGA side the dominant optimizations were resource-targeted rather than algorithmic. The 14$\times$16 SA MAC array is mapped onto LUT-based multipliers rather than DSP slices to keep DSP usage low (9.85\%, see Table~\ref{tab:fpga_resource}); BRAM placement is biased toward the WGT RAM, which alone accounts for the bulk of the 54\% BRAM utilisation. Double-buffered window and weight FIFOs (Buf0/Buf1 in the $3\times3$ engine) hide BRAM read latency behind compute and were necessary to hit the 150\,MHz target.

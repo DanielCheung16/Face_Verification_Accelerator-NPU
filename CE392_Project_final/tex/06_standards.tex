@@ -21,7 +21,7 @@ Timing models      & Liberty (.lib, Synopsys-de-facto)      & Cell delays for Ge
 Delay annotation   & IEEE 1497 (SDF)                        & Post-route SDF backannotation for gate-level signoff \\
 Constraints        & Synopsys SDC                           & \texttt{constraints\_v3.sdc}: clock, IO delay, false paths \\
 Reference floats   & IEEE 754 binary32                      & PyTorch baseline + C-model fp32 reference \\
-Fixed-point        & Q10 (data/weights), Q20 (accumulator)  & internal datapath \\
+Fixed-point        & INT8 (data, weights), INT32 (accumulator)  & internal datapath \\
 Process design kit & NCSU FreePDK45                         & ASIC standard-cell library + DRC rules \\
 Memory IP          & OpenRAM (open-source)                  & 192$\times$64 act\_buf, 512$\times$40 psum SRAMs \\
 % TODO friend FPGA:

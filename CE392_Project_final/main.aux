@@ -20,8 +20,10 @@
 \pgfsyspdfmark {pgfid1}{0}{0}
 \pgfsyspdfmark {pgfid2}{0}{0}
 \pgfsyspdfmark {pgfid3}{0}{0}
+\citation{9955645}
 \citation{chen2018mobilefacenetsefficientcnnsaccurate}
 \citation{Linjun_SUN20202019EDL8103}
+\citation{9955645}
 \citation{7738524}
 \citation{george2024edgefaceefficientfacerecognition}
 \pgfsyspdfmark {pgfid4}{0}{0}
@@ -37,7 +39,6 @@
 \@writefile{toc}{\contentsline {paragraph}{Prior art.}{1}{section*.11}}
 \citation{chen2018mobilefacenetsefficientcnnsaccurate}
 \citation{7738524}
-\citation{Linjun_SUN20202019EDL8103}
 \pgfsyspdfmark {pgfid5}{0}{0}
 \@writefile{lof}{\contentsline {figure}{\numberline {1}{\ignorespaces MobileFaceNet topology overview.}}{2}{figure.caption.12}}
 \providecommand*\caption@xref[2]{\@setref\relax\@undefined{#1}}
@@ -47,173 +48,205 @@
 \newlabel{sec:model}{{2}{2}{Model and Numerical Design}{section.2}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {2.1}MobileFaceNet Topology}{2}{subsection.2.1}}
 \newlabel{sec:model:topology}{{2.1}{2}{MobileFaceNet Topology}{subsection.2.1}{}}
+\citation{9955645}
 \pgfsyspdfmark {pgfid6}{0}{0}
-\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces MobileFaceNet Layer Configuration ($3\times 112\times 96$ input)\relax }}{3}{table.caption.14}}
-\newlabel{tab:mobile}{{1}{3}{MobileFaceNet Layer Configuration ($3\times 112\times 96$ input)\relax }{table.caption.14}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Precision Selection}{3}{subsection.2.2}}
-\newlabel{sec:model:precision}{{2.2}{3}{Precision Selection}{subsection.2.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Precision Comparison Summary\relax }}{3}{table.caption.15}}
-\newlabel{tab:precision}{{2}{3}{Precision Comparison Summary\relax }{table.caption.15}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Fixed-Point Format Selected for Hardware\relax }}{3}{table.caption.16}}
-\newlabel{tab:fixed_point}{{3}{3}{Fixed-Point Format Selected for Hardware\relax }{table.caption.16}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {2.3}Model Evaluation}{3}{subsection.2.3}}
-\newlabel{sec:model:eval}{{2.3}{3}{Model Evaluation}{subsection.2.3}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {1}{\ignorespaces MobileFaceNet Layer Configuration ($3\times 112\times 112$ input)\relax }}{3}{table.caption.14}}
+\newlabel{tab:mobile}{{1}{3}{MobileFaceNet Layer Configuration ($3\times 112\times 112$ input)\relax }{table.caption.14}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {2.2}Quantization}{3}{subsection.2.2}}
+\newlabel{sec:model:precision}{{2.2}{3}{Quantization}{subsection.2.2}{}}
+\newlabel{eq:quant}{{1}{3}{Quantization}{equation.2.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {2}{\ignorespaces Quantized Hardware Datatypes\relax }}{3}{table.caption.15}}
+\newlabel{tab:fixed_point}{{2}{3}{Quantized Hardware Datatypes\relax }{table.caption.15}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3}Broader Considerations}{3}{section.3}}
+\newlabel{sec:broader}{{3}{3}{Broader Considerations}{section.3}{}}
 \pgfsyspdfmark {pgfid7}{0}{0}
-\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Face-Verification Evaluation (C INT16 Q10)\relax }}{4}{table.caption.17}}
-\newlabel{tab:face_eval}{{4}{4}{Face-Verification Evaluation (C INT16 Q10)\relax }{table.caption.17}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces Similarity Summary: C Fixed-Point vs RTL\relax }}{4}{table.caption.18}}
-\newlabel{tab:sim_compare}{{5}{4}{Similarity Summary: C Fixed-Point vs RTL\relax }{table.caption.18}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {3}Broader Considerations}{4}{section.3}}
-\newlabel{sec:broader}{{3}{4}{Broader Considerations}{section.3}{}}
 \@writefile{toc}{\contentsline {section}{\numberline {4}Design Constraints and Requirements}{4}{section.4}}
 \newlabel{sec:constraints}{{4}{4}{Design Constraints and Requirements}{section.4}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3}{\ignorespaces Design Constraints and Requirements\relax }}{4}{table.caption.16}}
+\newlabel{tab:constraints}{{3}{4}{Design Constraints and Requirements\relax }{table.caption.16}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Process and IP Availability}{4}{subsection.4.1}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Verification Capability}{4}{subsection.4.2}}
 \pgfsyspdfmark {pgfid8}{0}{0}
-\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Design Constraints and Requirements\relax }}{5}{table.caption.19}}
-\newlabel{tab:constraints}{{6}{5}{Design Constraints and Requirements\relax }{table.caption.19}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.1}Process and IP Availability}{5}{subsection.4.1}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {4.2}Verification Capability}{5}{subsection.4.2}}
 \@writefile{toc}{\contentsline {section}{\numberline {5}Hardware Architecture}{5}{section.5}}
 \newlabel{sec:hw}{{5}{5}{Hardware Architecture}{section.5}{}}
 \@writefile{toc}{\contentsline {subsection}{\numberline {5.1}Architecture Overview}{5}{subsection.5.1}}
 \newlabel{sec:hw:overview}{{5.1}{5}{Architecture Overview}{subsection.5.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {4}{\ignorespaces Implementation Comparison: FPGA and ASIC Tracks\relax }}{5}{table.caption.17}}
+\newlabel{tab:asic_vs_fpga}{{4}{5}{Implementation Comparison: FPGA and ASIC Tracks\relax }{table.caption.17}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Frontend Design (RTL Architecture)}{5}{subsection.5.2}}
+\newlabel{sec:hw:frontend}{{5.2}{5}{Frontend Design (RTL Architecture)}{subsection.5.2}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.2.1}Top-Level NPU and Memory Hierarchy}{5}{subsubsection.5.2.1}}
+\newlabel{sec:hw:frontend:top}{{5.2.1}{5}{Top-Level NPU and Memory Hierarchy}{subsubsection.5.2.1}{}}
 \pgfsyspdfmark {pgfid9}{0}{0}
-\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces ASIC vs FPGA Implementation Comparison\relax }}{6}{table.caption.20}}
-\newlabel{tab:asic_vs_fpga}{{7}{6}{ASIC vs FPGA Implementation Comparison\relax }{table.caption.20}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.2}Frontend Design (RTL Architecture)}{6}{subsection.5.2}}
-\newlabel{sec:hw:frontend}{{5.2}{6}{Frontend Design (RTL Architecture)}{subsection.5.2}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.2.1}ASIC Frontend (Liao)}{6}{subsubsection.5.2.1}}
-\newlabel{sec:hw:frontend:asic}{{5.2.1}{6}{ASIC Frontend (Liao)}{subsubsection.5.2.1}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces ASIC frontend block diagram.}}{6}{figure.caption.21}}
-\newlabel{fig:asic_block}{{2}{6}{ASIC frontend block diagram}{figure.caption.21}{}}
-\@writefile{toc}{\contentsline {paragraph}{Compute datapath.}{6}{section*.22}}
+\@writefile{lof}{\contentsline {figure}{\numberline {2}{\ignorespaces NPU top-level architecture.}}{6}{figure.caption.18}}
+\newlabel{fig:npu_top}{{2}{6}{NPU top-level architecture}{figure.caption.18}{}}
+\@writefile{toc}{\contentsline {paragraph}{Global memories.}{6}{section*.19}}
+\@writefile{lot}{\contentsline {table}{\numberline {5}{\ignorespaces NPU Global Memory Hierarchy\relax }}{6}{table.caption.20}}
+\newlabel{tab:npu_memory}{{5}{6}{NPU Global Memory Hierarchy\relax }{table.caption.20}{}}
+\@writefile{toc}{\contentsline {paragraph}{Switcher and execution flow.}{6}{section*.21}}
+\@writefile{toc}{\contentsline {paragraph}{Compute datapath summary.}{6}{section*.22}}
 \pgfsyspdfmark {pgfid10}{0}{0}
-\@writefile{toc}{\contentsline {paragraph}{Memory hierarchy.}{7}{section*.23}}
-\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces ASIC On-Chip Storage Classification\relax }}{7}{table.caption.24}}
-\newlabel{tab:asic_mem}{{8}{7}{ASIC On-Chip Storage Classification\relax }{table.caption.24}{}}
-\@writefile{toc}{\contentsline {paragraph}{4-stage activation pipeline.}{7}{section*.25}}
-\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces 4-Stage Activation Pipeline (ASIC)\relax }}{7}{table.caption.26}}
-\newlabel{tab:pipeline_stages}{{9}{7}{4-Stage Activation Pipeline (ASIC)\relax }{table.caption.26}{}}
-\@writefile{toc}{\contentsline {paragraph}{Controller FSM.}{7}{section*.27}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.2.2}FPGA Frontend (Zhang)}{7}{subsubsection.5.2.2}}
-\newlabel{sec:hw:frontend:fpga}{{5.2.2}{7}{FPGA Frontend (Zhang)}{subsubsection.5.2.2}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.2.2}Operator Engines}{7}{subsubsection.5.2.2}}
+\newlabel{sec:hw:frontend:engines}{{5.2.2}{7}{Operator Engines}{subsubsection.5.2.2}{}}
+\@writefile{toc}{\contentsline {paragraph}{$1\times 1$ Conv engine (14$\times $16 systolic array).}{7}{section*.23}}
+\newlabel{fig:engine_1x1}{{3a}{7}{$1\times 1$ engine block diagram.\relax }{figure.caption.24}{}}
+\newlabel{sub@fig:engine_1x1}{{a}{7}{$1\times 1$ engine block diagram.\relax }{figure.caption.24}{}}
+\newlabel{fig:engine_1x1_dir}{{3b}{7}{Sliding direction over $H\times W$.\relax }{figure.caption.24}{}}
+\newlabel{sub@fig:engine_1x1_dir}{{b}{7}{Sliding direction over $H\times W$.\relax }{figure.caption.24}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces $1\times 1$ Conv engine and slide direction.}}{7}{figure.caption.24}}
+\newlabel{fig:engine_1x1_pair}{{3}{7}{$1\times 1$ Conv engine and slide direction}{figure.caption.24}{}}
+\@writefile{toc}{\contentsline {paragraph}{$3\times 3$ Layer engine.}{7}{section*.25}}
+\newlabel{fig:engine_3x3}{{4a}{7}{$3\times 3$ engine block diagram.\relax }{figure.caption.26}{}}
+\newlabel{sub@fig:engine_3x3}{{a}{7}{$3\times 3$ engine block diagram.\relax }{figure.caption.26}{}}
+\newlabel{fig:engine_3x3_dir}{{4b}{7}{Calculation direction.\relax }{figure.caption.26}{}}
+\newlabel{sub@fig:engine_3x3_dir}{{b}{7}{Calculation direction.\relax }{figure.caption.26}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces $3\times 3$ Layer engine and direction.}}{7}{figure.caption.26}}
+\newlabel{fig:engine_3x3_pair}{{4}{7}{$3\times 3$ Layer engine and direction}{figure.caption.26}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.2.3}Design Rationale}{7}{subsubsection.5.2.3}}
+\newlabel{sec:hw:frontend:rationale}{{5.2.3}{7}{Design Rationale}{subsubsection.5.2.3}{}}
+\@writefile{toc}{\contentsline {paragraph}{Why a systolic array.}{7}{section*.27}}
 \pgfsyspdfmark {pgfid11}{0}{0}
-\@writefile{lof}{\contentsline {figure}{\numberline {3}{\ignorespaces FPGA accelerator block diagram.}}{8}{figure.caption.28}}
-\newlabel{fig:fpga_block}{{3}{8}{FPGA accelerator block diagram}{figure.caption.28}{}}
-\@writefile{toc}{\contentsline {paragraph}{Compute datapath.}{8}{section*.29}}
-\@writefile{toc}{\contentsline {paragraph}{Memory subsystem.}{8}{section*.30}}
-\@writefile{toc}{\contentsline {paragraph}{Host interface.}{8}{section*.31}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Backend Design (Physical Implementation)}{8}{subsection.5.3}}
-\newlabel{sec:hw:backend}{{5.3}{8}{Backend Design (Physical Implementation)}{subsection.5.3}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.3.1}ASIC Backend (Liao): Genus Synthesis and Innovus P\&R}{8}{subsubsection.5.3.1}}
-\newlabel{sec:hw:backend:asic}{{5.3.1}{8}{ASIC Backend (Liao): Genus Synthesis and Innovus P\&R}{subsubsection.5.3.1}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Why systolic array.}}{8}{figure.caption.28}}
+\newlabel{fig:why_sa}{{5}{8}{Why systolic array}{figure.caption.28}{}}
+\@writefile{toc}{\contentsline {paragraph}{Why 14$\times $16.}{8}{section*.29}}
+\@writefile{toc}{\contentsline {paragraph}{Quantization scheme.}{8}{section*.30}}
+\@writefile{toc}{\contentsline {paragraph}{Why not a single oversized array.}{8}{section*.31}}
 \pgfsyspdfmark {pgfid12}{0}{0}
-\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces Genus Synthesis Results (ASIC, v3)\relax }}{9}{table.caption.32}}
-\newlabel{tab:syn_results}{{10}{9}{Genus Synthesis Results (ASIC, v3)\relax }{table.caption.32}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces Innovus Post-Route Results (ASIC, v3 final)\relax }}{9}{table.caption.33}}
-\newlabel{tab:pnr_results}{{11}{9}{Innovus Post-Route Results (ASIC, v3 final)\relax }{table.caption.33}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3}Backend Design (Physical Implementation)}{9}{subsection.5.3}}
+\newlabel{sec:hw:backend}{{5.3}{9}{Backend Design (Physical Implementation)}{subsection.5.3}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.3.1}ASIC Backend: Genus Synthesis and Innovus P\&R}{9}{subsubsection.5.3.1}}
+\newlabel{sec:hw:backend:asic}{{5.3.1}{9}{ASIC Backend: Genus Synthesis and Innovus P\&R}{subsubsection.5.3.1}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {6}{\ignorespaces Genus Synthesis Results\relax }}{9}{table.caption.32}}
+\newlabel{tab:syn_results}{{6}{9}{Genus Synthesis Results\relax }{table.caption.32}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {7}{\ignorespaces Innovus Post-Route Results\relax }}{9}{table.caption.33}}
+\newlabel{tab:pnr_results}{{7}{9}{Innovus Post-Route Results\relax }{table.caption.33}{}}
 \pgfsyspdfmark {pgfid13}{0}{0}
-\newlabel{fig:asic_v3_full}{{4a}{10}{Full die view (720$\times $720 $\mu $m$^2$).\relax }{figure.caption.34}{}}
+\newlabel{fig:asic_v3_full}{{6a}{10}{Full die view (720$\times $720 $\mu $m$^2$).\relax }{figure.caption.34}{}}
 \newlabel{sub@fig:asic_v3_full}{{a}{10}{Full die view (720$\times $720 $\mu $m$^2$).\relax }{figure.caption.34}{}}
-\newlabel{fig:asic_v3_detail}{{4b}{10}{Detail view: SA + SRAM macros + controller cells.\relax }{figure.caption.34}{}}
+\newlabel{fig:asic_v3_detail}{{6b}{10}{Detail view: SA + SRAM macros + controller cells.\relax }{figure.caption.34}{}}
 \newlabel{sub@fig:asic_v3_detail}{{b}{10}{Detail view: SA + SRAM macros + controller cells.\relax }{figure.caption.34}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {4}{\ignorespaces Final v3 Innovus post-route layout.}}{10}{figure.caption.34}}
-\newlabel{fig:asic_floorplan}{{4}{10}{Final v3 Innovus post-route layout}{figure.caption.34}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Innovus post-route layout.}}{10}{figure.caption.34}}
+\newlabel{fig:asic_floorplan}{{6}{10}{Innovus post-route layout}{figure.caption.34}{}}
 \pgfsyspdfmark {pgfid14}{0}{0}
-\newlabel{fig:asic_postcts}{{5a}{11}{Post-CTS placement and clock buffers.\relax }{figure.caption.35}{}}
+\newlabel{fig:asic_postcts}{{7a}{11}{Post-CTS placement and clock buffers.\relax }{figure.caption.35}{}}
 \newlabel{sub@fig:asic_postcts}{{a}{11}{Post-CTS placement and clock buffers.\relax }{figure.caption.35}{}}
-\newlabel{fig:asic_clk_tree}{{5b}{11}{Clock-tree topology and balanced fanout.\relax }{figure.caption.35}{}}
+\newlabel{fig:asic_clk_tree}{{7b}{11}{Clock-tree topology and balanced fanout.\relax }{figure.caption.35}{}}
 \newlabel{sub@fig:asic_clk_tree}{{b}{11}{Clock-tree topology and balanced fanout.\relax }{figure.caption.35}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {5}{\ignorespaces Clock-tree synthesis result.}}{11}{figure.caption.35}}
-\newlabel{fig:asic_cts}{{5}{11}{Clock-tree synthesis result}{figure.caption.35}{}}
-\newlabel{eq:fmax}{{1}{11}{ASIC Backend (Liao): Genus Synthesis and Innovus P\&R}{equation.5.1}{}}
-\newlabel{eq:fps}{{2}{11}{ASIC Backend (Liao): Genus Synthesis and Innovus P\&R}{equation.5.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Clock-tree synthesis result.}}{11}{figure.caption.35}}
+\newlabel{fig:asic_cts}{{7}{11}{Clock-tree synthesis result}{figure.caption.35}{}}
+\newlabel{eq:fmax}{{2}{11}{ASIC Backend: Genus Synthesis and Innovus P\&R}{equation.5.2}{}}
+\newlabel{eq:fps}{{3}{11}{ASIC Backend: Genus Synthesis and Innovus P\&R}{equation.5.3}{}}
 \pgfsyspdfmark {pgfid15}{0}{0}
-\newlabel{eq:energy}{{3}{12}{ASIC Backend (Liao): Genus Synthesis and Innovus P\&R}{equation.5.3}{}}
-\newlabel{fig:asic_timing}{{6a}{12}{Innovus \texttt {report\_timing}: setup WNS +0.089\,ns.\relax }{figure.caption.36}{}}
+\newlabel{eq:energy}{{4}{12}{ASIC Backend: Genus Synthesis and Innovus P\&R}{equation.5.4}{}}
+\newlabel{fig:asic_timing}{{8a}{12}{Innovus \texttt {report\_timing}: setup WNS +0.089\,ns.\relax }{figure.caption.36}{}}
 \newlabel{sub@fig:asic_timing}{{a}{12}{Innovus \texttt {report\_timing}: setup WNS +0.089\,ns.\relax }{figure.caption.36}{}}
-\newlabel{fig:asic_clocks}{{6b}{12}{Per-clock summary: 200\,MHz domain.\relax }{figure.caption.36}{}}
+\newlabel{fig:asic_clocks}{{8b}{12}{Per-clock summary: 200\,MHz domain.\relax }{figure.caption.36}{}}
 \newlabel{sub@fig:asic_clocks}{{b}{12}{Per-clock summary: 200\,MHz domain.\relax }{figure.caption.36}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {6}{\ignorespaces Post-route timing and clock-domain reports.}}{12}{figure.caption.36}}
-\newlabel{fig:asic_timing_pair}{{6}{12}{Post-route timing and clock-domain reports}{figure.caption.36}{}}
-\newlabel{fig:asic_optroute}{{7a}{12}{Post-route view (\texttt {optsRoute}).\relax }{figure.caption.37}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Post-route timing and clock-domain reports.}}{12}{figure.caption.36}}
+\newlabel{fig:asic_timing_pair}{{8}{12}{Post-route timing and clock-domain reports}{figure.caption.36}{}}
+\newlabel{fig:asic_optroute}{{9a}{12}{Post-route view (\texttt {optsRoute}).\relax }{figure.caption.37}{}}
 \newlabel{sub@fig:asic_optroute}{{a}{12}{Post-route view (\texttt {optsRoute}).\relax }{figure.caption.37}{}}
-\newlabel{fig:asic_area}{{7b}{12}{Area / utilisation report.\relax }{figure.caption.37}{}}
+\newlabel{fig:asic_area}{{9b}{12}{Area / utilisation report.\relax }{figure.caption.37}{}}
 \newlabel{sub@fig:asic_area}{{b}{12}{Area / utilisation report.\relax }{figure.caption.37}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {7}{\ignorespaces Routing and area utilisation.}}{12}{figure.caption.37}}
-\newlabel{fig:asic_route_area}{{7}{12}{Routing and area utilisation}{figure.caption.37}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Routing and area utilisation.}}{12}{figure.caption.37}}
+\newlabel{fig:asic_route_area}{{9}{12}{Routing and area utilisation}{figure.caption.37}{}}
 \pgfsyspdfmark {pgfid16}{0}{0}
-\@writefile{lof}{\contentsline {figure}{\numberline {8}{\ignorespaces Innovus post-route power report.}}{13}{figure.caption.38}}
-\newlabel{fig:asic_power}{{8}{13}{Innovus post-route power report}{figure.caption.38}{}}
-\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.3.2}FPGA Backend (Zhang): Synthesis and Implementation}{13}{subsubsection.5.3.2}}
-\newlabel{sec:hw:backend:fpga}{{5.3.2}{13}{FPGA Backend (Zhang): Synthesis and Implementation}{subsubsection.5.3.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {6}Design Optimizations}{13}{section.6}}
-\newlabel{sec:opt}{{6}{13}{Design Optimizations}{section.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}ASIC Optimization Journey (Liao)}{13}{subsection.6.1}}
-\newlabel{sec:opt:asic}{{6.1}{13}{ASIC Optimization Journey (Liao)}{subsection.6.1}{}}
-\newlabel{fig:evol_v1}{{9a}{13}{v1: 1$\times $9-MAC.\relax }{figure.caption.39}{}}
-\newlabel{sub@fig:evol_v1}{{a}{13}{v1: 1$\times $9-MAC.\relax }{figure.caption.39}{}}
-\newlabel{fig:evol_v2}{{9b}{13}{v2: 2$\times $9-MAC + psum SRAM.\relax }{figure.caption.39}{}}
-\newlabel{sub@fig:evol_v2}{{b}{13}{v2: 2$\times $9-MAC + psum SRAM.\relax }{figure.caption.39}{}}
-\newlabel{fig:evol_v3}{{9c}{13}{v3: 12$\times $12 SA + 2 SRAMs.\relax }{figure.caption.39}{}}
-\newlabel{sub@fig:evol_v3}{{c}{13}{v3: 12$\times $12 SA + 2 SRAMs.\relax }{figure.caption.39}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {9}{\ignorespaces Post-route floorplan evolution v1 $\to $ v2 $\to $ v3.}}{13}{figure.caption.39}}
-\newlabel{fig:evol_floorplans}{{9}{13}{Post-route floorplan evolution v1 $\to $ v2 $\to $ v3}{figure.caption.39}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Innovus post-route power report.}}{13}{figure.caption.38}}
+\newlabel{fig:asic_power}{{10}{13}{Innovus post-route power report}{figure.caption.38}{}}
+\@writefile{toc}{\contentsline {subsubsection}{\numberline {5.3.2}FPGA Backend: Vivado on Zynq UltraScale+}{13}{subsubsection.5.3.2}}
+\newlabel{sec:hw:backend:fpga}{{5.3.2}{13}{FPGA Backend: Vivado on Zynq UltraScale+}{subsubsection.5.3.2}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {11}{\ignorespaces FPGA block design (Vivado IP integrator).}}{13}{figure.caption.39}}
+\newlabel{fig:fpga_block}{{11}{13}{FPGA block design (Vivado IP integrator)}{figure.caption.39}{}}
+\@writefile{toc}{\contentsline {paragraph}{Resource utilisation.}{13}{section*.40}}
+\@writefile{lot}{\contentsline {table}{\numberline {8}{\ignorespaces FPGA Resource Utilisation (Vivado Implementation)\relax }}{13}{table.caption.41}}
+\newlabel{tab:fpga_resource}{{8}{13}{FPGA Resource Utilisation (Vivado Implementation)\relax }{table.caption.41}{}}
+\@writefile{toc}{\contentsline {paragraph}{Performance.}{13}{section*.42}}
 \pgfsyspdfmark {pgfid17}{0}{0}
-\newlabel{fig:v2_detail}{{10a}{14}{v2 detail: psum SRAM macro placed bottom-left.\relax }{figure.caption.40}{}}
-\newlabel{sub@fig:v2_detail}{{a}{14}{v2 detail: psum SRAM macro placed bottom-left.\relax }{figure.caption.40}{}}
-\newlabel{fig:v3_detail}{{10b}{14}{v3 detail: act\_buf and psum SRAM macros bracket the SA.\relax }{figure.caption.40}{}}
-\newlabel{sub@fig:v3_detail}{{b}{14}{v3 detail: act\_buf and psum SRAM macros bracket the SA.\relax }{figure.caption.40}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {10}{\ignorespaces Macro placement evolution v2 $\to $ v3.}}{14}{figure.caption.40}}
-\newlabel{fig:v2_v3_detail}{{10}{14}{Macro placement evolution v2 $\to $ v3}{figure.caption.40}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {12}{\ignorespaces ASIC Architecture Evolution: v1 $\to $ v2 $\to $ v3\relax }}{14}{table.caption.41}}
-\newlabel{tab:arch_evol}{{12}{14}{ASIC Architecture Evolution: v1 $\to $ v2 $\to $ v3\relax }{table.caption.41}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {9}{\ignorespaces FPGA Throughput Comparison (one inference, $112\times 96$ image)\relax }}{14}{table.caption.43}}
+\newlabel{tab:fpga_speedup}{{9}{14}{FPGA Throughput Comparison (one inference, $112\times 96$ image)\relax }{table.caption.43}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {6}Design Optimizations}{14}{section.6}}
+\newlabel{sec:opt}{{6}{14}{Design Optimizations}{section.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.1}ASIC Optimization Journey}{14}{subsection.6.1}}
+\newlabel{sec:opt:asic}{{6.1}{14}{ASIC Optimization Journey}{subsection.6.1}{}}
+\newlabel{fig:evol_v1}{{12a}{14}{v1: 1$\times $9-MAC.\relax }{figure.caption.44}{}}
+\newlabel{sub@fig:evol_v1}{{a}{14}{v1: 1$\times $9-MAC.\relax }{figure.caption.44}{}}
+\newlabel{fig:evol_v2}{{12b}{14}{v2: 2$\times $9-MAC + psum SRAM.\relax }{figure.caption.44}{}}
+\newlabel{sub@fig:evol_v2}{{b}{14}{v2: 2$\times $9-MAC + psum SRAM.\relax }{figure.caption.44}{}}
+\newlabel{fig:evol_v3}{{12c}{14}{v3: 12$\times $12 SA + 2 SRAMs.\relax }{figure.caption.44}{}}
+\newlabel{sub@fig:evol_v3}{{c}{14}{v3: 12$\times $12 SA + 2 SRAMs.\relax }{figure.caption.44}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {12}{\ignorespaces Post-route floorplan evolution v1 $\to $ v2 $\to $ v3.}}{14}{figure.caption.44}}
+\newlabel{fig:evol_floorplans}{{12}{14}{Post-route floorplan evolution v1 $\to $ v2 $\to $ v3}{figure.caption.44}{}}
 \pgfsyspdfmark {pgfid18}{0}{0}
-\@writefile{lot}{\contentsline {table}{\numberline {13}{\ignorespaces v3 Cumulative Micro-Optimizations\relax }}{15}{table.caption.42}}
-\newlabel{tab:v3_opt}{{13}{15}{v3 Cumulative Micro-Optimizations\relax }{table.caption.42}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}FPGA Optimization (Zhang)}{15}{subsection.6.2}}
-\newlabel{sec:opt:fpga}{{6.2}{15}{FPGA Optimization (Zhang)}{subsection.6.2}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {7}Engineering Standards}{15}{section.7}}
-\newlabel{sec:standards}{{7}{15}{Engineering Standards}{section.7}{}}
+\newlabel{fig:v2_detail}{{13a}{15}{v2 detail: psum SRAM macro placed bottom-left.\relax }{figure.caption.45}{}}
+\newlabel{sub@fig:v2_detail}{{a}{15}{v2 detail: psum SRAM macro placed bottom-left.\relax }{figure.caption.45}{}}
+\newlabel{fig:v3_detail}{{13b}{15}{v3 detail: act\_buf and psum SRAM macros bracket the SA.\relax }{figure.caption.45}{}}
+\newlabel{sub@fig:v3_detail}{{b}{15}{v3 detail: act\_buf and psum SRAM macros bracket the SA.\relax }{figure.caption.45}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {13}{\ignorespaces Macro placement evolution v2 $\to $ v3.}}{15}{figure.caption.45}}
+\newlabel{fig:v2_v3_detail}{{13}{15}{Macro placement evolution v2 $\to $ v3}{figure.caption.45}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {10}{\ignorespaces ASIC Architecture Evolution: v1 $\to $ v2 $\to $ v3\relax }}{15}{table.caption.46}}
+\newlabel{tab:arch_evol}{{10}{15}{ASIC Architecture Evolution: v1 $\to $ v2 $\to $ v3\relax }{table.caption.46}{}}
 \pgfsyspdfmark {pgfid19}{0}{0}
-\@writefile{lot}{\contentsline {table}{\numberline {14}{\ignorespaces Engineering Standards Applied\relax }}{16}{table.caption.43}}
-\newlabel{tab:standards}{{14}{16}{Engineering Standards Applied\relax }{table.caption.43}{}}
-\@writefile{toc}{\contentsline {paragraph}{Compliance notes.}{16}{section*.44}}
-\@writefile{toc}{\contentsline {section}{\numberline {8}Testing / Verification}{16}{section.8}}
-\newlabel{sec:verify}{{8}{16}{Testing / Verification}{section.8}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}Verification Flow}{16}{subsection.8.1}}
-\newlabel{sec:verify:flow}{{8.1}{16}{Verification Flow}{subsection.8.1}{}}
-\@writefile{toc}{\contentsline {paragraph}{Coverage.}{16}{section*.45}}
+\@writefile{lot}{\contentsline {table}{\numberline {11}{\ignorespaces v3 Cumulative Micro-Optimizations\relax }}{16}{table.caption.47}}
+\newlabel{tab:v3_opt}{{11}{16}{v3 Cumulative Micro-Optimizations\relax }{table.caption.47}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {6.2}FPGA Optimization}{16}{subsection.6.2}}
+\newlabel{sec:opt:fpga}{{6.2}{16}{FPGA Optimization}{subsection.6.2}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {7}Engineering Standards}{16}{section.7}}
+\newlabel{sec:standards}{{7}{16}{Engineering Standards}{section.7}{}}
+\citation{9955645}
+\citation{9955645}
+\citation{9955645}
 \pgfsyspdfmark {pgfid20}{0}{0}
-\@writefile{lot}{\contentsline {table}{\numberline {15}{\ignorespaces Verification Coverage Matrix\relax }}{17}{table.caption.46}}
-\newlabel{tab:verify_matrix}{{15}{17}{Verification Coverage Matrix\relax }{table.caption.46}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}ASIC Verification (Liao): Three-Tier + SDF Signoff}{17}{subsection.8.2}}
-\newlabel{sec:verify:asic}{{8.2}{17}{ASIC Verification (Liao): Three-Tier + SDF Signoff}{subsection.8.2}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {16}{\ignorespaces ASIC Verification Results\relax }}{17}{table.caption.47}}
-\newlabel{tab:asic_verify_results}{{16}{17}{ASIC Verification Results\relax }{table.caption.47}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {17}{\ignorespaces Gate-Level Simulation Wall-Clock Comparison\relax }}{17}{table.caption.48}}
-\newlabel{tab:gl_runtime}{{17}{17}{Gate-Level Simulation Wall-Clock Comparison\relax }{table.caption.48}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {12}{\ignorespaces Engineering Standards Applied\relax }}{17}{table.caption.48}}
+\newlabel{tab:standards}{{12}{17}{Engineering Standards Applied\relax }{table.caption.48}{}}
+\@writefile{toc}{\contentsline {paragraph}{Compliance notes.}{17}{section*.49}}
+\@writefile{toc}{\contentsline {section}{\numberline {8}Testing / Verification}{17}{section.8}}
+\newlabel{sec:verify}{{8}{17}{Testing / Verification}{section.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.1}Verification Flow}{17}{subsection.8.1}}
+\newlabel{sec:verify:flow}{{8.1}{17}{Verification Flow}{subsection.8.1}{}}
 \pgfsyspdfmark {pgfid21}{0}{0}
-\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}FPGA Verification (Zhang): Simulation and On-Board}{18}{subsection.8.3}}
-\newlabel{sec:verify:fpga}{{8.3}{18}{FPGA Verification (Zhang): Simulation and On-Board}{subsection.8.3}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {9}Ethical Considerations}{18}{section.9}}
-\newlabel{sec:ethics}{{9}{18}{Ethical Considerations}{section.9}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {18}{\ignorespaces Abuse Vectors and Mitigations\relax }}{18}{table.caption.49}}
-\newlabel{tab:abuse}{{18}{18}{Abuse Vectors and Mitigations\relax }{table.caption.49}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {14}{\ignorespaces QuantFace face-verification benchmark suite.}}{18}{figure.caption.51}}
+\newlabel{fig:quantface_bench}{{14}{18}{QuantFace face-verification benchmark suite}{figure.caption.51}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {13}{\ignorespaces Hardware-Spec Fixed-Point vs QuantFace PyTorch Reference\relax }}{18}{table.caption.52}}
+\newlabel{tab:hw_spec_accuracy}{{13}{18}{Hardware-Spec Fixed-Point vs QuantFace PyTorch Reference\relax }{table.caption.52}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {14}{\ignorespaces Verification Coverage Matrix\relax }}{18}{table.caption.54}}
+\newlabel{tab:verify_matrix}{{14}{18}{Verification Coverage Matrix\relax }{table.caption.54}{}}
+\pgfsyspdfmark {pgfid22}{0}{0}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.2}ASIC Verification: Three-Tier + SDF Signoff}{19}{subsection.8.2}}
+\newlabel{sec:verify:asic}{{8.2}{19}{ASIC Verification: Three-Tier + SDF Signoff}{subsection.8.2}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {15}{\ignorespaces ASIC Verification Results\relax }}{19}{table.caption.55}}
+\newlabel{tab:asic_verify_results}{{15}{19}{ASIC Verification Results\relax }{table.caption.55}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {16}{\ignorespaces Gate-Level Simulation Wall-Clock Comparison\relax }}{19}{table.caption.56}}
+\newlabel{tab:gl_runtime}{{16}{19}{Gate-Level Simulation Wall-Clock Comparison\relax }{table.caption.56}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {8.3}FPGA Verification: Zynq On-Board Readback}{19}{subsection.8.3}}
+\newlabel{sec:verify:fpga}{{8.3}{19}{FPGA Verification: Zynq On-Board Readback}{subsection.8.3}{}}
+\pgfsyspdfmark {pgfid23}{0}{0}
+\newlabel{fig:fpga_ref}{{15a}{20}{C-model reference embedding.\relax }{figure.caption.57}{}}
+\newlabel{sub@fig:fpga_ref}{{a}{20}{C-model reference embedding.\relax }{figure.caption.57}{}}
+\newlabel{fig:fpga_psout}{{15b}{20}{PS-side readout of the embedding vector after \texttt {wait\_done}.\relax }{figure.caption.57}{}}
+\newlabel{sub@fig:fpga_psout}{{b}{20}{PS-side readout of the embedding vector after \texttt {wait\_done}.\relax }{figure.caption.57}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {15}{\ignorespaces FPGA on-board embedding readback vs reference.}}{20}{figure.caption.57}}
+\newlabel{fig:fpga_readback}{{15}{20}{FPGA on-board embedding readback vs reference}{figure.caption.57}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {9}Ethical Considerations}{20}{section.9}}
+\newlabel{sec:ethics}{{9}{20}{Ethical Considerations}{section.9}{}}
+\pgfsyspdfmark {pgfid24}{0}{0}
+\@writefile{lot}{\contentsline {table}{\numberline {17}{\ignorespaces Abuse Vectors and Mitigations\relax }}{21}{table.caption.58}}
+\newlabel{tab:abuse}{{17}{21}{Abuse Vectors and Mitigations\relax }{table.caption.58}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {10}Conclusions}{21}{section.10}}
+\newlabel{sec:conclusion}{{10}{21}{Conclusions}{section.10}{}}
 \bibstyle{plain}
 \bibdata{refs}
-\pgfsyspdfmark {pgfid22}{0}{0}
-\@writefile{toc}{\contentsline {section}{\numberline {10}Conclusions}{19}{section.10}}
-\newlabel{sec:conclusion}{{10}{19}{Conclusions}{section.10}{}}
-\@writefile{lot}{\contentsline {table}{\numberline {19}{\ignorespaces Final Metrics vs Design Constraints\relax }}{19}{table.caption.50}}
-\newlabel{tab:final_summary}{{19}{19}{Final Metrics vs Design Constraints\relax }{table.caption.50}{}}
-\@writefile{toc}{\contentsline {paragraph}{Did the design meet spec?}{19}{section*.51}}
-\@writefile{toc}{\contentsline {paragraph}{What was not delivered.}{19}{section*.52}}
-\@writefile{lot}{\contentsline {table}{\numberline {20}{\ignorespaces Suggested Follow-on Work\relax }}{19}{table.caption.54}}
-\newlabel{tab:future}{{20}{19}{Suggested Follow-on Work\relax }{table.caption.54}{}}
-\@writefile{toc}{\contentsline {paragraph}{Future work.}{19}{table.caption.54}}
-\@writefile{toc}{\contentsline {paragraph}{Lessons learned.}{19}{section*.55}}
-\bibcite{chen2018mobilefacenetsefficientcnnsaccurate}{1}
-\bibcite{7738524}{2}
-\bibcite{george2024edgefaceefficientfacerecognition}{3}
-\bibcite{Linjun_SUN20202019EDL8103}{4}
-\pgfsyspdfmark {pgfid23}{0}{0}
+\bibcite{9955645}{1}
+\bibcite{chen2018mobilefacenetsefficientcnnsaccurate}{2}
+\pgfsyspdfmark {pgfid25}{0}{0}
+\@writefile{lot}{\contentsline {table}{\numberline {18}{\ignorespaces Final Metrics vs Design Constraints\relax }}{22}{table.caption.59}}
+\newlabel{tab:final_summary}{{18}{22}{Final Metrics vs Design Constraints\relax }{table.caption.59}{}}
+\@writefile{toc}{\contentsline {paragraph}{Did the design meet spec?}{22}{section*.60}}
+\@writefile{toc}{\contentsline {paragraph}{What was not delivered.}{22}{section*.61}}
+\@writefile{lot}{\contentsline {table}{\numberline {19}{\ignorespaces Suggested Follow-on Work\relax }}{22}{table.caption.63}}
+\newlabel{tab:future}{{19}{22}{Suggested Follow-on Work\relax }{table.caption.63}{}}
+\@writefile{toc}{\contentsline {paragraph}{Future work.}{22}{table.caption.63}}
+\@writefile{toc}{\contentsline {paragraph}{Lessons learned.}{22}{section*.64}}
+\bibcite{7738524}{3}
+\bibcite{george2024edgefaceefficientfacerecognition}{4}
+\bibcite{Linjun_SUN20202019EDL8103}{5}
+\pgfsyspdfmark {pgfid26}{0}{0}

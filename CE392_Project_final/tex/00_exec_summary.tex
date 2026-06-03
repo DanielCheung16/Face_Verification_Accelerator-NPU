@@ -6,22 +6,19 @@
 
 \paragraph{Problem.} Edge face verification needs a 50-layer CNN to run under $\sim$100\,mW at real-time frame rates. General-purpose CPUs and GPUs are too power-hungry to fit that envelope.
 
-\paragraph{Approach.} We build a MobileFaceNet-specific convolution accelerator with INT16 Q10 fixed-point arithmetic and run it as a complete 50-layer pipeline along two implementation paths:
-\begin{itemize}[nosep]
-\item \textbf{ASIC path (Liao)}: a 12$\times$12 = 144-MAC output-stationary systolic array in FreePDK45, with two OpenRAM SRAM macros (activation buffer and partial-sum SRAM) and a 4-stage activation pipeline. Full RTL$\rightarrow$Genus$\rightarrow$Innovus flow with SDF-annotated gate-level signoff.
-\item \textbf{FPGA path (Zhang)}: a systolic-array CNN accelerator on Zynq FPGA with the same MobileFaceNet workload.
-\end{itemize}
+\paragraph{Approach.} We designed a hybrid INT8 CNN accelerator specialised for MobileFaceNet. The compute fabric combines a $14\times16$ systolic array for the $1\times1$ convolutions that dominate the workload, a $3\times3$ standard array for $3\times3$ convolutions and $3\times3$ depthwise convolutions, and a dedicated $7\times7$ depthwise engine. The same RTL is brought up along two complementary tracks: a Zynq UltraScale+ FPGA bitstream for hardware-in-the-loop verification, and a FreePDK45 Innovus place-and-route flow for ASIC area, power, and timing data.
 
 \paragraph{Key Results.}
 \begin{itemize}[nosep]
-\item ASIC: \textbf{200~MHz}, \textbf{14.5~FPS} @ 720$\times$720~$\mu$m$^2$, \textbf{96.3~mW}, \textbf{6.63~$\mu$J/inference}, DRC/connectivity/antenna 0.
-\item Functional verification: \textbf{three-tier 50/50 layer MATCH} (RTL $\equiv$ Genus syn netlist $\equiv$ Innovus post-route netlist), plus zero SDF timing violations.
-\item FPGA:
+\item \textbf{FPGA (Zynq UltraScale+)}: 150\,MHz, 19.18\,M cycles per inference, 127.8\,ms per image, $\times7.18$ over an i7-9700 baseline. Resource utilisation 25\,\% LUT, 20\,\% FF, 54\,\% BRAM, 10\,\% DSP.
+\item \textbf{ASIC (FreePDK45)}: 200\,MHz, 19.18\,M cycles per inference, 95.88\,ms per image, $\times9.57$ over the same i7-9700 baseline. Core area 720$\times$720\,$\mu$m$^2$, total power 96.32\,mW, energy 9.24\,$\mu$J per inference, DRC/connectivity/antenna 0.
+\item \textbf{Functional verification}: bit-exact 50/50 layer match against the C-model at RTL, post-syn netlist, post-route netlist, and SDF-annotated post-route gate level (zero timing violations).
+\item \textbf{Model accuracy}: hardware-spec fixed-point matches the QuantFace INT8 reference within 0.20\,\% on LFW and $-0.12\,\%$ on AgeDB-30, both inside the protocol's statistical error.
 \end{itemize}
 
 \paragraph{Limitations.}
 \begin{itemize}[nosep]
-\item No commercial formal LEC tool (Conformal/Formality) was available; equivalence is shown by full 50-layer gate-level simulation rather than mathematical proof.
+\item No commercial formal LEC tool was available; equivalence is shown by full 50-layer gate-level simulation rather than mathematical proof.
 \item Single-corner timing signoff (typical PVT only); no SI/CRPR analysis.
-\item ASIC path is design-kit physical implementation only, not taped out.
+\item ASIC track is design-kit physical implementation only, not taped out. The FPGA bitstream targets a development board, not a productised platform.
 \end{itemize}

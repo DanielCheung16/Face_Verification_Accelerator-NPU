@@ -1,5 +1,13 @@
 \begin{thebibliography}{1}
 
+\bibitem{9955645}
+Fadi Boutros, Naser Damer, and Arjan Kuijper.
+\newblock { QuantFace: Towards Lightweight Face Recognition by Synthetic Data
+  Low-bit Quantization }.
+\newblock In {\em 2022 26th International Conference on Pattern Recognition
+  (ICPR)}, pages 855--862, Los Alamitos, CA, USA, August 2022. IEEE Computer
+  Society.
+
 \bibitem{chen2018mobilefacenetsefficientcnnsaccurate}
 Sheng Chen, Yang Liu, Xiang Gao, and Zhen Han.
 \newblock Mobilefacenets: Efficient cnns for accurate real-time face

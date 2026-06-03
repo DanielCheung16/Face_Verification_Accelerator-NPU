@@ -16,7 +16,7 @@ Table~\ref{tab:constraints} summarises the hard and soft constraints that drove 
 \midrule
 Functional       & Execute 50 MobileFaceNet layers autonomously                 & Hard \\
 Functional       & Produce 128-d float-equivalent embedding within $<$0.001 of C-model & Hard \\
-Numerics         & INT16 Q10 weights/activations, Q20 accumulators              & Hard \\
+Numerics         & INT8 weights and activations (w8a8), INT32 accumulators       & Hard \\
 Process (ASIC)   & FreePDK45 standard-cell library (NCSU PDK)                   & Hard \\
 Memory IP        & No commercial SRAM IP; must use OpenRAM open-source generator & Hard \\
 Clock target     & $\geq$ 100 MHz baseline; 200 MHz stretch goal                & Soft \\

@@ -25,7 +25,7 @@ Model substitution & Replacing the bitstream or netlist could bias the accelerat
 \end{tabularx}
 \end{table}
 
-Demographic bias is a known property of face-recognition networks. NIST FRVT 2019 and Buolamwini and Gebru's 2018 audit both found higher error rates on darker-skinned and female subjects, and quantising to INT16 Q10 does not remove that bias because it is in the trained weights. A deployment built on this accelerator should measure per-demographic error rates on its actual user population, tune the verification threshold to that population, and always offer a non-biometric fallback authentication path.
+Demographic bias is a known property of face-recognition networks. NIST FRVT 2019 and Buolamwini and Gebru's 2018 audit both found higher error rates on darker-skinned and female subjects, and INT8 quantisation does not remove that bias because it is in the trained weights. A deployment built on this accelerator should measure per-demographic error rates on its actual user population, tune the verification threshold to that population, and always offer a non-biometric fallback authentication path.
 
 Privacy compliance is a system-level requirement, not a chip-level one. GDPR Article~9 treats biometric data as special-category personal data, and CCPA has similar provisions. Exposing only the embedding helps but does not satisfy these regulations on its own. The integrator still needs consent capture, purpose limitation, template storage controls, and a documented opt-out path. We treat the chip as necessary but not sufficient.
 

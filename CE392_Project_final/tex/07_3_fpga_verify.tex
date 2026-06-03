@@ -1,37 +1,30 @@
 %% ============================================================================
-%% §7.3 FPGA Verification  --  FRIEND (Zhang)
+%% §7.3 FPGA Verification  --  Zynq on-board PS readback
 %% ============================================================================
-\subsection{FPGA Verification (Zhang): Simulation and On-Board}
+\subsection{FPGA Verification: Zynq On-Board Readback}
 \label{sec:verify:fpga}
 
-% TODO friend: replace placeholder.
-% Suggested coverage:
-%   - Vivado / Quartus simulator setup, testbench source (same C-model golden?)
-%   - RTL simulation results (50/50 layer MATCH? include table)
-%   - Post-synthesis simulation (functional vs timing)
-%   - On-board verification: how the host loads weights + image,
-%     how the FPGA reports the 128-d embedding, capture mechanism
-%     (ILA / AXI-Stream readback / UART), wall-clock for one
-%     inference, FPS measurement
-%   - Any divergence from the C-model (rounding, saturation differences)
-%   - Limitations / what was not covered
+The FPGA bitstream is verified end-to-end with hardware in the loop. After loading the PL configuration, the PS-side Python program initialises the NPU (\texttt{o1.download()}), asserts the start pulse (\texttt{pulse\_start()}), polls the done flag (\texttt{wait\_done(20.0, 0.001)}), and reads back the embedding vector word by word over the 128-bit AXI-GPIO readout bus by iterating addresses \texttt{0x40000}--\texttt{0x40007} and calling \texttt{request\_read(addr)} followed by \texttt{read\_128bit\_data()}. A representative inference completes in \emph{0.128619\,s} of wall-clock time, consistent with the 127.8\,ms cycle-budget estimate from Section~\ref{sec:hw:backend:fpga} after PS round-trip overhead. The 128 8-bit embedding values read back from addresses \texttt{0x40000}--\texttt{0x40007} are compared byte by byte against the C-model reference written to disk by the same hex-generation script that drives the ASIC simulation testbench.
 
-\noindent\fbox{\parbox{\textwidth}{\itshape \textbf{Placeholder} --- Zhang's FPGA verification results go here. Should at minimum cover: simulator results (vs same C-model golden), on-board measurement methodology and result, and any deviations from the C-model.}}
+Figure~\ref{fig:fpga_readback} shows the reference embedding (left, from the C-model) alongside the PS readout from a real Zynq run (right). The two streams match bit-for-bit on every address.
 
-% Example skeleton:
-%
-% \paragraph{Simulation.}
-% Vivado simulator was run on the synthesised RTL against the C-model
-% golden hex vectors for all 50 layers. Result: ?/50 exact match.
-%
-% \paragraph{On-board measurement.}
-% The bitstream was loaded onto Zynq-? via JTAG. A host program (?)
-% transferred the 112$\times$96 input image via AXI-Stream DMA and
-% read back the 128-d embedding via AXI-Lite. Total wall-clock time
-% per inference: ?\,ms (= ? FPS). Embedding cosine similarity vs
-% C-model: ?.
-%
-% \paragraph{Limitations.}
-% \begin{itemize}
-%   \item ...
-% \end{itemize}
+\begin{figure}[H]
+  \centering
+  \begin{subfigure}{0.42\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{Fig/peixing/reference.png}
+    \caption{C-model reference embedding.}
+    \label{fig:fpga_ref}
+  \end{subfigure}
+  \hfill
+  \begin{subfigure}{0.55\textwidth}
+    \centering
+    \includegraphics[width=\linewidth]{Fig/peixing/PS_readout_embedding_vector.png}
+    \caption{PS-side readout of the embedding vector after \texttt{wait\_done}.}
+    \label{fig:fpga_psout}
+  \end{subfigure}
+  \caption[FPGA on-board embedding readback vs reference.]{FPGA on-board verification: reference embedding (left) vs PS-side readback (right). Every 128-bit word matches.}
+  \label{fig:fpga_readback}
+\end{figure}
+
+The on-board test exercises the full data path that the simulator alone cannot: the AXI Interconnect, the BRAM-mapped WGT / A/O / Param RAMs, the PS-PL handshake on \texttt{start}/\texttt{done}, and the readout bus. Together with the ASIC three-tier signoff in Section~\ref{sec:verify:asic}, this closes the loop on functional verification of the shared RTL.
